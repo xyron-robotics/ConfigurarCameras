@@ -1,0 +1,46 @@
+# Release no GitHub a cada tag v*: roda os testes, gera o instalador (Inno
+# Setup 6, que vem no runner windows-latest) e publica o .exe com o .sha256.
+# A tag tem que bater com fonte\VERSAO.txt (unica fonte da versao).
+# O painel instalado le releases/latest desta API para avisar e atualizar.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  instalador:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag bate com VERSAO.txt
+        shell: pwsh
+        run: |
+          $v = (Get-Content fonte/VERSAO.txt -Raw).Trim()
+          if ($env:GITHUB_REF_NAME -ne ('v' + $v)) { throw "tag $env:GITHUB_REF_NAME nao bate com fonte/VERSAO.txt ($v)" }
+          "versao $v"
+
+      # Os testes rodam no PowerShell 5.1 (powershell.exe), o mesmo do painel.
+      - name: Testes do motor
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Motor.ps1
+
+      - name: Testes de descoberta
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Descoberta.ps1
+
+      - name: Gerar instalador
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File instalador\Gerar-Instalador.ps1 -SemTestes
+
+      - name: Publicar release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $exe = Get-ChildItem instalador/saida/*.exe | Select-Object -First 1
+          gh release create $env:GITHUB_REF_NAME --title ("Configurar Câmeras " + $env:GITHUB_REF_NAME) --generate-notes $exe.FullName ($exe.FullName + '.sha256')

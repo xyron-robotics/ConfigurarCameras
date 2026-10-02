@@ -1,0 +1,21 @@
+{
+    "_origem":  "configManager.getConfig Network lido da VIP-1230-D-G3 fw 2.800.00IB003.0.T em 2026-09-29 (DHCP da rede corporativa)",
+    "table":  {
+                  "DefaultInterface":  "eth0",
+                  "Domain":  "dahua",
+                  "Hostname":  "IPC",
+                  "eth0":  {
+                               "DefaultGateway":  "10.16.250.1",
+                               "DhcpEnable":  true,
+                               "EnableDhcpReservedIP":  false,
+                               "DnsServers":  [
+                                                  "8.8.8.8",
+                                                  "8.8.4.4"
+                                              ],
+                               "IPAddress":  "10.16.251.208",
+                               "MTU":  1500,
+                               "PhysicalAddress":  "d8:36:5f:00:00:f4",
+                               "SubnetMask":  "255.255.252.0"
+                           }
+              }
+}

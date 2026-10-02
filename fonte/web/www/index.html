@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configurar câmeras</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+
+<div id="faixa-simular" class="faixa-simular" hidden>
+  <span>Simulação ligada: nada é enviado para câmera nem para a placa de rede.</span>
+  <span id="faixa-falha"></span>
+</div>
+
+<div id="atualizacao" class="atualizacao" role="status" aria-live="polite" hidden>
+  <span id="atualizacao-texto"></span>
+  <a id="atualizacao-notas" href="#" target="_blank" rel="noopener" hidden>o que mudou</a>
+  <button type="button" class="btn" id="btn-atualizar">Atualizar</button>
+</div>
+
+<header class="topo">
+  <h1 class="marca">Configurar câmeras</h1>
+  <div class="topo-estado">
+    <div id="placa" class="placa" role="status" aria-live="polite">
+      <span class="luz" id="placa-luz"></span>
+      <span id="placa-texto">Placa de rede: verificando</span>
+    </div>
+    <div id="internet" class="placa" role="status" aria-live="polite" title="Internet deste PC, testada ao abrir e depois de preparar a placa">
+      <span class="luz" id="internet-luz"></span>
+      <span id="internet-texto">Internet: não testada</span>
+    </div>
+    <button type="button" class="btn discreto" id="btn-preparar" hidden>Preparar placa</button>
+  </div>
+</header>
+
+<div class="corpo">
+  <nav class="menu" id="menu" aria-label="Seções">
+    <a href="#painel" data-view="painel">Painel</a>
+    <a href="#ferramentas" data-view="ferramentas">Ferramentas</a>
+    <a href="#opcoes" data-view="opcoes" class="menu-opcoes"><span class="engrenagem" aria-hidden="true">⚙</span> Opções</a>
+  </nav>
+
+  <main>
+    <div id="aviso" class="aviso" role="alert" hidden></div>
+    <div id="anuncio" class="so-leitor" role="status" aria-live="polite"></div>
+
+    <!-- ============================== PASSO A PASSO (inicio) -->
+    <section id="inicio" class="view inicio" hidden aria-labelledby="inicio-titulo">
+      <h2 id="inicio-titulo" class="so-leitor">Passo a passo da sessão</h2>
+      <ol id="passos" class="passos" aria-label="Passos">
+        <li data-passo="1"><button type="button" class="passo-botao">Senha</button></li>
+        <li data-passo="2"><button type="button" class="passo-botao">Placa de rede</button></li>
+        <li data-passo="3"><button type="button" class="passo-botao">Rede das câmeras</button></li>
+        <li data-passo="4"><button type="button" class="passo-botao">Faixa de fábrica</button></li>
+        <li data-passo="5"><button type="button" class="passo-botao">Câmera</button></li>
+        <li data-passo="6"><button type="button" class="passo-botao">Fila</button></li>
+        <li data-passo="7"><button type="button" class="passo-botao">Resumo</button></li>
+      </ol>
+
+      <div class="passo" data-passo="1" hidden>
+        <h2>Senha das câmeras</h2>
+        <p class="explica">Esta senha vira a senha do <span class="mono">admin</span> de cada câmera que o painel configurar nesta sessão, e é a senha usada para entrar nelas. Confira bem antes de seguir: uma senha digitada errada fica gravada nas câmeras. Ela fica só na memória do painel enquanto ele está aberto. Não vai para disco, log nem relatório, e é pedida de novo a cada abertura.</p>
+        <div id="passo-escolha" class="passo-escolha" hidden>
+          <p id="escolha-texto"></p>
+          <div class="acoes">
+            <button type="button" class="btn acento" id="btn-usar-sessao">Usar essa sessão</button>
+            <button type="button" class="btn" id="btn-revisar-sessao">Revisar passo a passo</button>
+          </div>
+        </div>
+        <p id="senha-definida" class="senha-definida" hidden>Senha definida. <button type="button" class="btn discreto" id="btn-trocar-senha">Trocar a senha</button></p>
+        <div class="slot"></div>
+      </div>
+
+      <div class="passo" data-passo="2" hidden>
+        <h2>Placa de rede</h2>
+        <p class="explica">Escolha a placa deste PC que está ligada à bancada ou ao switch das câmeras. Só ela vai ser usada: é por ela que o painel procura a câmera de fábrica, dá os endereços ao PC e confere a câmera no IP definitivo. Ao preparar, a placa recebe dois endereços a mais (um na faixa de fábrica, um na rede das câmeras) sem perder os que já tem. Ao encerrar o painel ela volta ao que era. Se a placa escolhida for a que leva à internet, a rede pisca por alguns segundos e o painel testa a internet depois.</p>
+        <div class="slot"></div>
+      </div>
+
+      <div class="passo" data-passo="3" hidden>
+        <h2>Rede das câmeras</h2>
+        <p class="explica">A rede em que as câmeras vão ficar depois de configuradas: a mesma do NVR. Máscara, gateway e DNS são gravados em cada câmera. O IP do PC nessa rede é o que a placa recebe para conferir a câmera depois da troca de IP; vazio, o painel escolhe um entre .200 e .249, derivado do MAC da placa.</p>
+        <div class="slot"></div>
+      </div>
+
+      <div class="passo" data-passo="4" hidden>
+        <h2>Faixa de fábrica</h2>
+        <p class="explica">Onde a câmera nova aparece ao ligar: nas Intelbras, 192.168.1.108. Essa faixa precisa ser diferente da rede das câmeras. O IP do PC nessa faixa é o endereço que a placa recebe para falar com a câmera de fábrica; vazio, o painel usa o .220. A câmera também é encontrada pelo broadcast em qualquer faixa, mas o IP de fábrica continua sendo o primeiro lugar onde o painel olha.</p>
+        <div class="slot"></div>
+      </div>
+
+      <div class="passo" data-passo="5" hidden>
+        <h2>Câmera</h2>
+        <p class="explica">O e-mail de recuperação é gravado na câmera como a única forma de recuperar a senha do admin: use um e-mail da empresa, não o seu. O encoder dos dois streams é gravado em toda câmera; o intervalo de quadro-chave (GOP) é sempre o dobro dos quadros por segundo. H.264 e H.265 foram testados em câmera real; antes de usar H.265, confira se o NVR aceita.</p>
+        <div class="slot"></div>
+      </div>
+
+      <div class="passo" data-passo="6" hidden>
+        <h2>Fila</h2>
+        <p class="explica">A fila é a sequência de IPs de destino, um por câmera, dentro da rede das câmeras. Local, rack e andar vão para o registro de cada câmera. Pode deixar para montar depois: no Painel, a fila é montada em Opções, seção Fila. A última fila volta preenchida na próxima abertura, só como sugestão.</p>
+        <div class="slot"></div>
+      </div>
+
+      <div class="passo" data-passo="7" hidden>
+        <h2>Resumo</h2>
+        <p class="explica">Confira o que vai valer nesta sessão. Ao começar, o painel prepara a placa de rede escolhida (dois endereços a mais, nada removido), testa a internet e monta a fila, se houver uma. Tudo isso pode ser mudado depois em Opções.</p>
+        <div id="resumo" class="resumo"></div>
+        <label class="check" id="resumo-montar-rotulo" hidden><input type="checkbox" id="resumo-montar" checked> Montar a fila ao começar</label>
+        <p class="aviso" data-aviso-de="concluir" role="alert" hidden></p>
+      </div>
+
+      <div class="passo-acoes">
+        <button type="button" class="btn discreto" id="btn-voltar">Voltar</button>
+        <span id="passo-n" class="apoio" aria-live="polite"></span>
+        <span class="espaco"></span>
+        <button type="button" class="btn discreto" id="btn-montar-depois" hidden>Montar depois</button>
+        <button type="button" class="btn acento" id="btn-avancar">Avançar</button>
+        <button type="button" class="btn acento" id="btn-comecar" hidden>Preparar placa e começar</button>
+      </div>
+    </section>
+
+    <!-- ============================== PAINEL -->
+    <section id="view-painel" class="view" hidden>
+      <div id="painel-sem-fila" class="painel-sem-fila" hidden>
+        <h2>Sem fila montada</h2>
+        <p class="apoio">A fila é a sequência de IPs que as câmeras vão receber. <a href="#opcoes/fila">Monte uma em Opções, seção Fila.</a></p>
+      </div>
+
+      <div id="fita-bloco" hidden>
+        <div class="fita-cabeca">
+          <h2 id="fita-titulo">Fila</h2>
+          <span id="fita-resumo" class="apoio"></span>
+        </div>
+        <ol id="fita" class="fita" aria-label="Posições da fila"></ol>
+      </div>
+
+      <div id="bancada" class="bancada" hidden>
+        <div id="vigia" class="vigia" hidden>
+          <div class="vigia-cabeca">
+            <span class="luz" id="vigia-luz"></span>
+            <h3>Vigia</h3>
+            <span class="apoio" id="vigia-estado" role="status" aria-live="polite">desligado</span>
+          </div>
+          <p class="apoio" id="vigia-texto"></p>
+          <form id="form-vigia" class="linha-campos">
+            <label><span id="vigia-rotulo-porta">Porta inicial</span><input name="porta" autocomplete="off" placeholder="ex. 1 ou Gi1/0/1"></label>
+            <label><span id="vigia-rotulo-canal">Canal inicial</span><input name="canal" autocomplete="off" placeholder="ex. 1"></label>
+            <label class="check largo" title="Broadcast DHIP (UDP 37810): acha câmera de fábrica mesmo fora do IP de fábrica; a placa recebe um IP temporário na rede dela. Na rede do escritório, só com a bancada isolada."><input type="checkbox" name="broadcast"> Aceitar câmera de fábrica em qualquer faixa (broadcast)</label>
+            <button class="btn" type="submit" id="btn-vigia">Ligar vigia</button>
+          </form>
+          <p class="aviso" data-aviso-de="vigia" role="alert" hidden></p>
+        </div>
+
+        <div id="bancada-pronta">
+          <p class="bancada-pos" id="bancada-pos"></p>
+          <p class="bancada-destino">Destino <span class="mono" id="bancada-destino"></span></p>
+          <p class="apoio" id="bancada-apoio">Ligue uma câmera só no cabo e confirme. A câmera de fábrica é encontrada sozinha, em qualquer faixa de IP.</p>
+          <form id="form-conectada">
+            <div class="linha-campos">
+              <label>Porta do switch<input name="porta" autocomplete="off"></label>
+              <label>Canal no NVR<input name="canal" autocomplete="off"></label>
+              <button class="btn acento" type="submit" id="btn-conectada">Câmera conectada</button>
+            </div>
+            <details id="retomar" class="retomar">
+              <summary>Retomar câmera já inicializada</summary>
+              <p class="nota">Só para uma câmera que já recebeu a senha desta sessão, como depois de uma falha ou com o painel fechado no meio. Informe o IP em que ela responde agora. Com o campo vazio, o painel procura uma câmera de fábrica.</p>
+              <label>IP atual da câmera<input name="ip" class="mono" data-ip autocomplete="off"></label>
+            </details>
+          </form>
+        </div>
+
+        <div id="bancada-trabalho" hidden>
+          <p class="bancada-pos" id="trabalho-titulo"></p>
+          <ol class="etapas" id="etapas">
+            <li data-etapa="inicializada">Inicialização</li>
+            <li data-etapa="encoder">Encoder</li>
+            <li data-etapa="rede">Rede</li>
+            <li data-etapa="conferida">Conferência</li>
+          </ol>
+          <p class="apoio" id="trabalho-texto"></p>
+          <progress id="trabalho-progresso" max="120" value="0" hidden></progress>
+        </div>
+
+        <div id="bancada-escolha" hidden>
+          <p class="bancada-pos">Mais de uma câmera de fábrica na rede</p>
+          <p class="apoio">Confira o MAC (ou o serial) na etiqueta da câmera que está na bancada. Câmera fora das faixas da placa escolhida: a placa recebe um IP temporário na rede dela.</p>
+          <ul id="escolha-lista" class="escolha"></ul>
+          <button type="button" class="btn discreto" id="btn-escolha-cancelar">Cancelar</button>
+        </div>
+
+        <div id="bancada-decisao" hidden>
+          <p class="bancada-pos falha-titulo" id="decisao-titulo"></p>
+          <p id="decisao-erro" class="decisao-erro"></p>
+          <p class="apoio" id="decisao-apoio">O que foi concluído fica registrado. Tentar de novo continua da etapa que falhou.</p>
+          <div class="acoes">
+            <button type="button" class="btn acento" data-decisao="tentar">Tentar de novo</button>
+            <button type="button" class="btn" data-decisao="pular">Pular esta posição</button>
+            <button type="button" class="btn discreto" data-decisao="encerrar">Encerrar a fila</button>
+          </div>
+        </div>
+
+        <div id="bancada-fim" hidden>
+          <p class="bancada-pos" id="fim-titulo"></p>
+          <p class="apoio" id="fim-texto"></p>
+          <a class="btn" href="#opcoes/fila">Montar outra fila</a>
+        </div>
+        <p class="aviso" data-aviso-de="conectada" role="alert" hidden></p>
+      </div>
+
+      <p id="ultimo" class="ultimo" hidden></p>
+
+      <div id="registro-bloco" class="registro-bloco">
+        <div class="fita-cabeca">
+          <h2 id="registro-titulo">Registro</h2>
+          <div class="acoes">
+            <button type="button" class="btn discreto" id="btn-registro-atualizar">Atualizar</button>
+            <a class="btn" id="btn-exportar" href="/api/relatorio.csv">Exportar relatório</a>
+          </div>
+        </div>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead><tr>
+              <th>IP</th><th>MAC</th><th>Modelo</th><th>Situação</th><th>Encoder</th><th>Local</th><th>Rack / porta</th><th>Data</th>
+            </tr></thead>
+            <tbody id="registro-corpo"></tbody>
+          </table>
+        </div>
+        <p id="registro-vazio" class="apoio" hidden>Nenhuma câmera registrada ainda.</p>
+      </div>
+    </section>
+
+    <!-- ============================== FERRAMENTAS -->
+    <section id="view-ferramentas" class="view" hidden>
+      <h2>Ferramentas</h2>
+      <p class="apoio">Tudo aqui só lê a rede e as câmeras, pela placa escolhida. Nada é alterado. Para voltar uma câmera de fábrica, use a tela dela ou o botão físico de reset.</p>
+      <div class="ferramentas">
+        <form id="form-sondar" class="ferramenta">
+          <h3>Sondar uma câmera</h3>
+          <p class="apoio">Lê uma câmera pelo IP. Sem senha na sessão, mostra apenas se está de fábrica.</p>
+          <div class="linha-campos">
+            <label>IP<input name="ip" class="mono" data-ip required autocomplete="off"></label>
+            <button class="btn" type="submit" data-so-real>Sondar</button>
+          </div>
+          <p class="nota" data-nota-simular hidden>Desligado em simulação: lê a rede de verdade.</p>
+          <p class="aviso" data-aviso-de="sondar" role="alert" hidden></p>
+        </form>
+        <div class="ferramenta">
+          <h3>Procurar câmeras na rede</h3>
+          <p class="apoio">Broadcast DHIP pela placa escolhida (responde de qualquer faixa, com modelo, serial e firmware) e, se nada vier, varredura por ping. Lista câmeras de fábrica, já inicializadas, NVRs e controladores.</p>
+          <button type="button" class="btn" id="btn-descobrir" data-so-real>Procurar</button>
+          <p class="nota" data-nota-simular hidden>Desligado em simulação: lê a rede de verdade.</p>
+          <p class="aviso" data-aviso-de="descobrir" role="alert" hidden></p>
+        </div>
+        <div class="ferramenta">
+          <h3>Verificar câmeras instaladas</h3>
+          <p class="apoio">Faz login em cada câmera do registro e confere IP e MAC. Para na primeira senha recusada.</p>
+          <button type="button" class="btn" id="btn-verificar">Verificar</button>
+          <p class="aviso" data-aviso-de="verificar" role="alert" hidden></p>
+        </div>
+      </div>
+      <div id="resultado-ferramenta" class="resultado" hidden></div>
+    </section>
+
+    <!-- ============================== OPCOES -->
+    <section id="view-opcoes" class="view opcoes" hidden>
+      <h2>Opções</h2>
+      <p class="apoio">As mesmas seções do passo a passo, para mudar no meio da sessão. O que for salvo vale a partir da próxima câmera. Trocar a placa ou as faixas de rede devolve a placa e a prepara de novo.</p>
+
+      <div class="secao" data-secao="senha">
+        <h3>Senha das câmeras</h3>
+        <p class="apoio">Trocar a senha vale só para as próximas câmeras: as já instaladas ficam com a anterior.</p>
+        <p id="senha-instaladas" class="nota" hidden></p>
+        <div class="slot">
+          <form id="form-senha" class="secao-form">
+            <div class="campos">
+              <label>Senha<input name="senha" type="password" autocomplete="new-password"></label>
+              <label>Repita a senha<input name="senha2" type="password" autocomplete="new-password"></label>
+              <button class="btn discreto" type="button" id="btn-senha-mostrar" aria-pressed="false">Mostrar</button>
+            </div>
+            <p id="senha-erro" class="aviso" role="alert" hidden>As duas senhas não conferem. Digite a repetição de novo.</p>
+            <ul class="erros" role="alert" hidden></ul>
+            <div class="acoes so-opcoes">
+              <button class="btn acento" type="submit">Usar esta senha</button>
+              <span class="apoio" data-ok role="status" hidden></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="secao" data-secao="placa">
+        <h3>Placa de rede</h3>
+        <p class="apoio">Só a placa escolhida é usada para chegar às câmeras. A sugerida vem em primeiro.</p>
+        <div class="slot">
+          <form id="form-placa" class="secao-form">
+            <ul id="placas" class="placas" aria-label="Placas de rede deste PC"></ul>
+            <p class="nota" id="placas-nota" hidden></p>
+            <ul class="erros" role="alert" hidden></ul>
+            <div class="acoes">
+              <button type="button" class="btn discreto" id="btn-placas-atualizar">Atualizar lista</button>
+              <button class="btn acento so-opcoes" type="submit">Salvar placa</button>
+              <span class="apoio" data-ok role="status" hidden></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="secao" data-secao="rede">
+        <h3>Rede das câmeras</h3>
+        <p class="apoio">A rede do NVR: máscara, gateway e DNS gravados em cada câmera, e o IP do PC nela.</p>
+        <div class="slot">
+          <form id="form-rede" class="secao-form">
+            <div class="campos">
+              <label>Máscara<input name="Mascara" class="mono" data-ip required></label>
+              <label>Gateway<input name="Gateway" class="mono" data-ip required></label>
+              <label>DNS 1<input name="Dns1" class="mono" data-ip required></label>
+              <label>DNS 2<input name="Dns2" class="mono" data-ip required></label>
+              <label>IP do PC nessa rede (opcional)<input name="IpPcCameras" class="mono" data-ip autocomplete="off" placeholder="vazio = .200 a .249, pelo MAC"></label>
+            </div>
+            <ul class="erros" role="alert" hidden></ul>
+            <div class="acoes so-opcoes">
+              <button class="btn acento" type="submit">Salvar rede</button>
+              <span class="apoio" data-ok role="status" hidden></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="secao" data-secao="fabrica">
+        <h3>Faixa de fábrica</h3>
+        <p class="apoio">Onde a câmera nova aparece, e o IP do PC nessa faixa.</p>
+        <div class="slot">
+          <form id="form-fabrica" class="secao-form">
+            <div class="campos">
+              <label>IP de fábrica<input name="IpFabrica" class="mono" data-ip required></label>
+              <label>IP do PC nessa faixa (opcional)<input name="IpPcFabrica" class="mono" data-ip autocomplete="off" placeholder="vazio = 192.168.1.220"></label>
+            </div>
+            <ul class="erros" role="alert" hidden></ul>
+            <div class="acoes so-opcoes">
+              <button class="btn acento" type="submit">Salvar faixa</button>
+              <span class="apoio" data-ok role="status" hidden></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="secao" data-secao="camera">
+        <h3>Câmera</h3>
+        <p class="apoio">E-mail de recuperação e encoder dos dois streams, gravados em toda câmera.</p>
+        <div class="slot">
+          <form id="form-camera" class="secao-form">
+            <div class="campos">
+              <label class="largo">E-mail de recuperação gravado na câmera<input name="EmailRecuperacao" type="email" required></label>
+            </div>
+            <fieldset>
+              <legend>Stream principal</legend>
+              <div class="campos">
+                <label>Resolução<select name="Resolucao"></select></label>
+                <label>Quadros por segundo<select class="lista-valor" data-para="FpsPrincipal"></select><input name="FpsPrincipal" type="number" min="1" max="60" aria-label="Quadros por segundo do stream principal, outro valor" required hidden></label>
+                <label>Bitrate (kbps)<select class="lista-valor" data-para="BitRate" aria-describedby="faixa-principal"></select><input name="BitRate" type="number" min="64" max="16384" aria-label="Bitrate do stream principal em kbps, outro valor" aria-describedby="faixa-principal" required hidden></label>
+                <label>Codec<select name="CodecPrincipal"></select></label>
+              </div>
+              <p class="faixa-encoder" id="faixa-principal"></p>
+            </fieldset>
+            <fieldset>
+              <legend>Stream secundário</legend>
+              <div class="campos">
+                <label>Resolução<select name="ResolucaoSecundario"></select></label>
+                <label>Quadros por segundo<select class="lista-valor" data-para="FpsSecundario"></select><input name="FpsSecundario" type="number" min="1" max="60" aria-label="Quadros por segundo do stream secundário, outro valor" required hidden></label>
+                <label>Bitrate (kbps)<select class="lista-valor" data-para="BitRateSecundario" aria-describedby="faixa-secundario"></select><input name="BitRateSecundario" type="number" min="64" max="16384" aria-label="Bitrate do stream secundário em kbps, outro valor" aria-describedby="faixa-secundario" required hidden></label>
+                <label>Codec<select name="CodecSecundario"></select></label>
+              </div>
+              <p class="faixa-encoder" id="faixa-secundario"></p>
+            </fieldset>
+            <p class="nota">Em quadros e bitrate, escolha da lista ou "Outro valor…" para digitar. O intervalo de quadro-chave (GOP) é gravado como o dobro dos quadros por segundo. A câmera recebe o encoder em duas gravações: primeiro resolução, quadros e codec; depois bitrate e GOP.</p>
+            <ul class="avisos-leves" id="camera-avisos" hidden></ul>
+            <ul class="erros" role="alert" hidden></ul>
+            <div class="acoes so-opcoes">
+              <button class="btn acento" type="submit">Salvar câmera</button>
+              <span class="apoio" data-ok role="status" hidden></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="secao" data-secao="fila">
+        <h3>Fila</h3>
+        <p class="apoio">Faixa de IPs de destino, um por câmera. Montar substitui a fila atual; IP com câmera instalada, o gateway e endereços fora da rede ficam de fora.</p>
+        <div class="slot">
+          <form id="form-fila" class="secao-form">
+            <div class="campos">
+              <label>Primeiro IP<input name="inicio" class="mono" data-ip placeholder="ex. 10.70.20.50" autocomplete="off"></label>
+              <label>Último IP<input name="fim" class="mono" data-ip placeholder="ex. 10.70.20.99" autocomplete="off"></label>
+              <label>Local<input name="local" placeholder="ex. Obra Centro"></label>
+              <label>Rack<input name="rack" placeholder="ex. Rack 03"></label>
+              <label>Andar<input name="andar" placeholder="ex. Térreo"></label>
+            </div>
+            <p class="nota" id="fila-previa" aria-live="polite" hidden></p>
+            <p class="nota" id="fila-ultima" hidden></p>
+            <ul class="erros" role="alert" hidden></ul>
+            <div class="acoes so-opcoes">
+              <button class="btn acento" type="submit">Montar fila</button>
+              <span class="apoio" data-ok role="status" hidden></span>
+            </div>
+            <p class="aviso" data-aviso-de="fila" role="alert" hidden></p>
+          </form>
+        </div>
+      </div>
+
+      <div class="secao" data-secao="painel">
+        <h3>Painel</h3>
+        <p class="apoio">A placa de rede volta ao estado de antes ao encerrar; Restaurar DHCP faz o mesmo agora. Refazer o passo a passo volta às telas iniciais com tudo preenchido.</p>
+        <div class="acoes">
+          <button type="button" class="btn" id="btn-restaurar">Restaurar DHCP</button>
+          <button type="button" class="btn" id="btn-refazer">Refazer o passo a passo</button>
+          <button type="button" class="btn discreto" id="btn-encerrar">Encerrar o painel</button>
+          <span class="apoio" id="versao-painel"></span>
+        </div>
+        <p class="aviso" data-aviso-de="painel" role="alert" hidden></p>
+      </div>
+    </section>
+
+    <details class="log" id="log-bloco" open>
+      <summary>Log</summary>
+      <div id="log" class="log-linhas mono" aria-live="off"></div>
+    </details>
+  </main>
+</div>
+
+<div id="encerrado" class="encerrado" hidden>
+  <p id="encerrado-texto">Painel encerrado. Pode fechar esta janela.</p>
+</div>
+
+<div id="atualizando" class="encerrado" hidden>
+  <p id="atualizando-texto">Atualizando o painel… ele fecha e reabre sozinho em instantes. Pode fechar esta janela.</p>
+</div>
+
+</body>
+</html>

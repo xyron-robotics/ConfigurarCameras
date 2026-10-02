@@ -1,0 +1,383 @@
+/* Painel ConfigurarCameras. Grafite neutro + ambar de rotuladora para o que
+   esta acontecendo agora. Verde e vermelho so com sentido (ok / falha). */
+
+:root {
+  --fundo: #E9ECEE;
+  --sup: #FFFFFF;
+  --sup-2: #F4F6F7;
+  --texto: #262B2E;
+  --apoio: #5C656B;
+  --linha: #CBD1D5;
+  --acento: #E0A21B;
+  --acento-texto: #2A2206;
+  --acento-fraco: #FBEFCF;
+  --ok: #2A7146;
+  --ok-fraco: #DDEFE3;
+  --falha: #B3362B;
+  --falha-fraco: #F6DEDB;
+  --pulada: #8A9297;
+  /* Borda de campo: 3:1 contra a superficie (WCAG 1.4.11). */
+  --borda-campo: #7E878D;
+  --log-amarelo: #8A6408;
+  --raio: 6px;
+  --sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --sans-titulo: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #191C1E;
+    --sup: #23272A;
+    --sup-2: #1E2224;
+    --texto: #E4E7E9;
+    --apoio: #9AA3A9;
+    --linha: #3A4145;
+    --acento-fraco: #3A3014;
+    --ok: #5DBB83;
+    --ok-fraco: #1E3527;
+    --falha: #E86C60;
+    --falha-fraco: #3D2220;
+    --pulada: #6E777C;
+    --borda-campo: #7A8389;
+    --log-amarelo: #E9BD58;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--texto);
+  background: var(--fundo);
+  min-height: 100vh;
+}
+[hidden] { display: none !important; }
+.mono { font-family: var(--mono); font-size: 0.92em; }
+.apoio { color: var(--apoio); margin: 0.25rem 0; }
+.nota { color: var(--apoio); font-size: 13px; margin: 0.5rem 0 0; max-width: 70ch; }
+h1, h2, h3 { font-family: var(--sans-titulo); font-weight: 600; margin: 0; }
+h2 { font-size: 19px; margin-bottom: 0.5rem; }
+h3 { font-size: 16px; margin-bottom: 0.25rem; }
+a { color: inherit; }
+
+/* Anel duplo: o contorno na cor do texto aparece em qualquer fundo (inclusive
+   no botao ambar); o halo ambar marca a identidade. */
+:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; box-shadow: 0 0 0 2px var(--acento); }
+
+/* Fora da tela, lido pelo leitor de tela. */
+.so-leitor { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+progress { display: block; width: 100%; max-width: 32rem; height: 0.6rem; margin-top: 0.4rem; accent-color: var(--acento); }
+
+/* ---------------------------------------------------------------- simulacao */
+.faixa-simular {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; gap: 1.5rem; flex-wrap: wrap;
+  padding: 0.45rem 1.25rem;
+  font-weight: 600; color: var(--acento-texto);
+  background: repeating-linear-gradient(-45deg, #E0A21B 0 14px, #EDBB45 14px 28px);
+}
+
+/* ---------------------------------------------------------------- topo */
+.topo {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  padding: 0.7rem 1.25rem;
+  background: var(--sup);
+  border-bottom: 1px solid var(--linha);
+}
+.marca { font-size: 17px; letter-spacing: -0.01em; }
+.topo-estado { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.placa { display: flex; align-items: center; gap: 0.45rem; margin-right: 0.5rem; font-size: 14px; }
+.luz { width: 10px; height: 10px; border-radius: 50%; background: var(--pulada); flex: none; }
+.luz.ok { background: var(--ok); }
+.luz.falta { background: var(--falha); }
+
+/* ---------------------------------------------------------------- estrutura */
+.corpo { display: grid; grid-template-columns: 11rem 1fr; min-height: calc(100vh - 3.5rem); }
+.menu { display: flex; flex-direction: column; padding: 1rem 0.5rem; gap: 2px; border-right: 1px solid var(--linha); }
+.menu a {
+  color: var(--texto); text-decoration: none;
+  padding: 0.45rem 0.75rem; border-radius: var(--raio);
+  border-left: 3px solid transparent;
+}
+.menu a:hover { background: var(--sup); }
+.menu a.ativo { background: var(--sup); border-left-color: var(--acento); font-weight: 600; }
+.menu .menu-opcoes { margin-top: auto; color: var(--apoio); }
+.menu .menu-opcoes.ativo { color: var(--texto); }
+.engrenagem { display: inline-block; width: 1.1em; }
+main { padding: 1.25rem 1.5rem 2rem; max-width: 76rem; min-width: 0; }
+.view { display: flex; flex-direction: column; gap: 1.25rem; }
+.view > h2 + .apoio { margin-top: -1.1rem; }
+/* Passo a passo: sem menu, uma coluna, largura de leitura. */
+body.no-inicio .corpo { grid-template-columns: 1fr; }
+body.no-inicio .menu { display: none; }
+body.no-inicio main { max-width: 52rem; margin: 0 auto; }
+
+@media (max-width: 760px) {
+  .corpo { grid-template-columns: 1fr; }
+  .menu { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--linha); padding: 0.4rem; }
+  .menu a { border-left: 0; border-bottom: 3px solid transparent; }
+  .menu a.ativo { border-bottom-color: var(--acento); }
+  .menu .menu-opcoes { margin-top: 0; margin-left: auto; }
+  main { padding: 1rem; }
+}
+
+/* ---------------------------------------------------------------- campos */
+label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 13px; color: var(--apoio); }
+input, select {
+  font: inherit; font-size: 15px; color: var(--texto);
+  background: var(--sup); border: 1px solid var(--borda-campo); border-radius: var(--raio);
+  padding: 0.4rem 0.55rem; min-width: 0;
+}
+input.mono { font-family: var(--mono); font-size: 14px; }
+input:disabled { background: var(--sup-2); color: var(--apoio); border-style: dashed; }
+input:focus-visible, select:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--falha); border-width: 2px; }
+.erro-campo { color: var(--falha); font-size: 13px; }
+.linha-campos { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; }
+.linha-campos label { flex: 1 1 9rem; }
+label.check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(--texto); font-size: 15px; }
+/* Grade dos formularios de secao: 2 a 3 colunas conforme a largura. */
+.campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem 0.9rem; align-items: end; }
+.campos label.largo { grid-column: 1 / -1; }
+.secao-form { display: flex; flex-direction: column; gap: 0.75rem; }
+fieldset {
+  margin: 0; padding: 0.7rem 0.9rem 0.9rem;
+  background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--raio);
+}
+legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; padding: 0 0.3rem; }
+.erros { margin: 0; padding: 0.6rem 0.9rem 0.6rem 2rem; background: var(--falha-fraco); border-radius: var(--raio); }
+.avisos-leves { margin: 0; padding: 0.6rem 0.9rem 0.6rem 2rem; background: var(--acento-fraco); border-radius: var(--raio); }
+/* Faixa usual do bitrate, embaixo dos campos do stream. */
+.faixa-encoder { margin: 0.45rem 0 0; font-size: 13px; color: var(--apoio); }
+.faixa-encoder:empty { display: none; }
+
+.btn {
+  font: inherit; font-size: 14px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.45rem 0.9rem; min-height: 2.25rem;
+  color: var(--texto); background: var(--sup-2);
+  border: 1px solid var(--linha); border-radius: var(--raio);
+  cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+.btn:hover { border-color: var(--apoio); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.acento { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); }
+.btn.acento:hover { filter: brightness(1.06); }
+.btn.discreto { background: transparent; font-weight: 500; }
+.acoes { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+/* Linha de acoes por contexto: no passo a passo quem avanca e o rodape. */
+#inicio .so-opcoes, #inicio [data-ok] { display: none !important; }
+/* Formularios de secao dentro do passo: o encoder cabe em 4 colunas sem rolar. */
+#inicio fieldset .campos { grid-template-columns: repeat(4, 1fr); }
+
+.aviso {
+  padding: 0.6rem 0.9rem; border-radius: var(--raio);
+  background: var(--falha-fraco); color: var(--texto); border-left: 4px solid var(--falha);
+}
+/* "Aguarde": nao e erro, some sozinho. */
+.aviso.neutro { background: var(--sup-2); border-left-color: var(--apoio); }
+/* Aviso junto do formulario que o causou. */
+[data-aviso-de] { margin: 0.75rem 0 0; align-self: stretch; }
+
+/* ---------------------------------------------------------------- passo a passo */
+.inicio { gap: 1rem; }
+.passos {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  counter-reset: passo;
+}
+.passos li { counter-increment: passo; }
+.passo-botao {
+  font: inherit; font-size: 12.5px; width: 100%; text-align: left;
+  padding: 0.45rem 0.6rem; border-radius: 3px; cursor: pointer;
+  background: var(--sup-2); border: 1px solid var(--linha); border-top: 3px solid var(--linha); color: var(--apoio);
+}
+.passo-botao::before { content: counter(passo) "  "; font-family: var(--mono); }
+.passo-botao:disabled { cursor: default; opacity: 0.7; }
+.passos li.feito .passo-botao { border-top-color: var(--ok); color: var(--texto); }
+.passos li.agora .passo-botao { border-top-color: var(--acento); background: var(--sup); color: var(--texto); font-weight: 600; }
+@media (max-width: 760px) { .passos { grid-template-columns: repeat(4, 1fr); } .passo-botao { font-size: 12px; } }
+
+.passo {
+  background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--acento);
+  border-radius: var(--raio); padding: 1.1rem 1.25rem 1.25rem;
+  display: flex; flex-direction: column; gap: 0.8rem;
+}
+.passo h2 { font-size: 22px; letter-spacing: -0.015em; margin: 0; }
+.passo .explica { margin: 0; max-width: 72ch; }
+.passo .slot { display: contents; }
+.passo-acoes {
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.5rem 0;
+}
+.passo-acoes .espaco { flex: 1; }
+.passo-escolha {
+  background: var(--acento-fraco); border-radius: var(--raio); padding: 0.8rem 1rem;
+  display: flex; flex-direction: column; gap: 0.6rem;
+}
+.passo-escolha p { margin: 0; }
+.senha-definida { margin: 0; color: var(--ok); font-weight: 600; display: flex; align-items: center; gap: 0.6rem; }
+
+/* Placas: lista de radios, a sugerida em primeiro. */
+.placas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.placa-item {
+  flex-direction: row; align-items: flex-start; gap: 0.7rem; cursor: pointer;
+  padding: 0.7rem 0.9rem; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--sup);
+  color: var(--texto); font-size: 15px;
+}
+.placa-item input { margin-top: 0.25rem; accent-color: var(--acento); }
+.placa-item:has(input:checked) { border-color: var(--acento); box-shadow: inset 0 0 0 1px var(--acento); }
+.placa-corpo { display: flex; flex-direction: column; gap: 0.15rem; }
+.placa-nome { font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.placa-detalhe { font-size: 13px; color: var(--apoio); }
+.selo { font-size: 11.5px; font-weight: 600; padding: 0.1rem 0.45rem; border-radius: 999px; background: var(--acento-fraco); color: var(--acento-texto); }
+.selo.internet { background: var(--sup-2); color: var(--apoio); border: 1px solid var(--linha); }
+@media (prefers-color-scheme: dark) { .selo { color: var(--texto); } }
+
+/* Resumo: um cartao por secao, com "Alterar". */
+.resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.75rem; }
+.resumo-secao { background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 0.7rem 0.9rem; }
+.resumo-cabeca { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.resumo-cabeca a { font-size: 13px; color: var(--apoio); }
+.resumo-secao dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.7rem; margin: 0.4rem 0 0; font-size: 14px; }
+.resumo-secao dt { color: var(--apoio); }
+.resumo-secao dd { margin: 0; font-family: var(--mono); font-size: 13.5px; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- painel */
+.painel-sem-fila { background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--acento); border-radius: var(--raio); padding: 1.1rem 1.25rem; }
+.painel-sem-fila h2 { font-size: 22px; }
+.fita-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+
+/* A fita: cada posicao e uma etiqueta com o IP. A atual fica acesa. */
+.fita {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: 4px;
+}
+.fita li {
+  position: relative;
+  font-family: var(--mono); font-size: 13px;
+  padding: 0.4rem 0.55rem 0.35rem;
+  background: var(--sup); border: 1px solid var(--linha); border-radius: 3px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.fita li .pos { font-family: var(--sans); font-size: 11px; color: var(--apoio); }
+.fita li .motivo { font-family: var(--sans); font-size: 11px; line-height: 1.3; color: var(--apoio); overflow-wrap: anywhere; }
+.fita li .estado { font-weight: 600; }
+.fita li.feita { background: var(--ok-fraco); border-color: transparent; }
+.fita li.feita .estado { color: var(--ok); }
+.fita li.falhou .estado { color: var(--falha); }
+.fita li.proxima .estado { color: var(--texto); }
+.fita li.pulada { color: var(--apoio); background: transparent; border-style: dashed; }
+.fita li.falhou { background: var(--falha-fraco); border-color: var(--falha); }
+.fita li.atual { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); }
+.fita li.atual .pos, .fita li.atual .motivo, .fita li.atual .estado { color: var(--acento-texto); }
+/* A atual que falhou: vermelho, nao ambar ("acontecendo agora"). */
+.fita li.atual.falhou { background: var(--falha); border-color: var(--falha); color: var(--sup); }
+.fita li.atual.falhou .pos, .fita li.atual.falhou .motivo, .fita li.atual.falhou .estado { color: var(--sup); }
+.fita li.proxima { border-color: var(--acento); border-width: 2px; padding: calc(0.4rem - 1px) calc(0.55rem - 1px) calc(0.35rem - 1px); }
+
+.bancada {
+  background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--acento);
+  border-radius: var(--raio); padding: 1.1rem 1.25rem;
+}
+.bancada-pos { font-family: var(--sans-titulo); font-size: 24px; font-weight: 600; margin: 0 0 0.1rem; letter-spacing: -0.015em; }
+.bancada-destino { margin: 0 0 0.5rem; font-size: 17px; }
+.bancada-destino .mono { font-size: 20px; font-weight: 600; }
+.bancada form { margin-top: 0.9rem; }
+.falha-titulo { color: var(--falha); }
+.vigia { margin-bottom: 1.1rem; padding-bottom: 0.9rem; border-bottom: 1px solid var(--linha); }
+.vigia-cabeca { display: flex; align-items: center; gap: 0.5rem; }
+.vigia-cabeca h3 { margin: 0; }
+.vigia .apoio { max-width: 70ch; }
+.bancada .vigia form { margin-top: 0.5rem; }
+.retomar { margin-top: 0.75rem; }
+.retomar summary { cursor: pointer; color: var(--apoio); font-size: 14px; }
+.retomar[open] summary { margin-bottom: 0.4rem; }
+.retomar label { max-width: 16rem; margin-top: 0.5rem; }
+.decisao-erro { font-family: var(--mono); font-size: 14px; background: var(--falha-fraco); padding: 0.6rem 0.8rem; border-radius: var(--raio); overflow-wrap: anywhere; }
+#bancada-fim .btn { margin-top: 0.6rem; }
+
+/* Etapas: sequencia real, por isso numerada. */
+.etapas { list-style: none; counter-reset: etapa; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0; margin: 0.75rem 0; }
+.etapas li {
+  counter-increment: etapa;
+  padding: 0.55rem 0.7rem; border-radius: 3px;
+  background: var(--sup-2); border: 1px solid var(--linha); color: var(--apoio);
+}
+.etapas li::before { content: counter(etapa) "  "; font-family: var(--mono); }
+.etapas li.feita { background: var(--ok-fraco); color: var(--texto); border-color: transparent; }
+.etapas li.agora { background: var(--acento); color: var(--acento-texto); border-color: var(--acento); font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) {
+  .etapas li.agora { animation: pulso 1.6s ease-in-out infinite; }
+  @keyframes pulso { 50% { filter: brightness(1.12); } }
+}
+@media (max-width: 760px) { .etapas { grid-template-columns: 1fr 1fr; } }
+
+.escolha { list-style: none; padding: 0; margin: 0.75rem 0; display: flex; flex-direction: column; gap: 6px; }
+.escolha button { width: 100%; justify-content: flex-start; gap: 1rem; font-family: var(--mono); font-weight: 500; }
+.ultimo { margin: 0; padding: 0.5rem 0.8rem; border-left: 4px solid var(--ok); background: var(--ok-fraco); border-radius: var(--raio); }
+.registro-bloco { margin-top: 0.5rem; }
+
+/* ---------------------------------------------------------------- registro */
+.tabela-rolagem { overflow-x: auto; background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio); }
+.tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabela th { text-align: left; font-weight: 600; font-size: 13px; color: var(--apoio); padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+.tabela td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--linha); vertical-align: top; }
+.tabela tr:last-child td { border-bottom: 0; }
+.tabela td.mono { white-space: nowrap; }
+.tabela .enc-sec { color: var(--apoio); }
+.sit { font-weight: 600; }
+.sit.Instalada { color: var(--ok); }
+.sit.Falhou { color: var(--falha); }
+.sit.Resetada { color: var(--apoio); }
+.sit-detalhe { display: block; font-weight: 400; color: var(--apoio); font-size: 12px; max-width: 28ch; }
+
+/* ---------------------------------------------------------------- ferramentas */
+.ferramentas { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+.ferramenta { background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio); padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
+.ferramenta .linha-campos { width: 100%; }
+.resultado { background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio); padding: 1rem; }
+.resultado dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0.5rem 0 0; }
+.resultado dt { color: var(--apoio); }
+.resultado dd { margin: 0; font-family: var(--mono); font-size: 14px; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- opcoes */
+.opcoes { gap: 1rem; }
+.secao {
+  background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio);
+  padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.6rem;
+  scroll-margin-top: 1rem;
+}
+.secao > h3 { font-size: 17px; }
+.secao > .apoio { margin-top: -0.3rem; }
+.secao .slot { display: contents; }
+
+/* ---------------------------------------------------------------- log */
+.log { margin-top: 1.5rem; }
+.log summary { cursor: pointer; font-weight: 600; color: var(--apoio); padding: 0.25rem 0; }
+.log-linhas {
+  height: 15rem; overflow-y: auto; margin-top: 0.4rem;
+  background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--raio);
+  padding: 0.5rem 0.7rem; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.log-linhas .ts { color: var(--apoio); margin-right: 0.6rem; }
+.log-linhas .Red { color: var(--falha); }
+.log-linhas .Green { color: var(--ok); }
+.log-linhas .Yellow, .log-linhas .DarkYellow { color: var(--log-amarelo); }
+.log-linhas .Cyan { color: var(--texto); font-weight: 700; }
+.log-linhas .DarkGray, .log-linhas .Gray { color: var(--apoio); }
+
+/* ---------------------------------------------------------------- telas cheias */
+.encerrado { position: fixed; inset: 0; background: var(--fundo); display: grid; place-items: center; font-size: 18px; z-index: 50; }
+
+/* Faixa de atualizacao (versao nova no GitHub): discreta, acima do topo. */
+.atualizacao { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.4rem 1rem; font-size: 14px;
+  background: var(--acento-fraco); border-bottom: 1px solid var(--linha); }
+.atualizacao.erro { background: var(--falha-fraco); }
+.atualizacao .btn { padding: 0.2rem 0.7rem; }
+.atualizacao a { color: inherit; }

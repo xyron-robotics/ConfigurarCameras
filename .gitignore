@@ -1,0 +1,18 @@
+# Instalador gerado (instalador\Gerar-Instalador.ps1) e binarios antigos
+*.exe
+*.zip
+instalador/saida/
+
+# Senha e ajustes locais (senha.local.ps1 define $SenhaLocal)
+*.local.ps1
+
+# Copias de trabalho e saidas de execucao
+*.bak
+log-*.txt
+cameras.csv
+plano-cameras.csv
+relatorio-*.csv
+nao-cameras.txt
+
+# Capturas de tela dos testes de interface
+.playwright-mcp/
