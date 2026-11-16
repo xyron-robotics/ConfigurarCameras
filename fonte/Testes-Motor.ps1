@@ -1902,6 +1902,34 @@ T 'Aplicado no registro leva so o que a camera recebeu: sem placa, fila nem etap
     } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+T 'Tema: ausente vira sistema; grava e le; valor invalido estoura sem gravar; lixo no arquivo vira sistema' {
+    $d = New-Temp; $null = New-Item -ItemType Directory -Path $d
+    try {
+        $arq = Join-Path $d 'tema.txt'
+        Assert-Igual 'sistema' (Read-Tema -Caminho $arq) 'sem arquivo'
+        Assert-Igual 'escuro' (Save-Tema -Caminho $arq -Valor 'escuro') 'gravou escuro'
+        Assert-Igual 'escuro' (Read-Tema -Caminho $arq) 'leu escuro'
+        Assert-Igual 'claro' (Save-Tema -Caminho $arq -Valor ' CLARO ') 'troca por cima (Replace) e normaliza'
+        Assert-Igual 'claro' (Read-Tema -Caminho $arq) 'leu claro'
+        $estourou = $false; try { Save-Tema -Caminho $arq -Valor 'roxo' } catch { $estourou = $true }
+        Assert-Verdade $estourou 'tema invalido estoura'
+        Assert-Igual 'claro' (Read-Tema -Caminho $arq) 'invalido nao gravou'
+        Assert-Falso (Test-Path -LiteralPath ($arq + '.tmp')) 'sem .tmp sobrando'
+        [IO.File]::WriteAllText($arq, '<script>')
+        Assert-Igual 'sistema' (Read-Tema -Caminho $arq) 'lixo no arquivo'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Tema: data-tema entra so no <html> do index.html real, e o servidor tem as rotas' {
+    $html = [IO.File]::ReadAllText((Join-Path $raiz 'web\www\index.html'), [Text.Encoding]::UTF8)
+    $saida = Add-TemaNoHtml -Html $html -Tema 'escuro'
+    Assert-Verdade ($saida.Contains('<html lang="pt-BR" data-tema="escuro">') -or $saida.Contains('<html data-tema="escuro" lang="pt-BR">')) 'data-tema no <html>'
+    Assert-Igual 1 ([regex]::Matches($saida, 'data-tema="').Count) 'uma vez so'
+    Assert-Verdade ((Add-TemaNoHtml -Html '<html>' -Tema '"><script>') -eq '<html data-tema="sistema">') 'valor estranho vira sistema'
+    $txt = [IO.File]::ReadAllText((Join-Path $raiz 'web\Servidor-Painel.ps1'), [Text.Encoding]::UTF8)
+    foreach ($rota in @("'GET /api/tema'", "'PUT /api/tema'", 'Add-TemaNoHtml')) { Assert-Verdade ($txt.Contains($rota)) ('servidor tem ' + $rota) }
+}
+
 # ------------------------------------------------------------------- resultado
 
 Write-Host ""

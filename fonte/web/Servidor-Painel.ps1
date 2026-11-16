@@ -185,6 +185,8 @@ $arquivos = @{
     # Cache da ultima checagem de atualizacao e log do instalador silencioso.
     Atualizacao    = (Join-Path $PastaDados 'atualizacao.json')
     LogInstalador  = (Join-Path $PastaDados 'instalador.log')
+    # Tema do painel (sistema|claro|escuro): o listener grava, fora da sessao.
+    Tema           = (Join-Path $PastaDados 'tema.txt')
 }
 
 # ------------------------------------------------------- estado compartilhado
@@ -1370,7 +1372,10 @@ function Invoke-Rota {
     if ($metodo -eq 'GET' -and $estaticos.ContainsKey($rota)) {
         $ext = [IO.Path]::GetExtension($estaticos[$rota])
         $tipo = $tipos[$ext]; if (-not $tipo) { $tipo = 'application/octet-stream' }
-        Send-Resposta $Ctx 200 $tipo ([IO.File]::ReadAllBytes($estaticos[$rota])) @{ 'Content-Security-Policy' = "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }
+        $corpo = [IO.File]::ReadAllBytes($estaticos[$rota])
+        # index.html sai com data-tema no <html>: abre no tema certo, sem flash.
+        if ($ext -eq '.html') { $corpo = Add-TemaNoHtml -Html ([Text.Encoding]::UTF8.GetString($corpo)) -Tema (Read-Tema -Caminho $arquivos.Tema) }
+        Send-Resposta $Ctx 200 $tipo $corpo @{ 'Content-Security-Policy' = "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }
         return
     }
 
@@ -1385,6 +1390,14 @@ function Invoke-Rota {
             if ($l.Linhas.Count -eq 0) { $logJson = '[]' }
             Send-Json $Ctx ('{"estado":' + $E.Estado + ',"log":' + $logJson + ',"cursor":' + $l.Cursor + ',"comandos":' + $Q.Count +
                             ',"versao":"' + $VersaoPainel + '","atualizacao":' + $E.Atualizacao + '}')
+        }
+        # Tema: so preferencia visual. O listener grava direto (arquivo pequeno,
+        # sem hardware, sem fila); a sessao.json continua so do worker.
+        'GET /api/tema' { Send-Json $Ctx @{ tema = (Read-Tema -Caminho $arquivos.Tema) } }
+        'PUT /api/tema' {
+            $b = Read-Corpo $Ctx
+            try { $v = Save-Tema -Caminho $arquivos.Tema -Valor ([string]$b.tema) } catch { Send-Json $Ctx @{ erro = $_.Exception.Message } 400; return }
+            Send-Json $Ctx @{ ok = $true; tema = $v }
         }
         'POST /api/senha' { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'senha'; senha = [string]$b.senha } -Sempre }
         # Placas fisicas deste PC, para o passo 2 / secao Placa (Get-NetAdapter

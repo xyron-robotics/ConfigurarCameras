@@ -3315,6 +3315,42 @@ function Read-JsonArquivo {
     throw ($Caminho + ' esta corrompido e o .bak tambem. Nada foi sobrescrito; recupere o arquivo antes de continuar.')
 }
 
+# Tema do painel (sistema | claro | escuro). Mora num arquivo proprio, fora da
+# sessao: Sessao e termo do dominio das cameras (CONTEXT.md) e tema nao e. A
+# porta do painel muda a cada abertura (a origem muda e o localStorage nao
+# guarda nada), por isso quem lembra e o servidor. Ausente/ilegivel = sistema.
+$TemasAceitos = @('sistema', 'claro', 'escuro')
+function Read-Tema {
+    param([Parameter(Mandatory)][string]$Caminho)
+    try {
+        if (Test-Path -LiteralPath $Caminho) {
+            $v = ([IO.File]::ReadAllText($Caminho, [Text.Encoding]::UTF8)).Trim().ToLowerInvariant()
+            if ($TemasAceitos -contains $v) { return $v }
+        }
+    } catch { }
+    return 'sistema'
+}
+
+# Grava o tema (tmp + troca: nunca fica pela metade). Valor fora da lista estoura.
+function Save-Tema {
+    param([Parameter(Mandatory)][string]$Caminho, [string]$Valor)
+    $v = ([string]$Valor).Trim().ToLowerInvariant()
+    if ($TemasAceitos -notcontains $v) { throw ('Tema inválido: use ' + ($TemasAceitos -join ', ') + '.') }
+    $tmp = $Caminho + '.tmp'
+    [IO.File]::WriteAllText($tmp, $v, (New-Object Text.UTF8Encoding($false)))
+    # Sem .bak ([NullString]: $null puro vira "" e o Replace recusa o caminho).
+    if (Test-Path -LiteralPath $Caminho) { [IO.File]::Replace($tmp, $Caminho, [NullString]::Value) } else { [IO.File]::Move($tmp, $Caminho) }
+    return $v
+}
+
+# Poe data-tema no <html> do index.html servido: a pagina abre ja no tema certo,
+# sem flash e sem script inline (a CSP proibe). So a primeira tag <html.
+function Add-TemaNoHtml {
+    param([string]$Html, [string]$Tema)
+    if ($TemasAceitos -notcontains $Tema) { $Tema = 'sistema' }
+    return ([regex]'<html(\s|>)').Replace($Html, ('<html data-tema="' + $Tema + '"$1'), 1)
+}
+
 # Sessao gravada; NULA quando o arquivo nao existe (e isso que dispara o
 # passo a passo no painel). Corrompido com .bak tambem: estoura (Read-JsonArquivo).
 function Read-Sessao {

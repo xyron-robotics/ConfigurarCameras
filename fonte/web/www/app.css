@@ -1,49 +1,40 @@
 /* Painel ConfigurarCameras. Grafite neutro + ambar de rotuladora para o que
    esta acontecendo agora. Verde e vermelho so com sentido (ok / falha). */
 
+/* Tema: light-dark(claro, escuro) segue o color-scheme. Sem data-tema (ou
+   data-tema="sistema") vale o do Windows; o servidor poe data-tema no <html>
+   quando o operador forca Claro ou Escuro em Opcoes (sem flash, sem script
+   inline). Edge >= 123. */
 :root {
-  --fundo: #E9ECEE;
-  --sup: #FFFFFF;
-  --sup-2: #F4F6F7;
-  --texto: #262B2E;
-  --apoio: #5C656B;
-  --linha: #CBD1D5;
+  color-scheme: light dark;
+  --fundo: light-dark(#E9ECEE, #191C1E);
+  --sup: light-dark(#FFFFFF, #23272A);
+  --sup-2: light-dark(#F4F6F7, #1E2224);
+  --texto: light-dark(#262B2E, #E4E7E9);
+  --apoio: light-dark(#5C656B, #9AA3A9);
+  --linha: light-dark(#CBD1D5, #3A4145);
   --acento: #E0A21B;
+  /* Segunda listra da faixa de simulacao. */
+  --acento-listra: #EDBB45;
   --acento-texto: #2A2206;
-  --acento-fraco: #FBEFCF;
-  --ok: #2A7146;
-  --ok-fraco: #DDEFE3;
-  --falha: #B3362B;
-  --falha-fraco: #F6DEDB;
-  --pulada: #8A9297;
+  --acento-fraco: light-dark(#FBEFCF, #3A3014);
+  /* Texto sobre --acento-fraco: escuro no claro; no escuro o fundo ja e escuro. */
+  --acento-fraco-texto: light-dark(#2A2206, #E4E7E9);
+  --ok: light-dark(#2A7146, #5DBB83);
+  --ok-fraco: light-dark(#DDEFE3, #1E3527);
+  --falha: light-dark(#B3362B, #E86C60);
+  --falha-fraco: light-dark(#F6DEDB, #3D2220);
+  --pulada: light-dark(#8A9297, #6E777C);
   /* Borda de campo: 3:1 contra a superficie (WCAG 1.4.11). */
-  --borda-campo: #7E878D;
-  --log-amarelo: #8A6408;
+  --borda-campo: light-dark(#7E878D, #7A8389);
+  --log-amarelo: light-dark(#8A6408, #E9BD58);
   --raio: 6px;
   --sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --sans-titulo: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
-  color-scheme: light dark;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fundo: #191C1E;
-    --sup: #23272A;
-    --sup-2: #1E2224;
-    --texto: #E4E7E9;
-    --apoio: #9AA3A9;
-    --linha: #3A4145;
-    --acento-fraco: #3A3014;
-    --ok: #5DBB83;
-    --ok-fraco: #1E3527;
-    --falha: #E86C60;
-    --falha-fraco: #3D2220;
-    --pulada: #6E777C;
-    --borda-campo: #7A8389;
-    --log-amarelo: #E9BD58;
-  }
-}
+:root[data-tema="claro"] { color-scheme: light; }
+:root[data-tema="escuro"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -79,7 +70,7 @@ progress { display: block; width: 100%; max-width: 32rem; height: 0.6rem; margin
   display: flex; gap: 1.5rem; flex-wrap: wrap;
   padding: 0.45rem 1.25rem;
   font-weight: 600; color: var(--acento-texto);
-  background: repeating-linear-gradient(-45deg, #E0A21B 0 14px, #EDBB45 14px 28px);
+  background: repeating-linear-gradient(-45deg, var(--acento) 0 14px, var(--acento-listra) 14px 28px);
 }
 
 /* ---------------------------------------------------------------- topo */
@@ -235,9 +226,8 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .placa-corpo { display: flex; flex-direction: column; gap: 0.15rem; }
 .placa-nome { font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .placa-detalhe { font-size: 13px; color: var(--apoio); }
-.selo { font-size: 11.5px; font-weight: 600; padding: 0.1rem 0.45rem; border-radius: 999px; background: var(--acento-fraco); color: var(--acento-texto); }
+.selo { font-size: 11.5px; font-weight: 600; padding: 0.1rem 0.45rem; border-radius: 999px; background: var(--acento-fraco); color: var(--acento-fraco-texto); }
 .selo.internet { background: var(--sup-2); color: var(--apoio); border: 1px solid var(--linha); }
-@media (prefers-color-scheme: dark) { .selo { color: var(--texto); } }
 
 /* Resumo: um cartao por secao, com "Alterar". */
 .resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.75rem; }
@@ -356,6 +346,21 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .secao > h3 { font-size: 17px; }
 .secao > .apoio { margin-top: -0.3rem; }
 .secao .slot { display: contents; }
+/* Tema: grupo de radio com cara de controle segmentado. O radio fica na tela
+   (so invisivel), entao setas, Tab e leitor de tela funcionam como radio. */
+.tema { border: 0; padding: 0; margin: 0; background: transparent; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.tema legend { float: left; padding: 0; margin-right: 0.25rem; font-family: var(--sans); font-weight: 500; font-size: 14px; }
+.segmentos { display: inline-flex; border: 1px solid var(--borda-campo); border-radius: var(--raio); overflow: hidden; }
+.segmentos label {
+  position: relative; flex-direction: row; align-items: center;
+  padding: 0.4rem 0.9rem; font-size: 14px; color: var(--texto); cursor: pointer;
+  background: var(--sup);
+}
+.segmentos label + label { border-left: 1px solid var(--borda-campo); }
+.segmentos input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.segmentos label:hover { background: var(--sup-2); }
+.segmentos label:has(input:checked) { background: var(--texto); color: var(--sup); font-weight: 600; }
+.segmentos label:has(input:focus-visible) { outline: 2px solid var(--texto); outline-offset: -4px; box-shadow: inset 0 0 0 4px var(--acento); }
 
 /* ---------------------------------------------------------------- log */
 .log { margin-top: 1.5rem; }

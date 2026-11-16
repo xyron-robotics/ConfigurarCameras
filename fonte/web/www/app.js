@@ -1430,6 +1430,34 @@ function ligar() {
   });
 }
 
+// ------------------------------------------------------------------ tema
+// O servidor ja entrega o <html> com data-tema (sem flash). Aqui so a troca
+// em Opcoes: atributo + metas theme-color na hora, e PUT /api/tema para a
+// proxima abertura (a porta muda; localStorage nao serve).
+const MEDIA_TEMA = { claro: '(prefers-color-scheme: light)', escuro: '(prefers-color-scheme: dark)' };
+function aplicarTema(v) {
+  const tema = MEDIA_TEMA[v] ? v : 'sistema';
+  document.documentElement.dataset.tema = tema;
+  for (const m of document.querySelectorAll('meta[data-tema-cor]')) {
+    const dela = m.dataset.temaCor;
+    m.media = tema === 'sistema' ? MEDIA_TEMA[dela] : (dela === tema ? 'all' : 'not all');
+  }
+  for (const r of document.querySelectorAll('input[name="tema"]')) r.checked = r.value === tema;
+  return tema;
+}
+
+function ligarTema() {
+  aplicarTema(document.documentElement.dataset.tema);
+  $('tema').addEventListener('change', async (ev) => {
+    const anterior = document.documentElement.dataset.tema;
+    const novo = aplicarTema(ev.target.value);
+    try { await api('PUT', '/api/tema', { tema: novo }); } catch (e) {
+      aplicarTema(anterior);
+      mostrarAviso('Não deu para guardar o tema: ' + e.message, 'painel');
+    }
+  });
+}
+
 async function ciclo() {
   await buscarEstado();
   const rapido = estado && (estado.ocupado || estado.fase === 'configurando');
@@ -1437,5 +1465,6 @@ async function ciclo() {
 }
 
 ligar();
+ligarTema();
 carregarSessao();
 ciclo();

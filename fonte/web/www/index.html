@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Barra de titulo do Edge em modo app: as duas cobrem o tema Sistema; com
+     tema forcado o app.js troca o media das duas. -->
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)" data-tema-cor="claro">
+<meta name="theme-color" content="#23272A" media="(prefers-color-scheme: dark)" data-tema-cor="escuro">
 <title>Configurar câmeras</title>
 <link rel="stylesheet" href="/app.css">
 <script src="/app.js" defer></script>
@@ -417,6 +422,14 @@
           <button type="button" class="btn discreto" id="btn-encerrar">Encerrar o painel</button>
           <span class="apoio" id="versao-painel"></span>
         </div>
+        <fieldset class="tema" id="tema">
+          <legend>Tema</legend>
+          <div class="segmentos">
+            <label><input type="radio" name="tema" value="sistema" checked>Sistema</label>
+            <label><input type="radio" name="tema" value="claro">Claro</label>
+            <label><input type="radio" name="tema" value="escuro">Escuro</label>
+          </div>
+        </fieldset>
         <p class="aviso" data-aviso-de="painel" role="alert" hidden></p>
       </div>
     </section>
