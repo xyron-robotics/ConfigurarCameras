@@ -279,6 +279,59 @@ T 'H.265 grava Compression; secundario 1280x720 vira 720P; fora da lista estoura
     Assert-Estoura { ConvertTo-EncodeAjustado -Tabela (Get-Fixture 'encode-vip1230-d-g3.json') -Padroes $p } 'codec fora da lista'
 }
 
+T 'VIP-5460-Z-IA: entrada esqueleto (sem VideoEnable) do ExtraFormat fica como veio, as outras 3 recebem o secundario' {
+    $t = Get-Fixture 'encode-vip5460-z-ia.json'
+    $n = @(ConvertTo-EncodeAjustado -Tabela $t -Padroes $padroes)
+    $x = @($n[0].ExtraFormat)
+    Assert-Igual 4 $x.Count 'entradas ExtraFormat (esqueleto continua na tabela)'
+    for ($i = 0; $i -lt 3; $i++) {
+        Assert-Igual 12 $x[$i].Video.FPS ('ExtraFormat[' + $i + '] FPS')
+        Assert-Igual 24 $x[$i].Video.GOP ('ExtraFormat[' + $i + '] GOP')
+        Assert-Igual 'D1' $x[$i].Video.CustomResolutionName ('ExtraFormat[' + $i + '] nome')
+    }
+    $esq = $x[3].Video
+    Assert-Falso ($null -ne $esq.PSObject.Properties['FPS']) 'esqueleto ganhou FPS'
+    Assert-Falso ($null -ne $esq.PSObject.Properties['GOP']) 'esqueleto ganhou GOP'
+    Assert-Falso ($null -ne $x[3].PSObject.Properties['VideoEnable']) 'esqueleto ganhou VideoEnable'
+    Assert-Igual 512 $esq.BitRate 'BitRate do esqueleto como veio'
+    Assert-Igual 'H.265' $esq.Compression 'codec do esqueleto como veio'
+    Assert-Igual 4 @($n[0].MainFormat).Count 'entradas MainFormat'
+    foreach ($f in @($n[0].MainFormat)) { Assert-Igual '1080P' $f.Video.CustomResolutionName 'principal 1080P' }
+}
+
+T 'VIP-5460-Z-IA: conferencia pula o esqueleto (ajustada confere sem divergencia)' {
+    $n = @(ConvertTo-EncodeAjustado -Tabela (Get-Fixture 'encode-vip5460-z-ia.json') -Padroes $padroes)
+    Assert-Igual 0 @(Compare-EncodeAplicado -Tabela $n -Padroes $padroes).Count 'divergencias'
+}
+
+T 'Entrada COM VideoEnable e sem FPS continua estourando formato inesperado' {
+    $t = Get-Fixture 'encode-vip5460-z-ia.json'
+    @($t)[0].ExtraFormat[1].Video.PSObject.Properties.Remove('FPS')
+    Assert-Estoura { ConvertTo-EncodeAjustado -Tabela $t -Padroes $padroes } 'ExtraFormat[1] sem FPS'
+}
+
+T 'Firmware sem VideoEnable em nenhuma entrada (G3 sem o campo): todas gravadas e conferidas como antes' {
+    $t = Get-Fixture 'encode-vip1230-d-g3.json'
+    foreach ($k in 'MainFormat', 'ExtraFormat') {
+        foreach ($f in @(@($t)[0].$k)) { $f.PSObject.Properties.Remove('VideoEnable') }
+    }
+    $n = @(ConvertTo-EncodeAjustado -Tabela $t -Padroes $padroes)
+    foreach ($f in @($n[0].MainFormat)) { Assert-Igual 20 $f.Video.FPS 'principal FPS' }
+    foreach ($f in @($n[0].ExtraFormat)) { Assert-Igual 12 $f.Video.FPS 'secundario FPS' }
+    Assert-Igual 0 @(Compare-EncodeAplicado -Tabela $n -Padroes $padroes).Count 'confere'
+    Assert-Igual 21 @(Compare-EncodeAplicado -Tabela $t -Padroes $padroes).Count 'original segue acusando as 21'
+}
+
+T 'Stream so com entradas esqueleto estoura (nao grava nada calado)' {
+    $t = Get-Fixture 'encode-vip5460-z-ia.json'
+    $x = @(@($t)[0].ExtraFormat)
+    @($t)[0].ExtraFormat = @($x[3])
+    Assert-Estoura { ConvertTo-EncodeAjustado -Tabela $t -Padroes $padroes } 'ExtraFormat so esqueleto'
+    $vazio = Get-Fixture 'encode-vip1230-d-g3.json'
+    @($vazio)[0].ExtraFormat = @()
+    $null = @(ConvertTo-EncodeAjustado -Tabela $vazio -Padroes $padroes)
+}
+
 T 'Catalogo do encoder: faixas nos degraus, recomendado dentro, toda resolucao dos mapas coberta' {
     $c = Get-CatalogoEncoder
     $br = @($c.bitrates)

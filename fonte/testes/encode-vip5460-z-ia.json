@@ -1,0 +1,332 @@
+{
+  "_origem": "configManager.getConfig Encode lido da VIP-5460-Z-IA fw 3.120.00IB001.0.R em 2026-11-16, antes do ajuste. ExtraFormat[3] vem sem VideoEnable/FPS/GOP (esqueleto); encode.getCaps declara MaxExtraStream=3",
+  "table": [
+    {
+      "ExtraFormat": [
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Channels": [
+              0
+            ],
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": true,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 512,
+            "BitRateControl": "CBR",
+            "Compression": "H.265",
+            "CustomResolutionName": "D1",
+            "FPS": 30,
+            "GOP": 60,
+            "Height": 480,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 4,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 704
+          },
+          "VideoEnable": true
+        },
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Channels": [
+              0
+            ],
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": false,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 512,
+            "BitRateControl": "CBR",
+            "Compression": "H.265",
+            "CustomResolutionName": "D1",
+            "FPS": 30,
+            "GOP": 60,
+            "Height": 480,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 4,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 704
+          },
+          "VideoEnable": false
+        },
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Channels": [
+              0
+            ],
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": false,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 512,
+            "BitRateControl": "CBR",
+            "Compression": "H.265",
+            "CustomResolutionName": "D1",
+            "FPS": 30,
+            "GOP": 60,
+            "Height": 480,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 4,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 704
+          },
+          "VideoEnable": false
+        },
+        {
+          "Video": {
+            "BitRate": 512,
+            "BitRateControl": "CBR",
+            "Compression": "H.265",
+            "CustomResolutionName": "D1",
+            "Height": 480,
+            "Width": 704
+          }
+        }
+      ],
+      "MainFormat": [
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Channels": [
+              0
+            ],
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Mode": 0,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": true,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 2048,
+            "BitRateControl": "CBR",
+            "Compression": "H.265",
+            "CustomResolutionName": "2688x1520",
+            "FPS": 30,
+            "GOP": 60,
+            "Height": 1520,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 4,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 2688,
+            "encodeType": 0
+          },
+          "VideoEnable": true
+        },
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Channels": [
+              0
+            ],
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Mode": 0,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": true,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 2048,
+            "BitRateControl": "CBR",
+            "Compression": "H.265",
+            "CustomResolutionName": "2688x1520",
+            "FPS": 30,
+            "GOP": 60,
+            "Height": 1520,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 4,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 2688,
+            "encodeType": 0
+          },
+          "VideoEnable": true
+        },
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Channels": [
+              0
+            ],
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Mode": 0,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": true,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 2048,
+            "BitRateControl": "CBR",
+            "Compression": "H.265",
+            "CustomResolutionName": "2688x1520",
+            "FPS": 30,
+            "GOP": 60,
+            "Height": 1520,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 4,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 2688,
+            "encodeType": 0
+          },
+          "VideoEnable": true
+        },
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Channels": [
+              0
+            ],
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Mode": 0,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": true,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 2048,
+            "BitRateControl": "CBR",
+            "Compression": "H.265",
+            "CustomResolutionName": "720P",
+            "FPS": 30,
+            "GOP": 60,
+            "Height": 720,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 4,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 1280,
+            "encodeType": 0
+          },
+          "VideoEnable": true
+        }
+      ],
+      "SnapFormat": [
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": false,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 5120,
+            "BitRateControl": "VBR",
+            "Compression": "MJPG",
+            "CustomResolutionName": "2688x1520",
+            "FPS": 1.0,
+            "GOP": 60,
+            "Height": 1520,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 5,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 2688
+          },
+          "VideoEnable": true
+        },
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": false,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 5120,
+            "BitRateControl": "VBR",
+            "Compression": "MJPG",
+            "CustomResolutionName": "2688x1520",
+            "FPS": 1.0,
+            "GOP": 60,
+            "Height": 1520,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 5,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 2688
+          },
+          "VideoEnable": true
+        },
+        {
+          "Audio": {
+            "Bitrate": 64,
+            "Compression": "G.711A",
+            "Depth": 16,
+            "Frequency": 8000,
+            "Pack": "DHAV"
+          },
+          "AudioEnable": false,
+          "Video": {
+            "AiGOP": 60,
+            "BitRate": 5120,
+            "BitRateControl": "VBR",
+            "Compression": "MJPG",
+            "CustomResolutionName": "2688x1520",
+            "FPS": 1.0,
+            "GOP": 60,
+            "Height": 1520,
+            "Pack": "DHAV",
+            "Priority": 0,
+            "Profile": "Main",
+            "Quality": 5,
+            "QualityRange": 6,
+            "SVCTLayer": 1,
+            "Width": 2688
+          },
+          "VideoEnable": true
+        }
+      ]
+    }
+  ]
+}

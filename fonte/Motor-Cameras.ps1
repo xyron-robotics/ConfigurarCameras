@@ -2640,6 +2640,20 @@ function Set-CampoObrigatorio {
 }
 
 <#
+    Entrada esqueleto: o firmware traz a entrada sem VideoEnable E sem FPS.
+    A VIP-5460-Z-IA fw 3.120.00IB001.0.R manda ExtraFormat[3] assim, alem do
+    MaxExtraStream=3 do encode.getCaps (16/11/2026). Gravacao e conferencia
+    pulam; ela vai no setConfig como veio. Exigir os DOIS ausentes protege
+    firmware que nao mande VideoEnable: entrada com FPS e sempre gravada, e
+    entrada com VideoEnable sem campo obrigatorio continua formato inesperado.
+#>
+function Test-EntradaEsqueleto {
+    param($Formato)
+    return ($null -eq $Formato.PSObject.Properties['VideoEnable'] -and
+            ($null -eq $Formato.Video -or $null -eq $Formato.Video.PSObject.Properties['FPS']))
+}
+
+<#
     Valores prontos do encoder para a pagina (lista + digitar livre): fps,
     degraus de bitrate do firmware Dahua e, por resolucao, a faixa usual com
     o recomendado em H.264 e em H.265 (~metade). Faixas de referencia, nao
@@ -2678,7 +2692,8 @@ function Get-CatalogoEncoder {
 <#
     Grava um stream dos padroes em todas as entradas de MainFormat[] ou
     ExtraFormat[]: Width, Height, FPS, BitRate, GOP (= 2 x FPS), Compression
-    e CustomResolutionName (quando existe). Entrada nula e pulada.
+    e CustomResolutionName (quando existe). Entrada nula ou esqueleto
+    (Test-EntradaEsqueleto) e pulada.
     -SoFormato: so resolucao, fps e codec; BitRate e GOP ficam como vieram
     (passo 1 de Set-CamEncodeEmPassos).
 #>
@@ -2693,8 +2708,10 @@ function Set-StreamAjustado {
     $fps = [int]$Stream.Fps
 
     $i = 0
+    $esqueletos = 0
     foreach ($f in @($Formatos)) {
         if ($null -eq $f) { continue }
+        if (Test-EntradaEsqueleto $f) { $esqueletos++; continue }
         $onde = $Nome + '[' + $i + '].Video'
         Set-CampoObrigatorio $f.Video 'Width'       ([int]$wh[0])          $onde
         Set-CampoObrigatorio $f.Video 'Height'      ([int]$wh[1])          $onde
@@ -2708,6 +2725,10 @@ function Set-StreamAjustado {
             $f.Video.CustomResolutionName = $Mapa[$res]
         }
         $i++
+    }
+    # So esqueletos: nada seria gravado e a conferencia passaria vazia.
+    if ($i -eq 0 -and $esqueletos -gt 0) {
+        throw ('formato inesperado: ' + $Nome + ' so tem entradas incompletas (' + $esqueletos + ')')
     }
 }
 
@@ -2742,7 +2763,7 @@ function Add-DivergenciasStream {
     $fps = [int]$Stream.Fps
     $i = 0
     foreach ($f in @($Formatos)) {
-        if ($null -eq $f) { continue }
+        if ($null -eq $f -or (Test-EntradaEsqueleto $f)) { continue }
         $v = $f.Video
         $pre = $Nome + ' [' + $i + ']: '
         $lido = [string]$v.Width + 'x' + [string]$v.Height

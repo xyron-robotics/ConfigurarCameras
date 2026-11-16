@@ -83,7 +83,7 @@ Modo do painel, ligado só por parâmetro ao abrir, em que nada é enviado à c�
 _Avoid_: modo teste, dry run, sandbox
 
 **Ajuste de encoder**:
-Etapa obrigatória da configuração que grava resolução, quadros por segundo e bitrate no stream principal e no stream secundário, em todas as entradas de cada stream, e deriva o intervalo de quadro-chave (GOP) como o dobro dos quadros por segundo; o resto do encoder fica como veio.
+Etapa obrigatória da configuração que grava resolução, quadros por segundo e bitrate no stream principal e no stream secundário, em todas as entradas completas de cada stream (entrada que o firmware traz incompleta fica como veio), e deriva o intervalo de quadro-chave (GOP) como o dobro dos quadros por segundo; o resto do encoder fica como veio.
 _Avoid_: configurar vídeo, alterar qualidade
 
 **Fila**:
