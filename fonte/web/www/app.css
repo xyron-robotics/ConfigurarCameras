@@ -59,6 +59,26 @@ a { color: inherit; }
    no botao ambar); o halo ambar marca a identidade. */
 :focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; box-shadow: 0 0 0 2px var(--acento); }
 
+/* Pular para o conteudo: primeiro Tab da pagina; so aparece com foco. */
+.pular {
+  position: absolute; left: 0.75rem; top: -3rem; z-index: 60;
+  padding: 0.45rem 0.9rem; border-radius: var(--raio);
+  background: var(--texto); color: var(--sup); font-weight: 600; text-decoration: none;
+}
+.pular:focus-visible { top: 0.5rem; }
+main:focus { outline: none; }
+
+/* Clique sem atraso de toque duplo; o flash de toque e escolhido, nao o azul padrao. */
+button, .btn, a, label, summary, select, input[type="radio"], input[type="checkbox"] { touch-action: manipulation; }
+html { -webkit-tap-highlight-color: color-mix(in oklab, var(--acento) 30%, transparent); }
+
+/* Numero que muda ou se compara em coluna: digitos de largura igual. */
+.mono, .tabela, .fita, .resumo-secao dd, .resultado dd, .bancada-pos, .placa { font-variant-numeric: tabular-nums; }
+h1, h2, h3, legend { text-wrap: balance; }
+
+/* Ancoras abaixo da faixa de simulacao (sticky, ~2.3rem). */
+.secao, .passo, .bancada, input, select { scroll-margin-top: 3.5rem; }
+
 /* Fora da tela, lido pelo leitor de tela. */
 .so-leitor { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
@@ -81,8 +101,11 @@ progress { display: block; width: 100%; max-width: 32rem; height: 0.6rem; margin
   border-bottom: 1px solid var(--linha);
 }
 .marca { font-size: 17px; letter-spacing: -0.01em; }
+.topo > * { min-width: 0; }
 .topo-estado { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.placa { display: flex; align-items: center; gap: 0.45rem; margin-right: 0.5rem; font-size: 14px; }
+/* A placa preparada lista todos os IPs: quebra em vez de vazar da tela. */
+.placa { display: flex; align-items: center; gap: 0.45rem; margin-right: 0.5rem; font-size: 14px; min-width: 0; }
+.placa > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .luz { width: 10px; height: 10px; border-radius: 50%; background: var(--pulada); flex: none; }
 .luz.ok { background: var(--ok); }
 .luz.falta { background: var(--falha); }
@@ -124,6 +147,9 @@ input, select {
   background: var(--sup); border: 1px solid var(--borda-campo); border-radius: var(--raio);
   padding: 0.4rem 0.55rem; min-width: 0;
 }
+/* Lista aberta do select no Windows escuro: sem isto vem branca com texto claro. */
+select { background-color: var(--sup); color: var(--texto); }
+option { background-color: var(--sup); color: var(--texto); }
 input.mono { font-family: var(--mono); font-size: 14px; }
 input:disabled { background: var(--sup-2); color: var(--apoio); border-style: dashed; }
 input:focus-visible, select:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
@@ -141,6 +167,7 @@ fieldset {
   background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--raio);
 }
 legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; padding: 0 0.3rem; }
+.erros, .avisos-leves, .aviso { overflow-wrap: anywhere; }
 .erros { margin: 0; padding: 0.6rem 0.9rem 0.6rem 2rem; background: var(--falha-fraco); border-radius: var(--raio); }
 .avisos-leves { margin: 0; padding: 0.6rem 0.9rem 0.6rem 2rem; background: var(--acento-fraco); border-radius: var(--raio); }
 /* Faixa usual do bitrate, embaixo dos campos do stream. */
@@ -155,7 +182,10 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
   border: 1px solid var(--linha); border-radius: var(--raio);
   cursor: pointer; text-decoration: none; white-space: nowrap;
 }
-.btn:hover { border-color: var(--apoio); }
+/* Hover e pressionado sobem o contraste em relacao ao repouso. */
+.btn:hover { border-color: var(--apoio); background: color-mix(in oklab, var(--sup-2) 90%, var(--texto)); }
+.btn:active { background: color-mix(in oklab, var(--sup-2) 82%, var(--texto)); }
+.btn.discreto:hover { background: color-mix(in oklab, transparent 90%, var(--texto)); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn.acento { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); }
 .btn.acento:hover { filter: brightness(1.06); }
@@ -317,7 +347,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .tabela-rolagem { overflow-x: auto; background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio); }
 .tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tabela th { text-align: left; font-weight: 600; font-size: 13px; color: var(--apoio); padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--linha); white-space: nowrap; }
-.tabela td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--linha); vertical-align: top; }
+.tabela td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--linha); vertical-align: top; overflow-wrap: anywhere; }
 .tabela tr:last-child td { border-bottom: 0; }
 .tabela td.mono { white-space: nowrap; }
 .tabela .enc-sec { color: var(--apoio); }
@@ -341,7 +371,6 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .secao {
   background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio);
   padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.6rem;
-  scroll-margin-top: 1rem;
 }
 .secao > h3 { font-size: 17px; }
 .secao > .apoio { margin-top: -0.3rem; }

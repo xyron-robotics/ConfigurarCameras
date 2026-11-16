@@ -46,7 +46,8 @@ function h(tag, props, ...filhos) {
   if (props) {
     for (const [k, v] of Object.entries(props)) {
       if (v === undefined || v === null || v === false) continue;
-      if (k === 'class') el.className = v;
+      // IP, MAC, modelo e codec (sempre em .mono) nao passam por tradutor.
+      if (k === 'class') { el.className = v; if (/\bmono\b/.test(v)) el.translate = false; }
       else if (k === 'text') el.textContent = v;
       else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
       else el.setAttribute(k, v === true ? '' : v);
@@ -213,7 +214,11 @@ function trocarView() {
   if (!VIEWS.includes(r.view)) { history.replaceState(null, '', '#painel'); r = { view: 'painel', sub: '' }; }
   montarOpcoes();
   for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== 'view-' + r.view;
-  for (const a of document.querySelectorAll('.menu a')) a.classList.toggle('ativo', a.dataset.view === r.view);
+  for (const a of document.querySelectorAll('.menu a')) {
+    const ativo = a.dataset.view === r.view;
+    a.classList.toggle('ativo', ativo);
+    if (ativo) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  }
   // O log so interessa no painel; nas outras abas ele empurra o conteudo.
   $('log-bloco').open = r.view === 'painel';
   if (r.view === 'painel') carregarRegistro();
@@ -552,7 +557,7 @@ function desenharFila(e) {
 
   if (e.fase === 'configurando' || (e.ocupado && e.trabalho && e.fase === 'fila')) {
     blocos.trabalho = true;
-    $('trabalho-titulo').textContent = posAtual ? ordinal(posAtual) + ' → ' + posAtual.Ip : (e.trabalho || 'Trabalhando');
+    $('trabalho-titulo').textContent = posAtual ? ordinal(posAtual) + ' → ' + posAtual.Ip : (e.trabalho || 'Trabalhando…');
     $('trabalho-texto').textContent = e.trabalho || '';
     const barra = $('trabalho-progresso');
     barra.hidden = !e.progresso;
@@ -719,7 +724,7 @@ function desenharFerramenta(f, e) {
   ferramentaChave = chave;
   caixa.hidden = false;
   if (f.emCurso) {
-    const titulo = { sondar: 'Sondando ' + f.ip, descobrir: 'Procurando câmeras na rede', verificar: 'Verificando câmeras instaladas' }[f.tipo] || 'Trabalhando';
+    const titulo = { sondar: 'Sondando ' + f.ip + '…', descobrir: 'Procurando câmeras na rede…', verificar: 'Verificando câmeras instaladas…' }[f.tipo] || 'Trabalhando…';
     caixa.replaceChildren(h('h3', { text: titulo }), h('p', { class: 'apoio', text: e.trabalho || '' }),
       e.progresso ? barraProgresso(e.progresso, e.trabalho) : null);
     return;
