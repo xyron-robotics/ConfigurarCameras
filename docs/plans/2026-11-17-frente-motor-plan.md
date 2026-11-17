@@ -1,6 +1,8 @@
 # Frente motor: primitivas de concorrência (F1) e identidade por MAC com portão (F2)
 
-**Status:** Ativo · **Frente:** `motor`
+**Status:** Concluído · **Frente:** `motor`
+
+F1 (primitivas seguras para concorrência) e F2 (identidade por MAC e portão) do mapa `docs/plans/2026-11-cameras-em-paralelo.md` estão feitas nesta frente, Tasks 1 a 12.
 
 **Goal:** deixar o `Motor-Cameras.ps1` pronto para várias câmeras ao mesmo tempo, sem servidor nem UI. Gravação de arquivo e registro seguras entre runspaces, job com porta e etapa final explícitas, vizinho estático (o portão do IP de fábrica) com rastro, descoberta que não confunde duas câmeras no mesmo IP e trava de MAC que devolve dado em vez de texto.
 
