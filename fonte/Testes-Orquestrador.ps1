@@ -12,7 +12,8 @@
       - fim do job (portao -> conferencia -> feita, falha isolada, MAC trocado);
       - ja inicializada (aviso unico pelo registro, Init desconhecido em espera);
       - decisao (tentar na mesma posicao, guarda de lockout por cartao, pular,
-        encerrar).
+        encerrar);
+      - comando (guardas globais: tabela comando x estado).
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -988,6 +989,107 @@ T 'Decisao: grafia do MAC nao importa, estado de entrada nao e mutado e acao inv
     $recusou = $false
     try { Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'apagar' | Out-Null } catch { $recusou = $true }
     Assert-Verdade $recusou 'acao invalida recusada'
+}
+
+# --------------------------------------------------------------------- comando
+
+# Comandos que mexem em tudo: recusados com camera no portao ou conferindo.
+# Cada um com um pedaco do texto da recusa (sem acento neste arquivo; nome
+# diferente do mapa do orquestrador, que o dot-source traz para este escopo).
+$script:FragmentosDaRecusa = [ordered]@{
+    'nova-fila'       = 'montar uma nova fila'
+    'simular'         = 'ligar ou desligar a simula'
+    'salvar-sessao'   = 'salvar a sess'
+    'trocar-senha'    = 'trocar a senha'
+    'restaurar-placa' = 'restaurar a placa de rede'
+    'atualizar'       = 'atualizar o painel'
+}
+# Comandos por cartao e o vigia: passam em qualquer estado.
+$script:ComandosLivres = @('decisao', 'vigia', 'camera')
+
+# Estados da tabela, por nome: cada um so com as fases do nome.
+function New-EstadoDaTabela {
+    param([string]$Nome)
+    switch ($Nome) {
+        'ocioso'     { return (New-EstadoParalelo -Posicoes (New-PosicoesTeste 3)) }
+        'so espera'  { return (New-EstadoComEspera -Cameras 3 -Posicoes 3) }
+        'portao'     { return (New-EstadoComPortao -Cameras 1 -Posicoes 3) }
+        'conferindo' {
+            $e = New-EstadoComPortao -Cameras 1 -Posicoes 3
+            return (Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado (New-ResultadoTeste -Etapa 'rede')).Estado
+        }
+        'decisao'    {
+            $e = New-EstadoComPortao -Cameras 1 -Posicoes 3
+            $res = New-ResultadoTeste -Ok $false -Etapa 'login' -Falhou 'rede' -Erro 'sem resposta'
+            return (Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado $res).Estado
+        }
+    }
+    throw ('estado da tabela desconhecido: ' + $Nome)
+}
+
+T 'Comando: os estados da tabela tem so as fases do nome' {
+    $esperado = @{
+        'ocioso' = ''; 'so espera' = 'espera'; 'portao' = 'portao'
+        'conferindo' = 'conferindo'; 'decisao' = 'decisao'
+    }
+    foreach ($nome in $esperado.Keys) {
+        $fases = @(@((New-EstadoDaTabela $nome).Cameras) | ForEach-Object { $_.Fase } | Sort-Object -Unique) -join ','
+        Assert-Igual $esperado[$nome] $fases ('fases de ' + $nome)
+    }
+}
+
+T 'Comando: tabela comando x estado (recusa so com camera no portao ou conferindo)' {
+    $recusa = @{ 'ocioso' = $false; 'so espera' = $false; 'portao' = $true; 'conferindo' = $true; 'decisao' = $false }
+    foreach ($nome in @('ocioso', 'so espera', 'portao', 'conferindo', 'decisao')) {
+        $e = New-EstadoDaTabela $nome
+        foreach ($cmd in @($script:FragmentosDaRecusa.Keys)) {
+            $r = Step-Comando -Estado $e -Comando $cmd
+            $que = ($cmd + ' em ' + $nome)
+            $acoes = @($r.Acoes)
+            Assert-Igual 0 @($acoes | Where-Object { $_.Tipo -ne 'avisar' }).Count ($que + ': so avisar')
+            if ($recusa[$nome]) {
+                Assert-Verdade ($r.Aceito -eq $false) ($que + ': recusado')
+                Assert-Igual 1 $acoes.Count ($que + ': um aviso')
+                Assert-Igual '' $acoes[0].Mac ($que + ': aviso sem MAC (global)')
+                $texto = [string]$acoes[0].Texto
+                Assert-Verdade $texto.Contains($script:FragmentosDaRecusa[$cmd]) ($que + ': texto <' + $texto + '>')
+                Assert-Verdade $texto.Contains('1 c') ($que + ': conta a camera em curso <' + $texto + '>')
+            } else {
+                Assert-Verdade ($r.Aceito -eq $true) ($que + ': aceito')
+                Assert-Igual 0 $acoes.Count ($que + ': nenhuma acao')
+            }
+        }
+        foreach ($cmd in $script:ComandosLivres) {
+            $r = Step-Comando -Estado $e -Comando $cmd
+            Assert-Verdade ($r.Aceito -eq $true) ($cmd + ' em ' + $nome + ': passa')
+            Assert-Igual 0 @($r.Acoes).Count ($cmd + ' em ' + $nome + ': nenhuma acao')
+        }
+    }
+}
+
+T 'Comando: texto da recusa conta as cameras em curso no plural' {
+    # A 1 conferindo, a 2 no portao, a 3 em espera.
+    $e = New-EstadoComPortao -Cameras 3 -Posicoes 3
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado (New-ResultadoTeste -Etapa 'rede')
+    $e = (Step-Admissao -Estado $r.Estado).Estado
+    $r = Step-Comando -Estado $e -Comando 'nova-fila'
+    Assert-Verdade ($r.Aceito -eq $false) 'recusado'
+    $texto = [string]@($r.Acoes)[0].Texto
+    Assert-Verdade $texto.Contains('2 c') ('duas em curso: ' + $texto)
+    Assert-Verdade $texto.Contains('terminarem') ('plural: ' + $texto)
+}
+
+T 'Comando: nao muda o estado, nem a entrada, e comando desconhecido e recusado' {
+    $e = New-EstadoDaTabela 'portao'
+    $r = Step-Comando -Estado $e -Comando 'salvar-sessao'
+    Assert-Igual 'portao' (Get-Camera $r.Estado 1).Fase 'saida com a 1 no portao'
+    Assert-Igual 'AA:00:00:00:00:01' $r.Estado.Portao 'portao na saida'
+    Assert-Verdade ($r.Estado.Admitindo -eq $true) 'admitindo na saida'
+    Assert-Verdade (-not [object]::ReferenceEquals($e, $r.Estado)) 'saida e copia'
+    Assert-Igual 'portao' (Get-Camera $e 1).Fase 'entrada intacta'
+    $recusou = $false
+    try { Step-Comando -Estado $e -Comando 'formatar' | Out-Null } catch { $recusou = $true }
+    Assert-Verdade $recusou 'comando desconhecido recusado'
 }
 
 # ------------------------------------------------------------------- resultado

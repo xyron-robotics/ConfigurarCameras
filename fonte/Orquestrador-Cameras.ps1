@@ -30,6 +30,9 @@
       Max        0 = sem limite (padrão); 1 = uma por vez (reserva sem DHIP)
       Admitindo  $false depois de "encerrar": quem está em curso termina
       Avisados   MACs que já receberam o aviso único
+
+    Step-Comando (guardas globais) devolve também Aceito; o aviso de recusa
+    é global e sai com Mac vazio.
 #>
 
 <#
@@ -579,4 +582,59 @@ function Step-Decisao {
         $posicao.Motivo = $motivo
     }
     return $nada
+}
+
+# Comandos que mexem em tudo (fila, sessão, senha, placa, atualização) e o
+# que cada um faria, para o texto da recusa.
+$script:ComandosGuardados = [ordered]@{
+    'nova-fila'       = 'montar uma nova fila'
+    'simular'         = 'ligar ou desligar a simulação'
+    'salvar-sessao'   = 'salvar a sessão'
+    'trocar-senha'    = 'trocar a senha'
+    'restaurar-placa' = 'restaurar a placa de rede'
+    'atualizar'       = 'atualizar o painel'
+}
+
+<#
+    Step-Comando: guardas globais. O servidor pergunta antes de executar um
+    comando do painel; o orquestrador só decide, quem executa (ou repassa a
+    recusa) é a F4.
+      - nova-fila, simular, salvar-sessao, trocar-senha, restaurar-placa e
+        atualizar: recusados enquanto houver câmera em 'portao' ou
+        'conferindo', com 'avisar' de Mac vazio (é global) e o texto em
+        pt-BR que conta as câmeras em curso;
+      - decisao (por MAC, inclusive encerrar), vigia e camera (porta/canal
+        por cartão) passam em qualquer estado.
+    Espera, decisão, feita e pulada não seguram comando: nenhuma delas está
+    com job em curso. Além de Estado e Acoes, devolve Aceito. Nunca muda o
+    estado nem gera 'prender' ou 'despachar'.
+#>
+function Step-Comando {
+    param(
+        [Parameter(Mandatory = $true)]$Estado,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('nova-fila', 'simular', 'salvar-sessao', 'trocar-senha', 'restaurar-placa', 'atualizar', 'decisao', 'vigia', 'camera')]
+        [string]$Comando
+    )
+
+    $novo = Copy-EstadoParalelo -Estado $Estado
+    $aceito = @{ Estado = $novo; Acoes = @(); Aceito = $true }
+
+    if (-not $script:ComandosGuardados.Contains($Comando)) { return $aceito }
+
+    $emCurso = @(@($novo.Cameras) | Where-Object { $_.Fase -eq 'portao' -or $_.Fase -eq 'conferindo' }).Count
+    if ($emCurso -eq 0) { return $aceito }
+
+    if ($emCurso -eq 1) {
+        $texto = 'Há 1 câmera em configuração (portão ou conferência). Espere a câmera terminar para '
+    } else {
+        $texto = 'Há ' + $emCurso + ' câmeras em configuração (portão ou conferência). Espere as câmeras terminarem para '
+    }
+    $texto = $texto + $script:ComandosGuardados[$Comando] + '.'
+
+    return @{
+        Estado = $novo
+        Acoes  = @(@{ Tipo = 'avisar'; Mac = ''; Texto = $texto })
+        Aceito = $false
+    }
 }
