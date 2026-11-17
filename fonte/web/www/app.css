@@ -70,8 +70,9 @@ body {
 /* Texto de ajuda: linha de leitura curta. */
 .apoio { color: var(--apoio); margin: 0.25rem 0; max-width: 64ch; }
 .nota { color: var(--apoio); font-size: 13px; margin: 0.5rem 0 0; max-width: 64ch; }
+/* Um tamanho por nivel, h1 > h2 > h3 (h1 e a marca no topo). */
 h1, h2, h3 { font-family: var(--sans-titulo); font-weight: 600; margin: 0; }
-h2 { font-size: 19px; margin-bottom: 0.5rem; }
+h2 { font-size: 21px; letter-spacing: -0.015em; margin-bottom: 0.5rem; }
 h3 { font-size: 16px; margin-bottom: 0.25rem; }
 /* Link em texto: sublinhado discreto, ganha a cor do texto no hover. */
 a { color: inherit; text-decoration-color: var(--linha); text-underline-offset: 3px; }
@@ -88,7 +89,12 @@ a:hover { text-decoration-color: currentColor; }
   background: var(--texto); color: var(--sup); font-weight: 600; text-decoration: none;
 }
 .pular:focus-visible { top: 0.5rem; }
-main:focus { outline: none; }
+/* main (tabindex -1) so mostra o anel quando chega pelo teclado, via "Pular
+   para o conteudo"; clique de mouse nao casa :focus-visible. */
+main:focus-visible { outline-offset: -2px; }
+
+/* Rolagem elastica da pagina so some com mouse/touchpad; toque mantem o padrao. */
+@media (pointer: fine) { html { overscroll-behavior: none; } }
 
 /* Clique sem atraso de toque duplo; o flash de toque e escolhido, nao o azul padrao. */
 button, .btn, a, label, summary, select, input[type="radio"], input[type="checkbox"] { touch-action: manipulation; }
@@ -100,7 +106,7 @@ h1, h2, h3, legend { text-wrap: balance; }
 
 /* Ancoras abaixo da faixa de simulacao (sticky): ~2.3rem numa linha, ~3.6rem
    quando a falha simulada quebra para a segunda. */
-.secao, .passo, .bancada, input, select { scroll-margin-top: 4.5rem; }
+.secao, .passo, .bancada, input, select, button, a, summary { scroll-margin-top: 4.5rem; }
 
 /* Fora da tela, lido pelo leitor de tela. */
 .so-leitor { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -115,6 +121,8 @@ progress { display: block; width: 100%; max-width: 32rem; height: 0.6rem; margin
   font-weight: 600; color: var(--acento-texto);
   background: repeating-linear-gradient(-45deg, var(--acento) 0 14px, var(--acento-listra) 14px 28px);
 }
+/* O texto fica numa placa lisa: as listras sao a moldura, nao o fundo da letra. */
+.faixa-simular > span:not(:empty) { background: var(--acento); padding: 0.05rem 0.5rem; border-radius: var(--r-sm); }
 
 /* ---------------------------------------------------------------- topo */
 .topo {
@@ -123,7 +131,7 @@ progress { display: block; width: 100%; max-width: 32rem; height: 0.6rem; margin
   background: var(--sup);
   border-bottom: 1px solid var(--linha);
 }
-.marca { font-size: 17px; letter-spacing: -0.01em; }
+.marca { font-size: 24px; letter-spacing: -0.015em; line-height: 1.2; }
 .topo > * { min-width: 0; }
 .topo-estado { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 /* A placa preparada lista todos os IPs: quebra em vez de vazar da tela. */
@@ -277,7 +285,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
   border-radius: var(--r-md); padding: var(--s-4) var(--s-5) var(--s-5);
   display: flex; flex-direction: column; gap: var(--s-3);
 }
-.passo h2 { font-size: 22px; letter-spacing: -0.015em; margin: 0; }
+.passo h2 { margin: 0; }
 .passo .explica { margin: 0; max-width: 64ch; }
 .passo .slot { display: contents; }
 .passo-acoes {
@@ -319,7 +327,6 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 /* ---------------------------------------------------------------- painel */
 /* Ambar = agora: sem fila nada esta em curso, a barra lateral fica em --linha. */
 .painel-sem-fila { background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--linha); border-radius: var(--r-md); padding: var(--s-4) var(--s-5); }
-.painel-sem-fila h2 { font-size: 22px; }
 .fita-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
 
 /* A fita: cada posicao e uma etiqueta com o IP. A atual fica acesa. */
@@ -431,7 +438,6 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
   background: var(--sup); border: 1px solid var(--linha); border-radius: var(--r-md);
   padding: var(--s-4) var(--s-5) var(--s-5); display: flex; flex-direction: column; gap: var(--s-3);
 }
-.secao > h3 { font-size: 17px; }
 .secao > .apoio { margin-top: -0.3rem; }
 .secao .slot { display: contents; }
 /* Tema: grupo de radio com cara de controle segmentado. O radio fica na tela

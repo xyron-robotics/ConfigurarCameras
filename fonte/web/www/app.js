@@ -783,7 +783,7 @@ function desenharFerramenta(f, e) {
         'Confira o cabo e o PoE; um firewall que barra UDP de entrada também silencia o broadcast.' }));
     } else {
       partes.push(h('p', { class: 'apoio', text: f.broadcast + ' pelo broadcast, ' + (f.varredura || 0) + ' pela varredura. ' +
-        'Estado "de fábrica" só é certeza quando confirmado por HTTP; fora das faixas da placa é o que a câmera anunciou.' }));
+        'Estado “de fábrica” só é certeza quando confirmado por HTTP; fora das faixas da placa é o que a câmera anunciou.' }));
       const cab = ['IP', 'Máscara', 'MAC', 'Modelo', 'Serial', 'Firmware', 'Estado'];
       const estadoDe = (i) => {
         let t = i.fabrica ? 'de fábrica' : (i.init === -1 ? 'desconhecido' : 'inicializada');
@@ -1283,7 +1283,7 @@ async function carregarRegistro() {
       return h('tr', null,
         h('td', { class: 'mono', text: c.Ip }),
         h('td', { class: 'mono', text: formatarMac(c.Mac) }),
-        h('td', { text: c.Modelo || '' }),
+        h('td', { text: c.Modelo || '', translate: 'no' }),
         h('td', null, h('span', { class: 'sit ' + c.Status, text: c.Status }), detalhe ? h('span', { class: 'sit-detalhe', text: detalhe }) : null),
         h('td', { class: 'mono' }, enc ? [h('div', { text: 'Principal: ' + enc.principal }), h('div', { class: 'enc-sec', text: 'Secundário: ' + enc.secundario })] : null),
         h('td', { text: c.Local || '' }),

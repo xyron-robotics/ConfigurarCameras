@@ -318,10 +318,10 @@
         <div class="slot">
           <form id="form-rede" class="secao-form">
             <div class="campos">
-              <label>Máscara<input name="Mascara" class="mono" translate="no" data-ip spellcheck="false" required></label>
-              <label>Gateway<input name="Gateway" class="mono" translate="no" data-ip spellcheck="false" required></label>
-              <label>DNS 1<input name="Dns1" class="mono" translate="no" data-ip spellcheck="false" required></label>
-              <label>DNS 2<input name="Dns2" class="mono" translate="no" data-ip spellcheck="false" required></label>
+              <label>Máscara<input name="Mascara" autocomplete="off" class="mono" translate="no" data-ip spellcheck="false" required></label>
+              <label>Gateway<input name="Gateway" autocomplete="off" class="mono" translate="no" data-ip spellcheck="false" required></label>
+              <label>DNS 1<input name="Dns1" autocomplete="off" class="mono" translate="no" data-ip spellcheck="false" required></label>
+              <label>DNS 2<input name="Dns2" autocomplete="off" class="mono" translate="no" data-ip spellcheck="false" required></label>
               <label class="duplo">IP do PC nessa rede (opcional)<input name="IpPcCameras" class="mono" translate="no" data-ip spellcheck="false" autocomplete="off" placeholder="vazio = .200 a .249, pelo MAC"></label>
             </div>
             <ul class="erros" role="alert" hidden></ul>
@@ -339,7 +339,7 @@
         <div class="slot">
           <form id="form-fabrica" class="secao-form">
             <div class="campos">
-              <label>IP de fábrica<input name="IpFabrica" class="mono" translate="no" data-ip spellcheck="false" required></label>
+              <label>IP de fábrica<input name="IpFabrica" autocomplete="off" class="mono" translate="no" data-ip spellcheck="false" required></label>
               <label>IP do PC nessa faixa (opcional)<input name="IpPcFabrica" class="mono" translate="no" data-ip spellcheck="false" autocomplete="off" placeholder="vazio = 192.168.1.220"></label>
             </div>
             <ul class="erros" role="alert" hidden></ul>
@@ -357,14 +357,14 @@
         <div class="slot">
           <form id="form-camera" class="secao-form">
             <div class="campos">
-              <label class="largo">E-mail de recuperação gravado na câmera<input name="EmailRecuperacao" type="email" spellcheck="false" required></label>
+              <label class="largo">E-mail de recuperação gravado na câmera<input name="EmailRecuperacao" autocomplete="off" type="email" spellcheck="false" required></label>
             </div>
             <fieldset>
               <legend>Stream principal</legend>
               <div class="campos">
                 <label>Resolução<select name="Resolucao"></select></label>
-                <label>Quadros por segundo<select class="lista-valor" data-para="FpsPrincipal"></select><input name="FpsPrincipal" type="number" min="1" max="60" aria-label="Quadros por segundo do stream principal, outro valor" required hidden></label>
-                <label>Bitrate (kbps)<select class="lista-valor" data-para="BitRate" aria-describedby="faixa-principal"></select><input name="BitRate" type="number" min="64" max="16384" aria-label="Bitrate do stream principal em kbps, outro valor" aria-describedby="faixa-principal" required hidden></label>
+                <label>Quadros por segundo<select class="lista-valor" data-para="FpsPrincipal"></select><input name="FpsPrincipal" autocomplete="off" type="number" min="1" max="60" aria-label="Quadros por segundo do stream principal, outro valor" required hidden></label>
+                <label>Bitrate (kbps)<select class="lista-valor" data-para="BitRate" aria-describedby="faixa-principal"></select><input name="BitRate" autocomplete="off" type="number" min="64" max="16384" aria-label="Bitrate do stream principal em kbps, outro valor" aria-describedby="faixa-principal" required hidden></label>
                 <label>Codec<select name="CodecPrincipal"></select></label>
               </div>
               <p class="faixa-encoder" id="faixa-principal"></p>
@@ -373,13 +373,13 @@
               <legend>Stream secundário</legend>
               <div class="campos">
                 <label>Resolução<select name="ResolucaoSecundario"></select></label>
-                <label>Quadros por segundo<select class="lista-valor" data-para="FpsSecundario"></select><input name="FpsSecundario" type="number" min="1" max="60" aria-label="Quadros por segundo do stream secundário, outro valor" required hidden></label>
-                <label>Bitrate (kbps)<select class="lista-valor" data-para="BitRateSecundario" aria-describedby="faixa-secundario"></select><input name="BitRateSecundario" type="number" min="64" max="16384" aria-label="Bitrate do stream secundário em kbps, outro valor" aria-describedby="faixa-secundario" required hidden></label>
+                <label>Quadros por segundo<select class="lista-valor" data-para="FpsSecundario"></select><input name="FpsSecundario" autocomplete="off" type="number" min="1" max="60" aria-label="Quadros por segundo do stream secundário, outro valor" required hidden></label>
+                <label>Bitrate (kbps)<select class="lista-valor" data-para="BitRateSecundario" aria-describedby="faixa-secundario"></select><input name="BitRateSecundario" autocomplete="off" type="number" min="64" max="16384" aria-label="Bitrate do stream secundário em kbps, outro valor" aria-describedby="faixa-secundario" required hidden></label>
                 <label>Codec<select name="CodecSecundario"></select></label>
               </div>
               <p class="faixa-encoder" id="faixa-secundario"></p>
             </fieldset>
-            <p class="nota">Em quadros e bitrate, escolha da lista ou "Outro valor…" para digitar. O intervalo de quadro-chave (GOP) é gravado como o dobro dos quadros por segundo. A câmera recebe o encoder em duas gravações: primeiro resolução, quadros e codec; depois bitrate e GOP.</p>
+            <p class="nota">Em quadros e bitrate, escolha da lista ou “Outro valor…” para digitar. O intervalo de quadro-chave (GOP) é gravado como o dobro dos quadros por segundo. A câmera recebe o encoder em duas gravações: primeiro resolução, quadros e codec; depois bitrate e GOP.</p>
             <ul class="avisos-leves" id="camera-avisos" aria-live="polite" hidden></ul>
             <ul class="erros" role="alert" hidden></ul>
             <div class="acoes so-opcoes">
@@ -398,9 +398,9 @@
             <div class="campos">
               <label>Primeiro IP<input name="inicio" class="mono" translate="no" data-ip spellcheck="false" placeholder="ex. 10.70.20.50…" autocomplete="off"></label>
               <label>Último IP<input name="fim" class="mono" translate="no" data-ip spellcheck="false" placeholder="ex. 10.70.20.99…" autocomplete="off"></label>
-              <label>Local<input name="local" placeholder="ex. Obra Centro…"></label>
-              <label>Rack<input name="rack" placeholder="ex. Rack 03…"></label>
-              <label>Andar<input name="andar" placeholder="ex. Térreo…"></label>
+              <label>Local<input name="local" autocomplete="off" placeholder="ex. Obra Centro…"></label>
+              <label>Rack<input name="rack" autocomplete="off" placeholder="ex. Rack 03…"></label>
+              <label>Andar<input name="andar" autocomplete="off" placeholder="ex. Térreo…"></label>
             </div>
             <p class="nota" id="fila-previa" aria-live="polite" hidden></p>
             <p class="nota" id="fila-ultima" hidden></p>
