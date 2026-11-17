@@ -11,8 +11,11 @@
   --sup: light-dark(#FFFFFF, #23272A);
   --sup-2: light-dark(#F4F6F7, #1E2224);
   --texto: light-dark(#262B2E, #E4E7E9);
+  /* --apoio contra fundo, sup, sup-2 e acento-fraco: claro 5.02 / 5.95 / 5.49 / 5.20,
+     escuro 6.68 / 5.87 / 6.25 / 5.08 (WCAG, todos >= 4.5:1). */
   --apoio: light-dark(#5C656B, #9AA3A9);
-  --linha: light-dark(#CBD1D5, #3A4145);
+  /* Linha translucida: some no fundo que estiver embaixo, nos dois temas. */
+  --linha: color-mix(in oklab, var(--texto) 12%, transparent);
   --acento: #E0A21B;
   /* Segunda listra da faixa de simulacao. */
   --acento-listra: #EDBB45;
@@ -70,7 +73,9 @@ body {
 h1, h2, h3 { font-family: var(--sans-titulo); font-weight: 600; margin: 0; }
 h2 { font-size: 19px; margin-bottom: 0.5rem; }
 h3 { font-size: 16px; margin-bottom: 0.25rem; }
-a { color: inherit; }
+/* Link em texto: sublinhado discreto, ganha a cor do texto no hover. */
+a { color: inherit; text-decoration-color: var(--linha); text-underline-offset: 3px; }
+a:hover { text-decoration-color: currentColor; }
 
 /* Anel duplo: o contorno na cor do texto aparece em qualquer fundo (inclusive
    no botao ambar); o halo ambar marca a identidade. */
@@ -93,8 +98,9 @@ html { -webkit-tap-highlight-color: color-mix(in oklab, var(--acento) 30%, trans
 .mono, .tabela, .fita, .resumo-secao dd, .resultado dd, .bancada-pos, .placa { font-variant-numeric: tabular-nums; }
 h1, h2, h3, legend { text-wrap: balance; }
 
-/* Ancoras abaixo da faixa de simulacao (sticky, ~2.3rem). */
-.secao, .passo, .bancada, input, select { scroll-margin-top: 3.5rem; }
+/* Ancoras abaixo da faixa de simulacao (sticky): ~2.3rem numa linha, ~3.6rem
+   quando a falha simulada quebra para a segunda. */
+.secao, .passo, .bancada, input, select { scroll-margin-top: 4.5rem; }
 
 /* Fora da tela, lido pelo leitor de tela. */
 .so-leitor { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -184,9 +190,10 @@ label.check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(
 .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem 0.9rem; align-items: end; }
 .campos label.largo { grid-column: 1 / -1; }
 .secao-form { display: flex; flex-direction: column; gap: 0.75rem; }
+/* Sem fundo proprio: no maximo dois niveis de caixa (pagina e cartao). */
 fieldset {
   margin: 0; padding: 0.7rem 0.9rem 0.9rem;
-  background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--r-md);
+  background: transparent; border: 1px solid var(--linha); border-radius: var(--r-md);
 }
 legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; padding: 0 0.3rem; }
 .erros, .avisos-leves, .aviso { overflow-wrap: anywhere; }
@@ -273,10 +280,8 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
   padding: 0.5rem 0;
 }
 .passo-acoes .espaco { flex: 1; }
-.passo-escolha {
-  background: var(--acento-fraco); border-radius: var(--r-md); padding: 0.8rem 1rem;
-  display: flex; flex-direction: column; gap: 0.6rem;
-}
+/* Sem fundo proprio: fica no nivel do cartao do passo; o botao ambar ja chama. */
+.passo-escolha { display: flex; flex-direction: column; gap: 0.6rem; }
 .passo-escolha p { margin: 0; }
 .senha-definida { margin: 0; color: var(--ok); font-weight: 600; display: flex; align-items: center; gap: 0.6rem; }
 
@@ -288,7 +293,9 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
   color: var(--texto); font-size: 15px; font-weight: 400;
 }
 .placa-item input { margin-top: 0.25rem; accent-color: var(--acento); }
-.placa-item:has(input:checked) { border-color: var(--acento); box-shadow: inset 0 0 0 1px var(--acento); }
+/* Selecionada: borda ambar e, por dentro, um fio na cor do texto, que nao
+   depende so do ambar para ser vista. */
+.placa-item:has(input:checked) { border-color: var(--acento); box-shadow: inset 0 0 0 1px var(--acento), inset 0 0 0 2px var(--texto); }
 .placa-corpo { display: flex; flex-direction: column; gap: 0.15rem; }
 .placa-nome { font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .placa-detalhe { font-size: 13px; color: var(--apoio); }
@@ -305,7 +312,8 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .resumo-secao dd { margin: 0; font-family: var(--mono); font-size: 13.5px; overflow-wrap: anywhere; }
 
 /* ---------------------------------------------------------------- painel */
-.painel-sem-fila { background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--acento); border-radius: var(--r-md); padding: var(--s-4) var(--s-5); }
+/* Ambar = agora: sem fila nada esta em curso, a barra lateral fica em --linha. */
+.painel-sem-fila { background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--linha); border-radius: var(--r-md); padding: var(--s-4) var(--s-5); }
 .painel-sem-fila h2 { font-size: 22px; }
 .fita-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
 
@@ -394,6 +402,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .tabela th { text-align: left; font-weight: 600; font-size: 13px; color: var(--apoio); padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--linha); white-space: nowrap; }
 .tabela td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--linha); vertical-align: top; overflow-wrap: anywhere; }
 .tabela tr:last-child td { border-bottom: 0; }
+.tabela tr:hover td { background: var(--sup-2); }
 .tabela td.mono { white-space: nowrap; }
 .tabela .enc-sec { color: var(--apoio); }
 .sit { font-weight: 600; }
