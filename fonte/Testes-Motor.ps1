@@ -1210,6 +1210,52 @@ T 'Falha na conferencia: retomada vai direto conferir e devolve o MAC' {
     } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+# -AteEtapa: o job para depois da etapa pedida (Ok, registro Em andamento) e a
+# chamada seguinte, sem o parametro, retoma pelo registro sem reinicializar.
+T 'AteEtapa rede para Em andamento e a chamada seguinte termina Instalada sem novo DevInit' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    try {
+        $ctx = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.54'; Mac = '' }
+        $script:Linhas.Clear()
+        $r = Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular -AteEtapa 'rede'
+        Assert-Verdade $r.Ok ('primeira chamada: ' + $r.Erro)
+        Assert-Igual 'rede' $r.Etapa 'etapa devolvida'
+        Assert-Verdade ($r.Mac.Length -eq 12) 'MAC devolvido para a retomada'
+        $e = Find-CameraRegistro (Read-Registro $arq) $r.Mac
+        Assert-Igual 'Em andamento|rede' ($e.Status + '|' + $e.Etapa) 'registro apos parar'
+        $log1 = $script:Linhas -join "`n"
+        Assert-Falso ($log1 -match '--- conferencia em') 'nao conferiu'
+        Assert-Igual 1 @($script:Linhas | Where-Object { $_ -match 'DevInit\.setProtocolAgree' }).Count 'um DevInit na primeira'
+
+        $ctx.Mac = $r.Mac
+        $script:Linhas.Clear()
+        $r2 = Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular
+        Assert-Verdade $r2.Ok ('retomada: ' + $r2.Erro)
+        Assert-Igual 'conferida' $r2.Etapa 'etapa final'
+        $e2 = Find-CameraRegistro (Read-Registro $arq) $r.Mac
+        Assert-Igual 'Instalada|conferida' ($e2.Status + '|' + $e2.Etapa) 'registro final'
+        Assert-Igual 0 @($script:Linhas | Where-Object { $_ -match 'DevInit' }).Count 'sem segundo DevInit'
+        Assert-Falso (($script:Linhas -join "`n") -match '--- rede ---') 'nao regravou a rede'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'AteEtapa encoder para antes da rede; AteEtapa desconhecida estoura' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    try {
+        $ctx = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.55'; Mac = '' }
+        $script:Linhas.Clear()
+        $r = Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular -AteEtapa 'encoder'
+        Assert-Verdade $r.Ok ('resultado: ' + $r.Erro)
+        Assert-Igual 'encoder' $r.Etapa 'etapa devolvida'
+        $e = Find-CameraRegistro (Read-Registro $arq) $r.Mac
+        Assert-Igual 'Em andamento|encoder' ($e.Status + '|' + $e.Etapa) 'registro apos parar'
+        Assert-Falso (($script:Linhas -join "`n") -match '--- rede ---') 'nao tocou a rede'
+        Assert-Estoura { Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular -AteEtapa 'xyz' } 'etapa desconhecida'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
 T 'Destino fora da rede do gateway e recusado antes de tocar na camera' {
     $d = New-Temp
     try {

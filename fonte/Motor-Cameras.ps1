@@ -3750,6 +3750,10 @@ function New-ResultadoConfiguracao {
 
     -Simular nao envia nada e usa -CaminhoRegistro separado (o servidor
     passa outro arquivo). -FalharEm forca falha numa etapa, so em simulacao.
+
+    -AteEtapa (vazio = tudo): para depois da etapa pedida, com Ok=$true e o
+    registro em 'Em andamento'. A chamada seguinte, sem o parametro, retoma
+    pelo registro (Get-PlanoRetomada) sem refazer o que ja foi feito.
 #>
 function Invoke-ConfiguracaoCamera {
     param(
@@ -3759,8 +3763,15 @@ function Invoke-ConfiguracaoCamera {
         [Parameter(Mandatory)][string]$CaminhoRegistro,
         [switch]$Simular,
         [string]$FalharEm = '',
-        [int]$EsperaBootSeg = 120
+        [int]$EsperaBootSeg = 120,
+        [string]$AteEtapa = ''
     )
+
+    $etapas = Get-EtapasConfiguracao
+    $AteEtapa = ([string]$AteEtapa).Trim()
+    if ($AteEtapa -and [array]::IndexOf($etapas, $AteEtapa) -lt 0) {
+        throw ('etapa desconhecida em -AteEtapa: ' + $AteEtapa + ' (validas: ' + ($etapas -join ', ') + ')')
+    }
 
     $res = New-ResultadoConfiguracao
     $ctx = $Contexto
@@ -3845,6 +3856,20 @@ function Invoke-ConfiguracaoCamera {
         param([string]$Etapa)
         return ($Simular -and $FalharEm -eq $Etapa)
     }
+    # -AteEtapa: chegou quando a etapa feita e a pedida ou uma depois dela.
+    # O registro ja esta 'Em andamento' (gravado pelo $salvar da etapa).
+    $chegou = {
+        if (-not $AteEtapa -or -not $feita) { return $false }
+        return ([array]::IndexOf($etapas, $feita) -ge [array]::IndexOf($etapas, $AteEtapa))
+    }
+    $parar = {
+        $res.Ok = $true
+        $res.Etapa = $feita
+        $res.Entrada = $ent
+        if (-not $res.Mac -and $null -ne $ent) { $res.Mac = Get-MacNormalizado $ent.Mac }
+        Write-Log ("RESULTADO: parou depois da etapa " + $feita + " (pedido -AteEtapa " + $AteEtapa + "); falta continuar") 'Yellow'
+        return $res
+    }
 
     $sessao = $null
     try {
@@ -3905,6 +3930,7 @@ function Invoke-ConfiguracaoCamera {
             Write-Log ("  " + $info.Modelo + "  MAC " + (Format-Mac $mac) + "  fw " + $info.Firmware) 'White'
             & $salvar $feita 'Em andamento' ''
         }
+        if (& $chegou) { return (& $parar) }
 
         # --- 2. encoder ------------------------------------------------------
         if ((Get-ProximaEtapa $feita) -eq 'encoder') {
@@ -3937,6 +3963,7 @@ function Invoke-ConfiguracaoCamera {
             $feita = 'encoder'
             & $salvar 'encoder' 'Em andamento' ''
         }
+        if (& $chegou) { return (& $parar) }
 
         # --- 3. rede ---------------------------------------------------------
         if ((Get-ProximaEtapa $feita) -eq 'rede') {
@@ -3969,6 +3996,7 @@ function Invoke-ConfiguracaoCamera {
             $feita = 'rede'
             & $salvar 'rede' 'Em andamento' ''
         }
+        if (& $chegou) { return (& $parar) }
 
         # --- 4. conferencia no IP definitivo ---------------------------------
         if ((Get-ProximaEtapa $feita) -eq 'conferida') {
