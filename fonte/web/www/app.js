@@ -355,6 +355,15 @@ function barraProgresso(p, rotulo) {
 // nao e erro; a tela de "atualizando" fica.
 let atualizando = false;
 let geracaoVista = -1;
+
+// Tela de fim (#encerrado, #atualizando): mostra e leva o foco so na primeira
+// vez, para o poll seguinte nao roubar o foco de novo.
+function mostrarTelaFim(id) {
+  const el = $(id);
+  if (!el.hidden) return;
+  el.hidden = false;
+  el.focus();
+}
 let buscando = null;
 
 function buscarEstado() {
@@ -364,7 +373,7 @@ function buscarEstado() {
     try {
       dados = await api('GET', '/api/estado?desde=' + cursorLog);
     } catch (e) {
-      if (atualizando) { $('atualizando').hidden = false; return; }
+      if (atualizando) { mostrarTelaFim('atualizando'); return; }
       $('placa-texto').textContent = 'Painel sem resposta';
       $('placa-luz').className = 'luz falta';
       return;
@@ -483,7 +492,7 @@ function desenharAtualizacao(a, e) {
   const notas = $('atualizacao-notas');
   const estadoA = a.estado || 'nenhuma';
   atualizando = ['baixando', 'verificando', 'instalando'].includes(estadoA);
-  if (estadoA === 'instalando') { $('atualizando').hidden = false; }
+  if (estadoA === 'instalando') { mostrarTelaFim('atualizando'); }
   if (!['disponivel', 'baixando', 'verificando', 'instalando', 'erro'].includes(estadoA)) { faixa.hidden = true; return; }
   faixa.hidden = false;
   faixa.classList.toggle('erro', estadoA === 'erro');
@@ -1160,6 +1169,8 @@ function desenharPlacas() {
   const placas = placasCache.placas || [];
   if (!placas.length) {
     ul.replaceChildren(h('li', { class: 'apoio', text: 'Nenhuma placa de rede física encontrada. Conecte um adaptador (USB-Ethernet serve) e clique em Atualizar lista.' }));
+    $('placas-nota').hidden = true;
+    return;
   }
   ul.replaceChildren(...placas.map((p) => {
     const detalhes = [p.tipo === 'wifi' ? 'Wi-Fi' : 'Ethernet', p.cabo ? (p.tipo === 'wifi' ? 'conectada' : 'cabo conectado') : (p.tipo === 'wifi' ? 'desconectada' : 'sem cabo'),
@@ -1452,7 +1463,7 @@ function ligar() {
     let r = {};
     try { r = await api('POST', '/api/encerrar', {}); } catch (_) { /* o servidor fecha junto */ }
     if (r.restaurando) $('encerrado-texto').textContent = 'Painel encerrado. A placa de rede está voltando ao DHCP (leva alguns segundos). Pode fechar esta janela.';
-    $('encerrado').hidden = false;
+    mostrarTelaFim('encerrado');
   });
 }
 

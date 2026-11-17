@@ -149,7 +149,7 @@
             <h3>Vigia</h3>
             <span class="apoio" id="vigia-estado" role="status" aria-live="polite">desligado</span>
           </div>
-          <p class="apoio" id="vigia-texto"></p>
+          <p class="apoio" id="vigia-texto" aria-live="polite"></p>
           <form id="form-vigia" class="linha-campos">
             <label><span id="vigia-rotulo-porta">Porta inicial</span><input name="porta" autocomplete="off" placeholder="ex. 1 ou Gi1/0/1…"></label>
             <label><span id="vigia-rotulo-canal">Canal inicial</span><input name="canal" autocomplete="off" placeholder="ex. 1…"></label>
@@ -185,7 +185,7 @@
             <li data-etapa="rede">Rede</li>
             <li data-etapa="conferida">Conferência</li>
           </ol>
-          <p class="apoio" id="trabalho-texto"></p>
+          <p class="apoio" id="trabalho-texto" aria-live="polite"></p>
           <progress id="trabalho-progresso" max="120" value="0" hidden></progress>
         </div>
 
@@ -266,7 +266,7 @@
           <p class="aviso" data-aviso-de="verificar" role="alert" hidden></p>
         </div>
       </div>
-      <div id="resultado-ferramenta" class="resultado" hidden></div>
+      <div id="resultado-ferramenta" class="resultado" aria-live="polite" hidden></div>
     </section>
 
     <!-- ============================== OPCOES -->
@@ -380,7 +380,7 @@
               <p class="faixa-encoder" id="faixa-secundario"></p>
             </fieldset>
             <p class="nota">Em quadros e bitrate, escolha da lista ou "Outro valor…" para digitar. O intervalo de quadro-chave (GOP) é gravado como o dobro dos quadros por segundo. A câmera recebe o encoder em duas gravações: primeiro resolução, quadros e codec; depois bitrate e GOP.</p>
-            <ul class="avisos-leves" id="camera-avisos" hidden></ul>
+            <ul class="avisos-leves" id="camera-avisos" aria-live="polite" hidden></ul>
             <ul class="erros" role="alert" hidden></ul>
             <div class="acoes so-opcoes">
               <button class="btn acento" type="submit">Salvar câmera</button>
@@ -442,11 +442,11 @@
   </main>
 </div>
 
-<div id="encerrado" class="encerrado" hidden>
+<div id="encerrado" class="encerrado" tabindex="-1" hidden>
   <p id="encerrado-texto">Painel encerrado. Pode fechar esta janela.</p>
 </div>
 
-<div id="atualizando" class="encerrado" hidden>
+<div id="atualizando" class="encerrado" tabindex="-1" hidden>
   <p id="atualizando-texto">Atualizando o painel… ele fecha e reabre sozinho em instantes. Pode fechar esta janela.</p>
 </div>
 
