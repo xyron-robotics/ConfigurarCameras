@@ -32,6 +32,11 @@
   --sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --sans-titulo: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  /* Movimento: entra devagar, sai rapido, o press e o mais curto. */
+  --m-in: 150ms;
+  --m-out: 120ms;
+  --m-press: 90ms;
+  --ease: cubic-bezier(.2, .8, .2, 1);
 }
 :root[data-tema="claro"] { color-scheme: light; }
 :root[data-tema="escuro"] { color-scheme: dark; }
@@ -146,13 +151,15 @@ input, select {
   font: inherit; font-size: 15px; color: var(--texto);
   background: var(--sup); border: 1px solid var(--borda-campo); border-radius: var(--raio);
   padding: 0.4rem 0.55rem; min-width: 0;
+  transition: border-color var(--m-out) var(--ease), box-shadow var(--m-out) var(--ease);
 }
 /* Lista aberta do select no Windows escuro: sem isto vem branca com texto claro. */
 select { background-color: var(--sup); color: var(--texto); }
 option { background-color: var(--sup); color: var(--texto); }
 input.mono { font-family: var(--mono); font-size: 14px; }
 input:disabled { background: var(--sup-2); color: var(--apoio); border-style: dashed; }
-input:focus-visible, select:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
+/* O foco aparece na hora (duracao 0); so a saida dele usa a transicao do campo. */
+input:focus-visible, select:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); transition-duration: 0s; }
 input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--falha); border-width: 2px; }
 .erro-campo { color: var(--falha); font-size: 13px; }
 .linha-campos { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; }
@@ -181,15 +188,29 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
   color: var(--texto); background: var(--sup-2);
   border: 1px solid var(--linha); border-radius: var(--raio);
   cursor: pointer; text-decoration: none; white-space: nowrap;
+  transition:
+    background-color var(--m-out) var(--ease),
+    border-color var(--m-out) var(--ease),
+    color var(--m-out) var(--ease),
+    transform var(--m-press) var(--ease);
 }
-/* Hover e pressionado sobem o contraste em relacao ao repouso. */
+/* Hover e pressionado sobem o contraste em relacao ao repouso. Hover nao
+   levanta o botao; o press afunda 1px. */
 .btn:hover { border-color: var(--apoio); background: color-mix(in oklab, var(--sup-2) 90%, var(--texto)); }
-.btn:active { background: color-mix(in oklab, var(--sup-2) 82%, var(--texto)); }
+.btn:active { background: color-mix(in oklab, var(--sup-2) 82%, var(--texto)); transform: translateY(1px) scale(.985); }
 .btn.discreto:hover { background: color-mix(in oklab, transparent 90%, var(--texto)); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn.acento { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); }
-.btn.acento:hover { filter: brightness(1.06); }
+.btn.acento:hover { background: color-mix(in oklab, var(--acento) 86%, var(--texto)); border-color: color-mix(in oklab, var(--acento) 86%, var(--texto)); }
 .btn.discreto { background: transparent; font-weight: 500; }
+/* Desabilitado com a mesma cara do campo desabilitado (apoio, sup-2, borda
+   tracejada), sem opacidade: o texto continua legivel e nada reage ao ponteiro. */
+.btn:disabled, .btn:disabled:hover, .btn:disabled:active,
+.btn.acento:disabled, .btn.acento:disabled:hover, .btn.acento:disabled:active,
+.btn.discreto:disabled:hover, .btn.discreto:disabled:active {
+  color: var(--apoio); background: var(--sup-2);
+  border-color: var(--borda-campo); border-style: dashed;
+  cursor: not-allowed; transform: none;
+}
 .acoes { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 /* Linha de acoes por contexto: no passo a passo quem avanca e o rodape. */
 #inicio .so-opcoes, #inicio [data-ok] { display: none !important; }
@@ -333,8 +354,17 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .etapas li.feita { background: var(--ok-fraco); color: var(--texto); border-color: transparent; }
 .etapas li.agora { background: var(--acento); color: var(--acento-texto); border-color: var(--acento); font-weight: 600; }
 @media (prefers-reduced-motion: no-preference) {
-  .etapas li.agora { animation: pulso 1.6s ease-in-out infinite; }
+  .etapas li.agora { animation: pulso 3.2s ease-in-out infinite; }
   @keyframes pulso { 50% { filter: brightness(1.12); } }
+}
+/* Movimento reduzido: o botao nao se mexe, o press vira um tom mais fundo e
+   o pulso da etapa atual para. */
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition-property: background-color, border-color, color; }
+  .btn:active { transform: none; background: color-mix(in oklab, var(--sup-2) 74%, var(--texto)); }
+  .btn.discreto:active { background: color-mix(in oklab, transparent 82%, var(--texto)); }
+  .btn.acento:active { background: color-mix(in oklab, var(--acento) 76%, var(--texto)); border-color: color-mix(in oklab, var(--acento) 76%, var(--texto)); }
+  .etapas li.agora { animation: none; }
 }
 @media (max-width: 760px) { .etapas { grid-template-columns: 1fr 1fr; } }
 
