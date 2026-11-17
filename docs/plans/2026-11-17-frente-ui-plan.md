@@ -1,6 +1,8 @@
 # Frente ui: Taste Skill, guidelines em JS e verificação visual (F2b, F3 e F4 do plano de UI)
 
-**Status:** Ativo · **Frente:** `ui`
+**Status:** Concluído · **Frente:** `ui`
+
+F2b, F3 e F4 do plano de UI estão feitas (Tasks 1 a 9); a Onda 2 do mapa `docs/plans/2026-11-cameras-em-paralelo.md` pode começar.
 
 **Origem:** plano de UI `declarative-wobbling-rain.md` (fora do repo, aprovado). F1 (tema) está em 07b83c4 e F2 (guidelines em HTML e CSS) em 0d0581a. Este arquivo traz o que falta, e a partir daqui ele é a fonte. Os números de linha do plano de origem andaram com F1 e F2: localize pelo nome da função ou do seletor.
 
