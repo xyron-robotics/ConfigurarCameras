@@ -18,9 +18,11 @@
       Cameras    câmeras por MAC, na ordem do primeiro aparecimento no DHIP:
                  { Mac, Serial, Modelo, IpOrigem, HttpPort, Indice,
                    Fase: espera|portao|conferindo|decisao|feita|pulada,
-                   Etapa, Falha, GeracaoLogin, Motivo }
+                   Etapa, Falha, GeracaoLogin, Motivo, ConferirInit }
                  Indice é o número da posição (0 = ainda sem posição);
-                 Motivo diz por que a câmera continua em espera
+                 Motivo diz por que a câmera continua em espera;
+                 ConferirInit = o DHIP não trouxe o Init (o portão confere
+                 depois de prender)
       Posicoes   cópia da fila ({ Posicao, Ip, Estado, Motivo, Mac }, o
                  formato de New-FilaDeFaixa). Além dos estados da fila,
                  'reservada' = presa a uma câmera em curso (Mac preenchido)
@@ -116,6 +118,36 @@ function Get-InitOrquestrador {
 }
 
 <#
+    Marca do achado é da família DHIP? Marca vazia conta como família DHIP:
+    o achado veio do broadcast DHIP.
+#>
+function Test-MarcaDhip {
+    param($Marca)
+    $m = [string]$Marca
+    if ([string]::IsNullOrWhiteSpace($m)) { return $true }
+    return ($script:MarcasDhip -contains $m.Trim())
+}
+
+<#
+    Câmera nova em espera a partir de um achado DHIP, com Indice 0 (a posição
+    é atribuída na entrada do portão, D10). Porta HTTP ausente ou inválida
+    vira 80.
+#>
+function New-CameraDoAchado {
+    param([Parameter(Mandatory = $true)]$Achado, [bool]$ConferirInit = $false)
+
+    $porta = 0
+    if (-not [int]::TryParse([string]$Achado.HttpPort, [ref]$porta) -or $porta -le 0) { $porta = 80 }
+
+    return @{
+        Mac = [string]$Achado.Mac; Serial = [string]$Achado.Serial; Modelo = [string]$Achado.Modelo
+        IpOrigem = [string]$Achado.Ip; HttpPort = $porta; Indice = 0
+        Fase = 'espera'; Etapa = ''; Falha = $null; GeracaoLogin = 0; Motivo = ''
+        ConferirInit = $ConferirInit
+    }
+}
+
+<#
     Cópia do estado para o Step devolver sem mutar a entrada: câmeras,
     posições e avisados são clonados; os campos das câmeras são escalares,
     menos Falha, que os Steps trocam inteira e nunca alteram por dentro.
@@ -177,8 +209,7 @@ function Step-Descoberta {
         if ($chave -eq '') { continue }
         if ($conhecidos.ContainsKey($chave)) { continue }
 
-        $marca = [string]$a.Marca
-        if (-not [string]::IsNullOrWhiteSpace($marca) -and -not ($script:MarcasDhip -contains $marca.Trim())) {
+        if (-not (Test-MarcaDhip $a.Marca)) {
             if (-not $novo.Avisados.ContainsKey($chave)) {
                 $novo.Avisados[$chave] = 'marca'
                 $acoes += @{ Tipo = 'avisar'; Mac = [string]$a.Mac; Texto = 'Marca não suportada: não tocada.' }
@@ -188,15 +219,87 @@ function Step-Descoberta {
 
         if ((Get-InitOrquestrador $a.Init) -ne 1) { continue }
 
-        $porta = 0
-        if (-not [int]::TryParse([string]$a.HttpPort, [ref]$porta) -or $porta -le 0) { $porta = 80 }
-
         $conhecidos[$chave] = $true
-        $novas += @{
-            Mac = [string]$a.Mac; Serial = [string]$a.Serial; Modelo = [string]$a.Modelo
-            IpOrigem = [string]$a.Ip; HttpPort = $porta; Indice = 0
-            Fase = 'espera'; Etapa = ''; Falha = $null; GeracaoLogin = 0; Motivo = ''
+        $novas += New-CameraDoAchado -Achado $a
+    }
+
+    if ($novas.Count -gt 0) { $novo.Cameras = @($novo.Cameras) + $novas }
+
+    return @{ Estado = $novo; Acoes = $acoes }
+}
+
+<#
+    Step-JaInicializada: os mesmos achados DHIP do tique, vistos pelo lado das
+    câmeras que não são de fábrica (Q4/D8). Registro é dado, nunca arquivo:
+    lista de { Mac, Status, Etapa } que o servidor leu do registro.
+      - achado de fábrica (Init 1), sem MAC, de marca fora da família DHIP ou
+        de MAC já conhecido (em qualquer fase) é ignorado: os dois primeiros
+        são do Step-Descoberta, e a câmera conhecida inicializada é a que a
+        própria fila configurou;
+      - Init inicializada (0, 2 ou 3) nunca recebe 'prender' nem 'despachar'
+        e não entra em espera. 'avisar', uma vez por MAC (Avisados), pelo
+        registro: 'Em andamento' ou 'Falhou' = "Câmera da fila parada na
+        etapa X. Retome em Ferramentas." (sem etapa gravada, o texto não cita
+        etapa); 'Instalada' = nada; fora do registro ou outro status =
+        "Câmera já inicializada: não tocada.";
+      - Init desconhecido (firmware sem o campo) entra em espera com
+        ConferirInit, na ordem de chegada depois das que já esperam: o portão
+        confere o Init depois de prender.
+#>
+function Step-JaInicializada {
+    param(
+        [Parameter(Mandatory = $true)]$Estado,
+        $Achados = @(),
+        $Registro = @()
+    )
+
+    $novo = Copy-EstadoParalelo -Estado $Estado
+    $acoes = @()
+
+    $conhecidos = @{}
+    foreach ($c in @($novo.Cameras)) { $conhecidos[(Get-ChaveMac $c.Mac)] = $true }
+
+    # A última entrada do MAC vale, como no upsert do registro.
+    $porMac = @{}
+    foreach ($ent in @($Registro)) {
+        if ($null -eq $ent) { continue }
+        $k = Get-ChaveMac $ent.Mac
+        if ($k -ne '') { $porMac[$k] = $ent }
+    }
+
+    $novas = @()
+    foreach ($a in @($Achados)) {
+        if ($null -eq $a) { continue }
+        $chave = Get-ChaveMac $a.Mac
+        if ($chave -eq '' -or $conhecidos.ContainsKey($chave)) { continue }
+        if (-not (Test-MarcaDhip $a.Marca)) { continue }
+
+        $init = Get-InitOrquestrador $a.Init
+        if ($init -eq 1) { continue }
+
+        if ($init -eq -1) {
+            $conhecidos[$chave] = $true
+            $novas += New-CameraDoAchado -Achado $a -ConferirInit $true
+            continue
         }
+
+        if ($novo.Avisados.ContainsKey($chave)) { continue }
+
+        $ent = $porMac[$chave]
+        $status = ''
+        if ($null -ne $ent) { $status = ([string]$ent.Status).Trim() }
+        if ($status -eq 'Instalada') { continue }
+
+        if ($status -eq 'Em andamento' -or $status -eq 'Falhou') {
+            $etapa = ([string]$ent.Etapa).Trim()
+            $texto = 'Câmera da fila parada. Retome em Ferramentas.'
+            if ($etapa -ne '') { $texto = 'Câmera da fila parada na etapa ' + $etapa + '. Retome em Ferramentas.' }
+            $novo.Avisados[$chave] = 'fila'
+        } else {
+            $texto = 'Câmera já inicializada: não tocada.'
+            $novo.Avisados[$chave] = 'inicializada'
+        }
+        $acoes += @{ Tipo = 'avisar'; Mac = [string]$a.Mac; Texto = $texto }
     }
 
     if ($novas.Count -gt 0) { $novo.Cameras = @($novo.Cameras) + $novas }

@@ -9,7 +9,8 @@
       - resumo por fase;
       - descoberta (achados DHIP -> espera, dedup por MAC, marca nao suportada);
       - admissao (portao de 1 vaga, Max, posicao na entrada, destino ocupado);
-      - fim do job (portao -> conferencia -> feita, falha isolada, MAC trocado).
+      - fim do job (portao -> conferencia -> feita, falha isolada, MAC trocado);
+      - ja inicializada (aviso unico pelo registro, Init desconhecido em espera).
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -650,6 +651,168 @@ T 'FimDoJob: grafia do MAC nao importa e o estado de entrada nao e mutado' {
     Assert-Igual 'pendente' $r2.Estado.Posicoes[0].Estado 'saida pendente'
     Assert-Igual 'reservada' $e.Posicoes[0].Estado 'entrada reservada'
     Assert-Igual 1 (Get-Camera $e 1).Indice 'indice de entrada'
+}
+
+# ------------------------------------------------------------ ja inicializada
+
+# Registro como dado: lista de { Mac, Status, Etapa } (o servidor le o arquivo).
+function New-EntradaRegistroTeste {
+    param([int]$N, [string]$Status, [string]$Etapa = '')
+    return [pscustomobject]@{ Mac = ('AA:00:00:00:00:0' + $N); Status = $Status; Etapa = $Etapa }
+}
+
+# Textos com acento, sem acento neste arquivo.
+$script:TextoCamera = ('C' + [char]0x00E2 + 'mera')
+$script:TextoJaInicializada = ($script:TextoCamera + ' j' + [char]0x00E1 + ' inicializada: n' + [char]0x00E3 + 'o tocada.')
+function Get-TextoFilaParada {
+    param([string]$Etapa)
+    if ($Etapa -eq '') { return ($script:TextoCamera + ' da fila parada. Retome em Ferramentas.') }
+    return ($script:TextoCamera + ' da fila parada na etapa ' + $Etapa + '. Retome em Ferramentas.')
+}
+
+T 'JaInicializada: registro Em andamento avisa a etapa e nao entra na espera' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 2)
+    $reg = @((New-EntradaRegistroTeste 1 'Em andamento' 'encoder'))
+    $r = Step-JaInicializada -Estado $e -Achados @((New-AchadoTeste 1 -Init 0)) -Registro $reg
+    $a = @($r.Acoes)
+    Assert-Igual 1 $a.Count 'uma acao'
+    Assert-Igual 'avisar' $a[0].Tipo 'avisar'
+    Assert-Igual 'AA:00:00:00:00:01' $a[0].Mac 'mac do aviso'
+    Assert-Igual (Get-TextoFilaParada 'encoder') $a[0].Texto 'texto do aviso'
+    Assert-Igual 0 @($r.Estado.Cameras).Count 'fora da espera'
+    Assert-Verdade ($r.Estado.Avisados.ContainsKey('AA0000000001')) 'MAC em Avisados'
+}
+
+T 'JaInicializada: registro Falhou avisa a etapa; sem etapa, o aviso nao cita etapa' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 2)
+    $reg = @((New-EntradaRegistroTeste 1 'Falhou' 'rede'), (New-EntradaRegistroTeste 2 'Falhou' ''))
+    $r = Step-JaInicializada -Estado $e -Achados @((New-AchadoTeste 1 -Init 2), (New-AchadoTeste 2 -Init 3)) -Registro $reg
+    $a = @($r.Acoes)
+    Assert-Igual 2 $a.Count 'dois avisos'
+    Assert-Igual (Get-TextoFilaParada 'rede') $a[0].Texto 'texto com etapa'
+    Assert-Igual (Get-TextoFilaParada '') $a[1].Texto 'texto sem etapa'
+    Assert-Igual 0 @($r.Estado.Cameras).Count 'fora da espera'
+}
+
+T 'JaInicializada: registro Instalada nao avisa nem entra na espera' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 2)
+    $reg = @((New-EntradaRegistroTeste 1 'Instalada' 'conferida'))
+    $r = Step-JaInicializada -Estado $e -Achados @((New-AchadoTeste 1 -Init 0)) -Registro $reg
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    Assert-Igual 0 @($r.Estado.Cameras).Count 'fora da espera'
+    Assert-Igual 0 $r.Estado.Avisados.Count 'nada em Avisados'
+}
+
+T 'JaInicializada: desconhecida no registro (ou outro status) avisa que nao foi tocada' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 2)
+    $reg = @((New-EntradaRegistroTeste 2 'Resetada' 'reset'))
+    $r = Step-JaInicializada -Estado $e -Achados @((New-AchadoTeste 1 -Init 0), (New-AchadoTeste 2 -Init 0)) -Registro $reg
+    $a = @($r.Acoes)
+    Assert-Igual 2 $a.Count 'dois avisos'
+    Assert-Igual $script:TextoJaInicializada $a[0].Texto 'fora do registro'
+    Assert-Igual $script:TextoJaInicializada $a[1].Texto 'registro Resetada'
+    $r0 = Step-JaInicializada -Estado $e -Achados @((New-AchadoTeste 3 -Init 0))
+    Assert-Igual $script:TextoJaInicializada @($r0.Acoes)[0].Texto 'sem registro'
+}
+
+T 'JaInicializada: aviso unico por MAC entre tiques, grafia do MAC nao importa' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 2)
+    $entrada = New-EntradaRegistroTeste 1 'Em andamento' 'login'
+    $entrada.Mac = 'aa0000000001'
+    $reg = @($entrada)
+    $r1 = Step-JaInicializada -Estado $e -Achados @((New-AchadoTeste 1 -Init 0), (New-AchadoTeste 1 -Init 0), (New-AchadoTeste 2 -Init 0)) -Registro $reg
+    Assert-Igual 2 @($r1.Acoes).Count 'um aviso por MAC no 1o tique'
+    Assert-Igual (Get-TextoFilaParada 'login') @($r1.Acoes)[0].Texto 'registro casou pela chave do MAC'
+    $outraGrafia = New-AchadoTeste 1 -Init 0
+    $outraGrafia.Mac = 'aa-00-00-00-00-01'
+    $r2 = Step-JaInicializada -Estado $r1.Estado -Achados @($outraGrafia, (New-AchadoTeste 2 -Init 0), (New-AchadoTeste 3 -Init 0)) -Registro $reg
+    $a2 = @($r2.Acoes)
+    Assert-Igual 1 $a2.Count 'so o MAC novo avisa no 2o tique'
+    Assert-Igual 'AA:00:00:00:00:03' $a2[0].Mac 'mac novo'
+    $r3 = Step-JaInicializada -Estado $r2.Estado -Achados @((New-AchadoTeste 1 -Init 0), (New-AchadoTeste 3 -Init 0)) -Registro $reg
+    Assert-Igual 0 @($r3.Acoes).Count 'nada no 3o tique'
+}
+
+T 'JaInicializada: Init desconhecido vai para espera com ConferirInit, sem acao' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 3)
+    $e.Cameras = @((New-CameraTeste 1 'espera'))
+    $semInit = New-AchadoTeste 3
+    $semInit.Init = $null
+    $r = Step-JaInicializada -Estado $e -Achados @((New-AchadoTeste 2 -Init -1), $semInit)
+    $c = @($r.Estado.Cameras)
+    Assert-Igual 3 $c.Count 'cameras'
+    Assert-Igual 'AA:00:00:00:00:01' $c[0].Mac 'a que ja esperava segue na frente'
+    Assert-Igual 'AA:00:00:00:00:02' $c[1].Mac 'Init -1 na ordem de chegada'
+    Assert-Igual 'AA:00:00:00:00:03' $c[2].Mac 'Init ausente na ordem de chegada'
+    foreach ($x in @($c[1], $c[2])) {
+        Assert-Igual 'espera' $x.Fase ('fase de ' + $x.Mac)
+        Assert-Verdade ($x.ConferirInit -eq $true) ('ConferirInit de ' + $x.Mac)
+        Assert-Igual 0 $x.Indice ('indice de ' + $x.Mac)
+        Assert-Igual '192.168.1.108' $x.IpOrigem ('IpOrigem de ' + $x.Mac)
+    }
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    $r2 = Step-JaInicializada -Estado $r.Estado -Achados @((New-AchadoTeste 2 -Init -1))
+    Assert-Igual 3 @($r2.Estado.Cameras).Count 'sem duplicar entre tiques'
+    $d = Step-Descoberta -Estado (New-EstadoParalelo) -Achados @((New-AchadoTeste 4))
+    Assert-Verdade ($d.Estado.Cameras[0].ConferirInit -eq $false) 'de fabrica sem ConferirInit'
+}
+
+T 'JaInicializada: de fabrica, MAC ja conhecido e marca nao suportada ficam com os outros Steps' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 3)
+    $e.Cameras = @((New-CameraTeste 1 'feita'), (New-CameraTeste 2 'conferindo'))
+    $achados = @(
+        (New-AchadoTeste 1 -Init 0),
+        (New-AchadoTeste 2 -Init 2),
+        (New-AchadoTeste 3),
+        (New-AchadoTeste 4 -Init 0 -Marca 'OutraMarca'),
+        (New-AchadoTeste 5 -Init -1 -Marca 'OutraMarca')
+    )
+    $r = Step-JaInicializada -Estado $e -Achados $achados
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    Assert-Igual 2 @($r.Estado.Cameras).Count 'nenhuma camera nova'
+    Assert-Igual 0 $r.Estado.Avisados.Count 'nada em Avisados'
+}
+
+T 'JaInicializada: estado de entrada nao e mutado' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 2)
+    $r = Step-JaInicializada -Estado $e -Achados @((New-AchadoTeste 1 -Init 0), (New-AchadoTeste 2 -Init -1))
+    Assert-Igual 1 @($r.Estado.Cameras).Count 'cameras de saida'
+    Assert-Igual 1 $r.Estado.Avisados.Count 'avisados de saida'
+    Assert-Igual 0 @($e.Cameras).Count 'cameras de entrada'
+    Assert-Igual 0 $e.Avisados.Count 'avisados de entrada'
+}
+
+T 'JaInicializada: nenhuma acao prender/despachar sai para camera inicializada em varios tiques' {
+    $inicializadas = @{ 'AA:00:00:00:00:04' = $true; 'AA:00:00:00:00:05' = $true; 'AA:00:00:00:00:06' = $true }
+    $reg = @((New-EntradaRegistroTeste 4 'Em andamento' 'encoder'), (New-EntradaRegistroTeste 5 'Instalada' 'conferida'))
+    $achados = @(
+        (New-AchadoTeste 4 -Init 0), (New-AchadoTeste 1), (New-AchadoTeste 5 -Init 2),
+        (New-AchadoTeste 2 -Init -1), (New-AchadoTeste 6 -Init 3), (New-AchadoTeste 3)
+    )
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 6)
+    $todas = @()
+    for ($tique = 1; $tique -le 6; $tique++) {
+        $r = Step-Descoberta -Estado $e -Achados $achados
+        $todas += @($r.Acoes)
+        $r = Step-JaInicializada -Estado $r.Estado -Achados $achados -Registro $reg
+        $todas += @($r.Acoes)
+        $r = Step-Admissao -Estado $r.Estado
+        $todas += @($r.Acoes)
+        $e = $r.Estado
+        foreach ($c in @($e.Cameras)) {
+            if ($c.Fase -eq 'portao' -or $c.Fase -eq 'conferindo') {
+                $r = Step-FimDoJob -Estado $e -Mac $c.Mac -Resultado (New-ResultadoTeste -Etapa 'rede')
+                $todas += @($r.Acoes)
+                $e = $r.Estado
+            }
+        }
+    }
+    $rede = @($todas | Where-Object { $null -ne $_ -and ($_.Tipo -eq 'prender' -or $_.Tipo -eq 'despachar') })
+    Assert-Verdade ($rede.Count -gt 0) 'as de fabrica e a de Init desconhecido receberam acao de rede'
+    foreach ($x in $rede) { Assert-Verdade (-not $inicializadas.ContainsKey([string]$x.Mac)) ($x.Tipo + ' para inicializada ' + $x.Mac) }
+    Assert-Igual 3 (Get-Resumo -Estado $e).Fases['feita'] 'as tres da fila feitas'
+    $avisos = @($todas | Where-Object { $null -ne $_ -and $_.Tipo -eq 'avisar' })
+    Assert-Igual 2 $avisos.Count 'dois avisos em seis tiques (a Instalada nao avisa)'
 }
 
 # ------------------------------------------------------------------- resultado
