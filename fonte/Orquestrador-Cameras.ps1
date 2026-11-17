@@ -314,7 +314,9 @@ function Step-JaInicializada {
       - Admitindo (depois de "encerrar" ninguém entra);
       - vaga: Max 0 = sem limite; senão, câmeras em 'portao' + 'conferindo'
         abaixo de Max (decisão não ocupa vaga, D6);
-      - posição livre: a primeira posição 'pendente' da fila (D10).
+      - posição livre: a primeira posição 'pendente' da fila (D10). Câmera
+        que volta do "Tentar de novo" já tem Indice e a posição reservada
+        com o MAC dela: reentra nessa mesma posição.
     IpsOcupados (dado de entrada: o servidor pinga, o orquestrador não toca
     a rede) pula a posição como Invoke-Conectada faz hoje: 'pulada', motivo
     "IP já responde na rede", e tenta a seguinte. Só pula quando há câmera
@@ -350,8 +352,21 @@ function Step-Admissao {
     $ocupados = @{}
     foreach ($ip in @($IpsOcupados)) { if ($null -ne $ip) { $ocupados[([string]$ip).Trim()] = $true } }
 
+    # "Tentar de novo" (Step-Decisao) guarda a posição reservada: a câmera
+    # volta para ela, sem conferir IpsOcupados (o IP pode ser dela mesma).
     $posicao = $null
+    if ([int]$camera.Indice -gt 0) {
+        $chaveCamera = Get-ChaveMac $camera.Mac
+        foreach ($p in @($novo.Posicoes)) {
+            if ([int]$p.Posicao -eq [int]$camera.Indice -and $p.Estado -eq 'reservada' -and (Get-ChaveMac $p.Mac) -eq $chaveCamera) {
+                $posicao = $p
+                break
+            }
+        }
+    }
+
     foreach ($p in @($novo.Posicoes)) {
+        if ($null -ne $posicao) { break }
         if ($p.Estado -ne 'pendente') { continue }
         if ($ocupados.ContainsKey([string]$p.Ip)) {
             $p.Estado = 'pulada'
@@ -485,4 +500,83 @@ function Step-FimDoJob {
     if ([bool]$Resultado.LoginRecusado) { $camera.GeracaoLogin = $Geracao }
 
     return @{ Estado = $novo; Acoes = $acoes }
+}
+
+# Recusa do "Tentar de novo" com login recusado na mesma geração da senha
+# (mesmo texto do servidor de hoje). Lockout Dahua: ~5 senhas erradas trancam
+# o admin por minutos; nunca repetir a mesma senha no mesmo MAC.
+$script:TextoSenhaRecusada = 'A câmera recusou a senha da sessão. Troque a senha (Opções, seção Senha) antes de tentar de novo: cada tentativa com a senha errada conta para o bloqueio da câmera.'
+$script:TextoBloqueada = 'A câmera bloqueou o admin por senhas erradas. Espere alguns minutos, confirme a senha certa em Opções e só então tente de novo.'
+
+<#
+    Step-Decisao: o operador respondeu ao cartão de decisão de uma câmera.
+    Geracao é a geração atual da senha da sessão (o servidor conhece a
+    senha, o orquestrador só compara o número).
+      - tentar: a câmera volta para espera com a mesma posição (Indice e a
+        posição reservada ficam; Falha, Etapa e Motivo são limpos;
+        GeracaoLogin fica). A admissão a põe de volta no portão nessa
+        posição, na ordem de chegada. Recusado, com 'avisar' e o estado
+        intacto, se a falha foi login recusado e GeracaoLogin é a geração
+        atual: a guarda de lockout vale por cartão, não para a fila;
+      - pular: câmera e posição 'pulada' (motivo com a etapa e o erro da
+        falha); a câmera sai e o DHIP não a traz de volta;
+      - encerrar: Admitindo = $false. Não precisa de Mac: quem está no
+        portão ou conferindo termina, e as câmeras em decisão ou em espera
+        ficam como estão.
+    tentar e pular só valem para câmera em 'decisao'; MAC desconhecido ou
+    câmera em outra fase não muda nada. Nenhum ramo gera 'prender' nem
+    'despachar': quem despacha é a admissão.
+#>
+function Step-Decisao {
+    param(
+        [Parameter(Mandatory = $true)]$Estado,
+        $Mac = '',
+        [Parameter(Mandatory = $true)][ValidateSet('tentar', 'pular', 'encerrar')][string]$Acao,
+        [int]$Geracao = 0
+    )
+
+    $novo = Copy-EstadoParalelo -Estado $Estado
+    $acoes = @()
+    $nada = @{ Estado = $novo; Acoes = $acoes }
+
+    if ($Acao -eq 'encerrar') {
+        $novo.Admitindo = $false
+        return $nada
+    }
+
+    $chave = Get-ChaveMac $Mac
+    if ($chave -eq '') { return $nada }
+
+    $camera = $null
+    foreach ($c in @($novo.Cameras)) { if ((Get-ChaveMac $c.Mac) -eq $chave) { $camera = $c; break } }
+    if ($null -eq $camera -or $camera.Fase -ne 'decisao') { return $nada }
+
+    $posicao = $null
+    foreach ($p in @($novo.Posicoes)) {
+        if ([int]$p.Posicao -eq [int]$camera.Indice -and (Get-ChaveMac $p.Mac) -eq $chave) { $posicao = $p; break }
+    }
+
+    if ($Acao -eq 'tentar') {
+        $falha = $camera.Falha
+        if ($null -ne $falha -and [bool]$falha.LoginRecusado -and [int]$camera.GeracaoLogin -eq $Geracao) {
+            $texto = $script:TextoSenhaRecusada
+            if ([bool]$falha.Bloqueada) { $texto = $script:TextoBloqueada }
+            $acoes += @{ Tipo = 'avisar'; Mac = [string]$camera.Mac; Texto = $texto }
+            return @{ Estado = $novo; Acoes = $acoes }
+        }
+        $camera.Fase = 'espera'
+        $camera.Falha = $null
+        $camera.Etapa = ''
+        $camera.Motivo = ''
+        return $nada
+    }
+
+    $motivo = 'pulada pelo operador'
+    if ($null -ne $camera.Falha) { $motivo = $motivo + ' - ' + [string]$camera.Falha.Etapa + ': ' + [string]$camera.Falha.Erro }
+    $camera.Fase = 'pulada'
+    if ($null -ne $posicao) {
+        $posicao.Estado = 'pulada'
+        $posicao.Motivo = $motivo
+    }
+    return $nada
 }

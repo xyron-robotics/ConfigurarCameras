@@ -10,7 +10,9 @@
       - descoberta (achados DHIP -> espera, dedup por MAC, marca nao suportada);
       - admissao (portao de 1 vaga, Max, posicao na entrada, destino ocupado);
       - fim do job (portao -> conferencia -> feita, falha isolada, MAC trocado);
-      - ja inicializada (aviso unico pelo registro, Init desconhecido em espera).
+      - ja inicializada (aviso unico pelo registro, Init desconhecido em espera);
+      - decisao (tentar na mesma posicao, guarda de lockout por cartao, pular,
+        encerrar).
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -813,6 +815,179 @@ T 'JaInicializada: nenhuma acao prender/despachar sai para camera inicializada e
     Assert-Igual 3 (Get-Resumo -Estado $e).Fases['feita'] 'as tres da fila feitas'
     $avisos = @($todas | Where-Object { $null -ne $_ -and $_.Tipo -eq 'avisar' })
     Assert-Igual 2 $avisos.Count 'dois avisos em seis tiques (a Instalada nao avisa)'
+}
+
+# -------------------------------------------------------------------- decisao
+
+# Estado com as cameras 1..N em espera, a 1 admitida e falhada no portao
+# (decisao na posicao 1) e a 2 ja no portao na posicao 2.
+function New-EstadoComDecisao {
+    param([int]$Cameras = 3, [int]$Posicoes = 3, $Resultado = $null, [int]$Geracao = 1)
+    if ($null -eq $Resultado) { $Resultado = New-ResultadoTeste -Ok $false -Etapa 'login' -Falhou 'rede' -Erro 'sem resposta' }
+    $e = New-EstadoComPortao -Cameras $Cameras -Posicoes $Posicoes
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado $Resultado -Geracao $Geracao
+    return (Step-Admissao -Estado $r.Estado).Estado
+}
+
+T 'Decisao: tentar volta para espera com a mesma posicao, sem acao' {
+    $e = New-EstadoComDecisao -Cameras 3 -Posicoes 3
+    Assert-Igual 'decisao' (Get-Camera $e 1).Fase 'a 1 em decisao'
+    Assert-Igual 'AA:00:00:00:00:02' $e.Portao 'a 2 no portao'
+    $r = Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'tentar' -Geracao 1
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'espera' $c1.Fase 'fase da 1'
+    Assert-Igual 1 $c1.Indice 'mesma posicao'
+    Assert-Verdade ($null -eq $c1.Falha) 'falha limpa'
+    Assert-Igual 'reservada' $r.Estado.Posicoes[0].Estado 'posicao 1 continua reservada'
+    Assert-Igual 'AA:00:00:00:00:01' $r.Estado.Posicoes[0].Mac 'mac da posicao 1'
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    Assert-Igual 'AA:00:00:00:00:02' $r.Estado.Portao 'portao continua com a 2'
+    Assert-Verdade ($r.Estado.Admitindo -eq $true) 'admitindo intacto'
+}
+
+T 'Decisao: tentar reentra no portao pela mesma posicao, antes das que chegaram depois' {
+    $e = New-EstadoComDecisao -Cameras 3 -Posicoes 3
+    $r = Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'tentar' -Geracao 1
+    $r = Step-FimDoJob -Estado $r.Estado -Mac 'AA:00:00:00:00:02' -Resultado (New-ResultadoTeste -Etapa 'rede')
+    # O IP da posicao 1 pode responder (a propria camera, se a rede ja foi gravada): nao pula.
+    $r = Step-Admissao -Estado $r.Estado -IpsOcupados @('192.0.2.11')
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'portao' $c1.Fase 'a 1 volta ao portao'
+    Assert-Igual 1 $c1.Indice 'na posicao 1'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 3).Fase 'a 3 segue em espera'
+    Assert-Igual 'reservada' $r.Estado.Posicoes[0].Estado 'posicao 1 reservada'
+    Assert-Igual 'AA:00:00:00:00:01' $r.Estado.Posicoes[0].Mac 'mac da posicao 1'
+    Assert-Igual 'pendente' $r.Estado.Posicoes[2].Estado 'posicao 3 intacta'
+    $d = @(Get-AcoesDoTipo $r 'despachar')
+    Assert-Igual 1 $d.Count 'um despachar'
+    Assert-Igual 'rede' $d[0].AteEtapa 'portao ate a rede'
+    Assert-Igual 1 $d[0].Posicao 'posicao do despachar'
+    Assert-Igual '192.0.2.11' $d[0].Destino 'destino do despachar'
+    Assert-Igual 1 @(Get-AcoesDoTipo $r 'prender').Count 'um prender'
+}
+
+T 'Decisao: tentar com login recusado na mesma geracao e recusado com texto' {
+    $res = New-ResultadoTeste -Ok $false -Etapa '' -Falhou 'login' -Erro 'senha errada' -LoginRecusado $true
+    $e = New-EstadoComDecisao -Cameras 2 -Posicoes 3 -Resultado $res -Geracao 3
+    $r = Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'tentar' -Geracao 3
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'decisao' $c1.Fase 'continua em decisao'
+    Assert-Verdade ($c1.Falha.LoginRecusado -eq $true) 'falha mantida'
+    Assert-Igual 'reservada' $r.Estado.Posicoes[0].Estado 'posicao mantida'
+    $a = @($r.Acoes)
+    Assert-Igual 1 $a.Count 'uma acao'
+    Assert-Igual 'avisar' $a[0].Tipo 'avisar'
+    Assert-Igual 'AA:00:00:00:00:01' $a[0].Mac 'mac do aviso'
+    Assert-Verdade ([string]$a[0].Texto).Contains('Troque a senha') ('texto da recusa: ' + $a[0].Texto)
+    Assert-Igual 0 @(@($r.Acoes) | Where-Object { $_.Tipo -eq 'prender' -or $_.Tipo -eq 'despachar' }).Count 'nada de rede'
+}
+
+T 'Decisao: tentar com login recusado e admin bloqueado avisa o bloqueio' {
+    $res = New-ResultadoTeste -Ok $false -Etapa '' -Falhou 'login' -Erro 'bloqueada' -LoginRecusado $true -Bloqueada $true
+    $e = New-EstadoComDecisao -Cameras 2 -Posicoes 3 -Resultado $res -Geracao 2
+    $r = Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'tentar' -Geracao 2
+    Assert-Igual 'decisao' (Get-Camera $r.Estado 1).Fase 'continua em decisao'
+    $a = @($r.Acoes)
+    Assert-Igual 1 $a.Count 'uma acao'
+    Assert-Verdade ([string]$a[0].Texto).Contains('Espere alguns minutos') ('texto do bloqueio: ' + $a[0].Texto)
+}
+
+T 'Decisao: tentar com login recusado em geracao nova e aceito' {
+    $res = New-ResultadoTeste -Ok $false -Etapa '' -Falhou 'login' -Erro 'senha errada' -LoginRecusado $true
+    $e = New-EstadoComDecisao -Cameras 2 -Posicoes 3 -Resultado $res -Geracao 3
+    $r = Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'tentar' -Geracao 4
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'espera' $c1.Fase 'volta para espera'
+    Assert-Igual 1 $c1.Indice 'mesma posicao'
+    Assert-Igual 3 $c1.GeracaoLogin 'geracao do login recusado guardada'
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+}
+
+T 'Decisao: guarda de lockout e por cartao (outra camera na mesma geracao segue)' {
+    $res = New-ResultadoTeste -Ok $false -Etapa '' -Falhou 'login' -Erro 'senha errada' -LoginRecusado $true
+    $e = New-EstadoComDecisao -Cameras 2 -Posicoes 3 -Resultado $res -Geracao 5
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:02' -Resultado (New-ResultadoTeste -Ok $false -Etapa 'login' -Falhou 'rede' -Erro 'sem resposta') -Geracao 5
+    $r1 = Step-Decisao -Estado $r.Estado -Mac 'AA:00:00:00:00:01' -Acao 'tentar' -Geracao 5
+    Assert-Igual 'decisao' (Get-Camera $r1.Estado 1).Fase 'a 1 recusada'
+    $r2 = Step-Decisao -Estado $r.Estado -Mac 'AA:00:00:00:00:02' -Acao 'tentar' -Geracao 5
+    Assert-Igual 'espera' (Get-Camera $r2.Estado 2).Fase 'a 2 aceita'
+    Assert-Igual 0 @($r2.Acoes).Count 'nenhuma acao para a 2'
+}
+
+T 'Decisao: pular deixa a camera e a posicao puladas, sem acao' {
+    $e = New-EstadoComDecisao -Cameras 3 -Posicoes 3
+    $r = Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'pular'
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'pulada' $c1.Fase 'fase da 1'
+    Assert-Igual 'pulada' $r.Estado.Posicoes[0].Estado 'posicao 1 pulada'
+    Assert-Igual 'AA:00:00:00:00:01' $r.Estado.Posicoes[0].Mac 'mac da posicao 1'
+    Assert-Verdade ([string]$r.Estado.Posicoes[0].Motivo).Contains('rede: sem resposta') ('motivo: ' + $r.Estado.Posicoes[0].Motivo)
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    Assert-Igual 'AA:00:00:00:00:02' $r.Estado.Portao 'portao continua com a 2'
+
+    # A camera sai: nao volta pela descoberta e a admissao segue na posicao 3.
+    $r = Step-Descoberta -Estado $r.Estado -Achados @((New-AchadoTeste 1))
+    Assert-Igual 'pulada' (Get-Camera $r.Estado 1).Fase 'descoberta nao traz de volta'
+    $r = Step-FimDoJob -Estado $r.Estado -Mac 'AA:00:00:00:00:02' -Resultado (New-ResultadoTeste -Etapa 'rede')
+    $r = Step-Admissao -Estado $r.Estado
+    Assert-Igual 'portao' (Get-Camera $r.Estado 3).Fase 'a 3 entra'
+    Assert-Igual 3 (Get-Camera $r.Estado 3).Indice 'na posicao 3'
+}
+
+T 'Decisao: encerrar para a admissao e deixa terminar quem esta em curso' {
+    $e = New-EstadoComDecisao -Cameras 4 -Posicoes 4
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:02' -Resultado (New-ResultadoTeste -Etapa 'rede')
+    $r = Step-Admissao -Estado $r.Estado
+    Assert-Igual 'conferindo' (Get-Camera $r.Estado 2).Fase 'a 2 conferindo'
+    Assert-Igual 'portao' (Get-Camera $r.Estado 3).Fase 'a 3 no portao'
+
+    $r = Step-Decisao -Estado $r.Estado -Acao 'encerrar'
+    Assert-Verdade ($r.Estado.Admitindo -eq $false) 'nao admite mais'
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    Assert-Igual 'decisao' (Get-Camera $r.Estado 1).Fase 'a 1 continua em decisao'
+    Assert-Igual 'conferindo' (Get-Camera $r.Estado 2).Fase 'a 2 segue conferindo'
+    Assert-Igual 'portao' (Get-Camera $r.Estado 3).Fase 'a 3 segue no portao'
+    Assert-Igual 'AA:00:00:00:00:03' $r.Estado.Portao 'portao com a 3'
+
+    # Quem esta em curso termina; ninguem novo entra.
+    $r = Step-FimDoJob -Estado $r.Estado -Mac 'AA:00:00:00:00:03' -Resultado (New-ResultadoTeste -Etapa 'rede')
+    Assert-Igual 'conferindo' (Get-Camera $r.Estado 3).Fase 'a 3 vai para a conferencia'
+    Assert-Igual 1 @(Get-AcoesDoTipo $r 'despachar').Count 'conferencia da 3 despachada'
+    $r = Step-FimDoJob -Estado $r.Estado -Mac 'AA:00:00:00:00:02' -Resultado (New-ResultadoTeste -Etapa 'encoder')
+    Assert-Igual 'feita' (Get-Camera $r.Estado 2).Fase 'a 2 feita'
+    $r = Step-Admissao -Estado $r.Estado
+    Assert-Igual 'espera' (Get-Camera $r.Estado 4).Fase 'a 4 nao entra'
+    Assert-Igual 0 @($r.Acoes).Count 'admissao sem acao'
+}
+
+T 'Decisao: MAC desconhecido ou camera fora de decisao nao mexe no estado' {
+    $e = New-EstadoComDecisao -Cameras 3 -Posicoes 3
+    foreach ($acao in @('tentar', 'pular')) {
+        foreach ($mac in @('AA:00:00:00:00:09', 'AA:00:00:00:00:02', 'AA:00:00:00:00:03', '')) {
+            $r = Step-Decisao -Estado $e -Mac $mac -Acao $acao -Geracao 1
+            Assert-Igual 0 @($r.Acoes).Count ($acao + ' ' + $mac + ': nenhuma acao')
+            Assert-Igual 'portao' (Get-Camera $r.Estado 2).Fase ($acao + ' ' + $mac + ': a 2 no portao')
+            Assert-Igual 'espera' (Get-Camera $r.Estado 3).Fase ($acao + ' ' + $mac + ': a 3 em espera')
+            Assert-Igual 'decisao' (Get-Camera $r.Estado 1).Fase ($acao + ' ' + $mac + ': a 1 em decisao')
+            Assert-Igual 'reservada' $r.Estado.Posicoes[1].Estado ($acao + ' ' + $mac + ': posicao 2')
+        }
+    }
+}
+
+T 'Decisao: grafia do MAC nao importa, estado de entrada nao e mutado e acao invalida e recusada' {
+    $e = New-EstadoComDecisao -Cameras 2 -Posicoes 3
+    $r = Step-Decisao -Estado $e -Mac 'aa-00-00-00-00-01' -Acao 'pular'
+    Assert-Igual 'pulada' (Get-Camera $r.Estado 1).Fase 'pulada pela outra grafia'
+    Assert-Igual 'decisao' (Get-Camera $e 1).Fase 'camera de entrada intacta'
+    Assert-Igual 'reservada' $e.Posicoes[0].Estado 'posicao de entrada intacta'
+    $r = Step-Decisao -Estado $e -Acao 'encerrar'
+    Assert-Verdade ($e.Admitindo -eq $true) 'admitindo de entrada intacto'
+    $r = Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'tentar' -Geracao 1
+    Assert-Igual 'decisao' (Get-Camera $e 1).Fase 'camera de entrada intacta apos tentar'
+    Assert-Verdade ($null -ne (Get-Camera $e 1).Falha) 'falha de entrada intacta'
+    $recusou = $false
+    try { Step-Decisao -Estado $e -Mac 'AA:00:00:00:00:01' -Acao 'apagar' | Out-Null } catch { $recusou = $true }
+    Assert-Verdade $recusou 'acao invalida recusada'
 }
 
 # ------------------------------------------------------------------- resultado
