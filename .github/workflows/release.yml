@@ -33,6 +33,10 @@ jobs:
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Descoberta.ps1
 
+      - name: Testes do orquestrador
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Orquestrador.ps1
+
       - name: Gerar instalador
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File instalador\Gerar-Instalador.ps1 -SemTestes

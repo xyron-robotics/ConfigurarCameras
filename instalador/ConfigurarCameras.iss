@@ -48,6 +48,7 @@ Name: "desktopicon"; Description: "Criar atalho na área de trabalho"; GroupDesc
 
 [Files]
 Source: "{#Raiz}\fonte\Motor-Cameras.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\Orquestrador-Cameras.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\VERSAO.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\INICIAR-PAINEL.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\INICIAR-PAINEL-COM-CONSOLE.bat"; DestDir: "{app}"; Flags: ignoreversion
