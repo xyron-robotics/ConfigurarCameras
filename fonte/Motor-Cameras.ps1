@@ -3808,6 +3808,9 @@ function Invoke-ConfiguracaoCamera {
     $ipCam = $plano.Ip
 
     # --- persistencia de cada etapa ----------------------------------------
+    # Grava so esta camera, sob o Mutex do registro (Update-RegistroCamera
+    # rele o arquivo e mescla pelo MAC): outro job no mesmo registro nao perde
+    # a camera dele. O $reg lido acima serve so para a retomada.
     $salvar = {
         param([string]$Etapa, [string]$Status, [string]$Erro)
         if ($null -eq $ent) { return }
@@ -3819,8 +3822,7 @@ function Invoke-ConfiguracaoCamera {
         foreach ($c in @('Local', 'Rack', 'Andar', 'Porta', 'Canal')) {
             if (-not [string]::IsNullOrWhiteSpace([string]$ctx.$c)) { $ent.$c = [string]$ctx.$c }
         }
-        Set-CameraRegistro -Registro $reg -Entrada $ent
-        Save-JsonAtomico -Caminho $CaminhoRegistro -Objeto $reg
+        $null = Update-RegistroCamera -Caminho $CaminhoRegistro -Entrada $ent
     }
     $falhar = {
         param([string]$Etapa, [string]$Erro, [bool]$Recusa = $false, [bool]$Login = $false, [bool]$Bloqueada = $false)

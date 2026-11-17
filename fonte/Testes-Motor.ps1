@@ -1086,6 +1086,47 @@ T 'Simulacao instala e grava a camera como Instalada' {
     } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+T 'Duas configuracoes simuladas concorrentes no mesmo registro terminam as duas Instalada' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $largada = New-Object Threading.Barrier 2
+    $trabalhos = @()
+    try {
+        $null = New-Item -ItemType Directory -Path $d
+        $bloco = {
+            param($Motor, $Arq, $Largada, $Padroes, $Mac, $Destino)
+            $ErrorActionPreference = 'Stop'
+            . $Motor
+            Set-MotorLog -Sink { param($Ts, $Msg, $Cor) }
+            $ctx = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = $Destino; Mac = $Mac }
+            if (-not $Largada.SignalAndWait(60000)) { throw 'largada sem o outro runspace' }
+            $r = Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $Padroes -Senha 'SenhaFicticia@1' -CaminhoRegistro $Arq -Simular
+            if (-not $r.Ok) { throw ('configuracao de ' + $Mac + ': ' + $r.Erro) }
+        }
+        foreach ($cam in @(@('AA:00:00:00:00:01', '10.70.20.61'), @('AA:00:00:00:00:02', '10.70.20.62'))) {
+            $ps = [PowerShell]::Create()
+            $null = $ps.AddScript($bloco).AddArgument($motor).AddArgument($arq).AddArgument($largada).AddArgument($padroes).AddArgument($cam[0]).AddArgument($cam[1])
+            $trabalhos += [pscustomobject]@{ Ps = $ps; H = $ps.BeginInvoke() }
+        }
+        $erros = @()
+        foreach ($t in $trabalhos) {
+            try { $null = $t.Ps.EndInvoke($t.H) } catch { $erros += $_.Exception.Message }
+            foreach ($e in $t.Ps.Streams.Error) { $erros += [string]$e }
+        }
+        Assert-Igual 0 $erros.Count ('erros nos runspaces (' + ($erros -join ' | ') + ')')
+        $reg = Read-Registro $arq
+        Assert-Igual 2 @($reg.Cameras).Count 'as duas cameras no registro'
+        $a = Find-CameraRegistro $reg 'AA:00:00:00:00:01'
+        $b = Find-CameraRegistro $reg 'AA:00:00:00:00:02'
+        Assert-Verdade ($null -ne $a -and $null -ne $b) 'as duas achadas pelo MAC'
+        Assert-Igual 'Instalada|10.70.20.61|Instalada|10.70.20.62' ($a.Status + '|' + $a.Ip + '|' + $b.Status + '|' + $b.Ip) 'status e IP'
+    } finally {
+        foreach ($t in $trabalhos) { $t.Ps.Dispose() }
+        $largada.Dispose()
+        Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 T 'Falha na rede grava Falhou e a nova tentativa retoma sem reinicializar' {
     $d = New-Temp
     $arq = Join-Path $d 'registro.json'
