@@ -1210,6 +1210,34 @@ T 'Falha na conferencia: retomada vai direto conferir e devolve o MAC' {
     } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+# Trava de MAC (D7): MAC trocado e erro do portao, nao falha da posicao. O
+# resultado devolve MacTrocado e MacLido; o registro nao ganha Falhou.
+T 'Trava de MAC devolve MacTrocado e MacLido sem gravar Falhou no registro' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    try {
+        $ctx = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.55'; Mac = 'AA:00:00:00:00:01' }
+        $r = Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular -FalharEm 'mac-trocado'
+        Assert-Falso $r.Ok 'resultado'
+        Assert-Verdade ($r.MacTrocado -eq $true) 'MacTrocado'
+        Assert-Igual 12 ([string]$r.MacLido).Length 'MacLido normalizado'
+        Assert-Verdade ($r.MacLido -ne 'AA0000000001') ('MacLido e o falso, nao o escolhido: ' + $r.MacLido)
+        Assert-Falso ($r.Erro -match 'Nada foi alterado') ('texto da trava: ' + $r.Erro)
+        Assert-Igual 0 @((Read-Registro $arq).Cameras | Where-Object { $_.Status -eq 'Falhou' }).Count 'entradas Falhou no registro (camera nova)'
+
+        # Posicao ja em andamento no registro: a trava nao a marca Falhou.
+        $ctx2 = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.56'; Mac = '' }
+        $r1 = Invoke-ConfiguracaoCamera -Contexto $ctx2 -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular -AteEtapa 'encoder'
+        Assert-Verdade $r1.Ok ('primeira chamada: ' + $r1.Erro)
+        $ctx2.Mac = $r1.Mac
+        $r2 = Invoke-ConfiguracaoCamera -Contexto $ctx2 -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular -FalharEm 'mac-trocado'
+        Assert-Verdade ($r2.MacTrocado -eq $true) 'MacTrocado na retomada'
+        Assert-Verdade ($r2.MacLido -ne $r1.Mac) 'MacLido diferente do escolhido na retomada'
+        $e = Find-CameraRegistro (Read-Registro $arq) $r1.Mac
+        Assert-Igual 'Em andamento|encoder|' ($e.Status + '|' + $e.Etapa + '|' + $e.Erro) 'registro da posicao depois da trava'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
 # -AteEtapa: o job para depois da etapa pedida (Ok, registro Em andamento) e a
 # chamada seguinte, sem o parametro, retoma pelo registro sem reinicializar.
 T 'AteEtapa rede para Em andamento e a chamada seguinte termina Instalada sem novo DevInit' {

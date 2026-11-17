@@ -3858,9 +3858,12 @@ function Get-EstadoCamera {
 # LoginRecusado: a camera recusou a senha da sessao (SenhaErrada ou Bloqueada).
 # Repetir sem trocar a senha gasta tentativa do lockout (~5): o painel trava
 # o "Tentar de novo" ate uma senha nova. Bloqueada: a camera ja trancou o admin.
+# MacTrocado: a camera que respondeu no IP nao e a escolhida (MacLido = MAC
+# dela). Erro do portao, nao da posicao: o registro nao ganha Falhou (D7).
 function New-ResultadoConfiguracao {
     return [pscustomobject]@{ Ok = $false; Etapa = ''; Falhou = ''; Erro = ''; Recusa = $false
                               LoginRecusado = $false; Bloqueada = $false
+                              MacTrocado = $false; MacLido = ''
                               Mac = ''; Ip = ''; Entrada = $null }
 }
 
@@ -4013,6 +4016,11 @@ function Invoke-ConfiguracaoCamera {
             if ($Simular) {
                 $info = [pscustomobject]@{ Ok = $true; Modelo = 'SIMULADA'; Serial = 'SIM'; Firmware = '-'; Mac = $mac }
                 if (-not $info.Mac) { $info.Mac = 'AA0000' + ('{0:X6}' -f ([uint32](ConvertTo-Ipv4Numero $destino) -band 0xFFFFFF)) }
+                # Outra camera respondeu no IP: MAC falso diferente do escolhido.
+                if (& $simularFalha 'mac-trocado') {
+                    $info.Mac = 'AA00000000FF'
+                    if ($mac -eq $info.Mac) { $info.Mac = 'AA00000000FE' }
+                }
             } else {
                 $sessao = New-CamSessao -Ip $ipCam -Senha $Senha
                 if (-not $sessao.Ok) {
@@ -4027,8 +4035,15 @@ function Invoke-ConfiguracaoCamera {
                 }
             }
             $macLido = Get-MacNormalizado $info.Mac
+            # Trava de MAC (defesa em profundidade atras do portao, D7): outra
+            # camera respondeu no IP. A inicializacao ja pode ter ido para ela,
+            # entao o texto nao promete "nada alterado". Sem $salvar: a posicao
+            # continua como estava no registro, sem Falhou.
             if ($mac -and $macLido -and $mac -ne $macLido) {
-                & $falhar (Get-ProximaEtapa $feita) ('MAC lido (' + (Format-Mac $macLido) + ') nao e o da camera escolhida (' + (Format-Mac $mac) + '). Nada foi alterado.')
+                $res.Falhou = (Get-ProximaEtapa $feita); $res.Etapa = $feita
+                $res.MacTrocado = $true; $res.MacLido = $macLido
+                $res.Erro = 'A camera que respondeu (MAC ' + (Format-Mac $macLido) + ') nao e a escolhida (MAC ' + (Format-Mac $mac) + '). A posicao continua livre.'
+                Write-Log ("  MAC TROCADO: " + $res.Erro) 'Yellow'
                 return $res
             }
             if ($macLido) { $mac = $macLido }
