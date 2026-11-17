@@ -1766,6 +1766,30 @@ T 'Configuracao simulada com origem 192.168.0.64:8081 registra a porta para a or
     } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue; $script:PortasHttp = $null }
 }
 
+T 'Configuracao simulada aplica a porta HTTP do contexto e ignora a deixada pela descoberta' {
+    $d = New-Temp
+    try {
+        # Estado velho: a descoberta (ou um job anterior no mesmo runspace) deixou 8081.
+        $script:PortasHttp = @{ '192.168.1.108' = 8081; '10.70.20.72' = 8081 }
+        $ctx = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.72'; Mac = ''; HttpPort = 8080 }
+        $r = Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro (Join-Path $d 'r.json') -Simular
+        Assert-Verdade $r.Ok ('resultado: ' + $r.Erro)
+        Assert-Igual 'http://192.168.1.108:8080/RPC2' (ConvertTo-UrlCam -Ip '192.168.1.108' -Endpoint '/RPC2') 'origem leva :8080'
+        Assert-Igual 'http://10.70.20.72:8080/RPC2' (ConvertTo-UrlCam -Ip '10.70.20.72' -Endpoint '/RPC2') 'destino leva :8080'
+        # Contexto com 80: a porta velha some, a URL volta sem porta.
+        $script:PortasHttp = @{ '192.168.1.108' = 8081; '10.70.20.72' = 8081 }
+        $ctx.HttpPort = 80
+        $null = Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro (Join-Path $d 'r2.json') -Simular
+        Assert-Igual 'http://192.168.1.108/RPC2' (ConvertTo-UrlCam -Ip '192.168.1.108' -Endpoint '/RPC2') 'origem com 80'
+        Assert-Igual 'http://10.70.20.72/RPC2' (ConvertTo-UrlCam -Ip '10.70.20.72' -Endpoint '/RPC2') 'destino com 80'
+        # Contexto sem HttpPort: 80 explicito, tambem sem herdar.
+        $script:PortasHttp = @{ '192.168.1.108' = 8081 }
+        $ctx3 = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.73'; Mac = '' }
+        $null = Invoke-ConfiguracaoCamera -Contexto $ctx3 -Padroes $padroes -Senha 's' -CaminhoRegistro (Join-Path $d 'r3.json') -Simular
+        Assert-Igual 'http://192.168.1.108/RPC2' (ConvertTo-UrlCam -Ip '192.168.1.108' -Endpoint '/RPC2') 'sem HttpPort = 80'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue; $script:PortasHttp = $null }
+}
+
 T 'Add-IpTemporarioPlaca -Simular escolhe o .220 da rede da camera e nao toca a placa' {
     function Get-IpsLocais { return @('10.16.251.207') }
     function Get-FaixasDaPlaca { return @(@{ Ip = '10.16.251.207'; Prefixo = 22; IfIndex = 15 }) }

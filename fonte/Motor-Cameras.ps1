@@ -3772,12 +3772,12 @@ function Invoke-ConfiguracaoCamera {
     if ($Simular) { $simTxt = ' [SIMULACAO]' }
     # Porta HTTP fora do padrao (do broadcast DHIP): vale na origem e, depois
     # da troca de IP, no destino - a camera leva a porta junto.
+    # Sempre explicita a partir do contexto (ausente = 80): o job nao herda a
+    # porta que a descoberta ou um job anterior deixou no runspace.
     $portaHttp = 80
     if ($null -ne $ctx.PSObject.Properties['HttpPort'] -and [int]$ctx.HttpPort -gt 0) { $portaHttp = [int]$ctx.HttpPort }
-    if ($portaHttp -ne 80) {
-        Set-CamPortaHttp -Ip $origem -Porta $portaHttp
-        if (Test-Ipv4Estrito $destino) { Set-CamPortaHttp -Ip $destino -Porta $portaHttp }
-    }
+    Set-CamPortaHttp -Ip $origem -Porta $portaHttp
+    Set-CamPortaHttp -Ip $destino -Porta $portaHttp
     Write-Log ""
     Write-Log ("=== camera em " + $origem + $(if ($portaHttp -ne 80) { ':' + $portaHttp } else { '' }) + " -> " + $destino + $simTxt + " ===") 'Cyan'
 
