@@ -1340,9 +1340,32 @@ function notaSenhaInstaladas() {
     ' com a senha atual. Só as próximas recebem a nova.';
 }
 
+// "Montar fila" em Opcoes troca a fila em memoria: com posicoes, confirma
+// dizendo quantas saem. Sem fila, devolve '' e confirm nao e chamado.
+function textoTrocarFila() {
+  const itens = (estado && estado.fila && estado.fila.itens) || [];
+  if (!itens.length) return '';
+  const pend = itens.filter((i) => i.Estado === 'pendente').length;
+  const um = itens.length === 1;
+  const total = um ? '1 posição' : itens.length + ' posições';
+  const resto = pend === 0 ? '' : (um ? ', pendente' : (pend === 1 ? ', 1 delas pendente' : ', ' + pend + ' delas pendentes'));
+  return 'Montar uma fila nova? A fila atual (' + itens[0].Ip + ' a ' + itens[itens.length - 1].Ip + ') sai da memória com ' +
+         total + resto + '.\n\nAs câmeras já instaladas continuam no registro.';
+}
+
+// Fechar ou recarregar a aba com secao editada e nao salva pede confirmacao.
+// Nas telas de fim o servidor ja saiu: nao ha o que salvar.
+function sairComSujo(ev) {
+  if (!Object.values(sujo).some(Boolean)) return;
+  if (!$('encerrado').hidden || !$('atualizando').hidden) return;
+  ev.preventDefault();
+  ev.returnValue = '';
+}
+
 // ------------------------------------------------------------------ ligacoes
 function ligar() {
   window.addEventListener('hashchange', trocarView);
+  window.addEventListener('beforeunload', sairComSujo);
 
   // Passo a passo.
   $('btn-avancar').addEventListener('click', avancar);
@@ -1364,6 +1387,8 @@ function ligar() {
       if (secao === 'senha') { enviarSenha(form).then((ok) => { if (ok) notaSenhaInstaladas(); }); return; }
       if (secao === 'fila') {
         const f = form.elements;
+        const troca = textoTrocarFila();
+        if (troca && !confirm(troca)) return;
         comando('/api/fila', { inicio: f.inicio.value, fim: f.fim.value, local: f.local.value, rack: f.rack.value, andar: f.andar.value });
         sujo.fila = false;
         return;
