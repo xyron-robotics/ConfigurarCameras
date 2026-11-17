@@ -16,3 +16,6 @@ nao-cameras.txt
 
 # Capturas de tela dos testes de interface
 .playwright-mcp/
+
+# Worktrees das frentes (scripts\frente-abrir.ps1)
+.claude/worktrees/
