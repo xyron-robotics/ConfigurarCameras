@@ -8,7 +8,8 @@
       - estado inicial (posicoes copiadas, Max, portao livre, admitindo);
       - resumo por fase;
       - descoberta (achados DHIP -> espera, dedup por MAC, marca nao suportada);
-      - admissao (portao de 1 vaga, Max, posicao na entrada, destino ocupado).
+      - admissao (portao de 1 vaga, Max, posicao na entrada, destino ocupado);
+      - fim do job (portao -> conferencia -> feita, falha isolada, MAC trocado).
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -471,6 +472,184 @@ T 'Admissao: estado de entrada nao e mutado' {
     Assert-Igual 'pendente' $e.Posicoes[0].Estado 'posicao 1 de entrada'
     Assert-Igual 'pendente' $e.Posicoes[1].Estado 'posicao 2 de entrada'
     Assert-Igual 'portao' (Get-Camera $r.Estado 1).Fase 'fase de saida'
+}
+
+# ------------------------------------------------------------------ fim do job
+
+# Resultado do job no formato de Invoke-ConfiguracaoCamera (Motor-Cameras.ps1):
+# Ok, Etapa (ultima feita), Falhou (etapa da falha), Erro, Recusa,
+# LoginRecusado, Bloqueada e, da frente motor, MacTrocado e MacLido.
+function New-ResultadoTeste {
+    param([bool]$Ok = $true, [string]$Etapa = 'rede', [string]$Falhou = '', [string]$Erro = '',
+          [bool]$Recusa = $false, [bool]$LoginRecusado = $false, [bool]$Bloqueada = $false,
+          [bool]$MacTrocado = $false, [string]$MacLido = '')
+    return [pscustomobject]@{
+        Ok = $Ok; Etapa = $Etapa; Falhou = $Falhou; Erro = $Erro; Recusa = $Recusa
+        LoginRecusado = $LoginRecusado; Bloqueada = $Bloqueada; MacTrocado = $MacTrocado; MacLido = $MacLido
+    }
+}
+
+# Estado com as cameras 1..N em espera e a 1 admitida no portao (posicao 1).
+function New-EstadoComPortao {
+    param([int]$Cameras = 2, [int]$Posicoes = 3, [int]$Max = 0)
+    $e = New-EstadoComEspera -Cameras $Cameras -Posicoes $Posicoes -Max $Max
+    return (Step-Admissao -Estado $e).Estado
+}
+
+T 'FimDoJob: portao com Ok solta e despacha a conferencia na posicao da camera' {
+    $e = New-EstadoComPortao -Cameras 2 -Posicoes 3
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado (New-ResultadoTeste -Ok $true -Etapa 'rede')
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'conferindo' $c1.Fase 'fase da 1'
+    Assert-Igual 'rede' $c1.Etapa 'etapa da 1'
+    Assert-Igual 1 $c1.Indice 'indice mantido'
+    Assert-Verdade ($null -eq $r.Estado.Portao) 'portao livre'
+    Assert-Igual 'reservada' $r.Estado.Posicoes[0].Estado 'posicao 1 continua reservada'
+    $a = @($r.Acoes)
+    Assert-Igual 2 $a.Count 'duas acoes'
+    Assert-Igual 'soltar' $a[0].Tipo 'primeiro soltar'
+    Assert-Igual 'AA:00:00:00:00:01' $a[0].Mac 'mac do soltar'
+    Assert-Igual 'despachar' $a[1].Tipo 'depois despachar'
+    Assert-Igual 'AA:00:00:00:00:01' $a[1].Mac 'mac do despachar'
+    Assert-Igual '' $a[1].AteEtapa 'conferencia: AteEtapa vazio'
+    Assert-Igual 1 $a[1].Posicao 'posicao do despachar'
+    Assert-Igual '192.0.2.11' $a[1].Destino 'destino do despachar'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 2).Fase 'a 2 continua em espera'
+
+    # Portao livre: a 2 entra enquanto a 1 confere (Max 0).
+    $r2 = Step-Admissao -Estado $r.Estado
+    Assert-Igual 'portao' (Get-Camera $r2.Estado 2).Fase 'a 2 entra no portao'
+}
+
+T 'FimDoJob: Ok da conferencia deixa a camera feita sem mexer no portao' {
+    $e = New-EstadoComPortao -Cameras 2 -Posicoes 3
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado (New-ResultadoTeste -Etapa 'rede')
+    $r = Step-Admissao -Estado $r.Estado
+    Assert-Igual 'AA:00:00:00:00:02' $r.Estado.Portao 'a 2 no portao'
+    $r2 = Step-FimDoJob -Estado $r.Estado -Mac 'AA:00:00:00:00:01' -Resultado (New-ResultadoTeste -Etapa 'encoder')
+    $c1 = Get-Camera $r2.Estado 1
+    Assert-Igual 'feita' $c1.Fase 'fase da 1'
+    Assert-Igual 'encoder' $c1.Etapa 'etapa da 1'
+    Assert-Igual 'feita' $r2.Estado.Posicoes[0].Estado 'posicao 1 feita'
+    Assert-Igual 'AA:00:00:00:00:01' $r2.Estado.Posicoes[0].Mac 'mac da posicao 1'
+    Assert-Igual 'AA:00:00:00:00:02' $r2.Estado.Portao 'portao continua com a 2'
+    Assert-Igual 0 @(Get-AcoesDoTipo $r2 'soltar').Count 'nada a soltar'
+    Assert-Igual 0 @(Get-AcoesDoTipo $r2 'despachar').Count 'nada a despachar'
+}
+
+T 'FimDoJob: falha no portao abre decisao so daquele MAC e solta' {
+    $e = New-EstadoComPortao -Cameras 3 -Posicoes 3
+    $res = New-ResultadoTeste -Ok $false -Etapa 'login' -Falhou 'rede' -Erro 'sem resposta' -Recusa $true
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado $res -Geracao 4
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'decisao' $c1.Fase 'fase da 1'
+    Assert-Igual 'login' $c1.Etapa 'etapa feita'
+    Assert-Igual 'rede' $c1.Falha.Etapa 'etapa da falha'
+    Assert-Igual 'sem resposta' $c1.Falha.Erro 'erro'
+    Assert-Verdade ($c1.Falha.Recusa -eq $true) 'recusa'
+    Assert-Verdade ($c1.Falha.LoginRecusado -eq $false) 'login nao recusado'
+    Assert-Igual 4 $c1.Falha.Geracao 'geracao'
+    Assert-Verdade ($null -eq $r.Estado.Portao) 'portao livre'
+    Assert-Verdade ($r.Estado.Admitindo -eq $true) 'admitindo intacto'
+    Assert-Igual 'reservada' $r.Estado.Posicoes[0].Estado 'posicao fica com o cartao'
+    $a = @($r.Acoes)
+    Assert-Igual 1 $a.Count 'uma acao'
+    Assert-Igual 'soltar' $a[0].Tipo 'soltar'
+    Assert-Igual 'AA:00:00:00:00:01' $a[0].Mac 'mac do soltar'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 2).Fase 'a 2 segue em espera'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 3).Fase 'a 3 segue em espera'
+    Assert-Igual 1 (Get-Resumo -Estado $r.Estado).Fases['decisao'] 'uma decisao so'
+
+    # D6: a fila nao pausa, a 2 entra na posicao 2.
+    $r2 = Step-Admissao -Estado $r.Estado
+    Assert-Igual 'portao' (Get-Camera $r2.Estado 2).Fase 'a 2 entra'
+    Assert-Igual 2 (Get-Camera $r2.Estado 2).Indice 'posicao 2'
+}
+
+T 'FimDoJob: falha na conferencia abre decisao sem soltar nem mexer no portao' {
+    $e = New-EstadoComPortao -Cameras 2 -Posicoes 3
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado (New-ResultadoTeste -Etapa 'rede')
+    $r = Step-Admissao -Estado $r.Estado
+    $res = New-ResultadoTeste -Ok $false -Etapa 'rede' -Falhou 'encoder' -Erro 'valor recusado'
+    $r2 = Step-FimDoJob -Estado $r.Estado -Mac 'AA:00:00:00:00:01' -Resultado $res -Geracao 1
+    $c1 = Get-Camera $r2.Estado 1
+    Assert-Igual 'decisao' $c1.Fase 'fase da 1'
+    Assert-Igual 'encoder' $c1.Falha.Etapa 'etapa da falha'
+    Assert-Igual 0 @($r2.Acoes).Count 'nenhuma acao'
+    Assert-Igual 'AA:00:00:00:00:02' $r2.Estado.Portao 'portao continua com a 2'
+    Assert-Igual 'portao' (Get-Camera $r2.Estado 2).Fase 'a 2 segue no portao'
+}
+
+T 'FimDoJob: login recusado guarda a geracao da senha na falha e na camera' {
+    $e = New-EstadoComPortao -Cameras 1 -Posicoes 1
+    $res = New-ResultadoTeste -Ok $false -Etapa '' -Falhou 'login' -Erro 'senha errada' -LoginRecusado $true -Bloqueada $true
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado $res -Geracao 3
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'decisao' $c1.Fase 'fase'
+    Assert-Verdade ($c1.Falha.LoginRecusado -eq $true) 'login recusado'
+    Assert-Verdade ($c1.Falha.Bloqueada -eq $true) 'bloqueada'
+    Assert-Igual 3 $c1.Falha.Geracao 'geracao na falha'
+    Assert-Igual 3 $c1.GeracaoLogin 'geracao do login recusado na camera'
+}
+
+T 'FimDoJob: print 1 (escolhido A, lido B) volta A e B para espera e a posicao a pendente' {
+    $e = New-EstadoComPortao -Cameras 2 -Posicoes 3
+    Assert-Igual 'AA:00:00:00:00:01' $e.Portao 'A no portao'
+    $res = New-ResultadoTeste -Ok $false -Etapa 'login' -Falhou 'encoder' -Erro 'MAC lido nao e o escolhido' -MacTrocado $true -MacLido 'aa-00-00-00-00-02'
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado $res -Geracao 2
+    $a = Get-Camera $r.Estado 1
+    $b = Get-Camera $r.Estado 2
+    Assert-Igual 'espera' $a.Fase 'A em espera'
+    Assert-Igual 0 $a.Indice 'A sem posicao'
+    Assert-Verdade ($null -eq $a.Falha) 'A sem falha'
+    Assert-Igual '' $a.Etapa 'A sem etapa'
+    Assert-Igual 'espera' $b.Fase 'B em espera'
+    Assert-Igual 'pendente' $r.Estado.Posicoes[0].Estado 'posicao 1 pendente'
+    Assert-Igual '' $r.Estado.Posicoes[0].Mac 'posicao 1 sem MAC'
+    Assert-Verdade ($null -eq $r.Estado.Portao) 'portao livre'
+    Assert-Verdade ($r.Estado.Admitindo -eq $true) 'Admitindo intacto'
+    Assert-Igual 0 (Get-Resumo -Estado $r.Estado).Fases['decisao'] 'sem decisao'
+    $acoes = @($r.Acoes)
+    Assert-Igual 1 $acoes.Count 'uma acao'
+    Assert-Igual 'soltar' $acoes[0].Tipo 'soltar'
+    Assert-Igual 'AA:00:00:00:00:01' $acoes[0].Mac 'solta A'
+
+    # Vigia sem pausa: a admissao seguinte volta a tentar A na posicao 1.
+    $r2 = Step-Admissao -Estado $r.Estado
+    Assert-Igual 'AA:00:00:00:00:01' $r2.Estado.Portao 'A volta ao portao'
+    Assert-Igual 1 (Get-Camera $r2.Estado 1).Indice 'posicao 1 de novo'
+}
+
+T 'FimDoJob: MAC lido desconhecido nao entra na espera (o DHIP decide no proximo tique)' {
+    $e = New-EstadoComPortao -Cameras 1 -Posicoes 2
+    $res = New-ResultadoTeste -Ok $false -Falhou 'encoder' -MacTrocado $true -MacLido 'AA:00:00:00:00:09'
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado $res
+    Assert-Igual 1 @($r.Estado.Cameras).Count 'so a escolhida'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 1).Fase 'escolhida em espera'
+    Assert-Igual 'pendente' $r.Estado.Posicoes[0].Estado 'posicao pendente'
+}
+
+T 'FimDoJob: evento de MAC desconhecido ou fora de curso nao mexe no estado' {
+    $e = New-EstadoComPortao -Cameras 2 -Posicoes 2
+    $r = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:09' -Resultado (New-ResultadoTeste)
+    Assert-Igual 0 @($r.Acoes).Count 'MAC desconhecido: nenhuma acao'
+    Assert-Igual 'AA:00:00:00:00:01' $r.Estado.Portao 'portao intacto'
+    $r2 = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:02' -Resultado (New-ResultadoTeste -Ok $false -Falhou 'rede')
+    Assert-Igual 0 @($r2.Acoes).Count 'camera em espera: nenhuma acao'
+    Assert-Igual 'espera' (Get-Camera $r2.Estado 2).Fase 'a 2 continua em espera'
+}
+
+T 'FimDoJob: grafia do MAC nao importa e o estado de entrada nao e mutado' {
+    $e = New-EstadoComPortao -Cameras 2 -Posicoes 2
+    $r = Step-FimDoJob -Estado $e -Mac 'aa0000000001' -Resultado (New-ResultadoTeste)
+    Assert-Igual 'conferindo' (Get-Camera $r.Estado 1).Fase 'saida conferindo'
+    Assert-Igual 'portao' (Get-Camera $e 1).Fase 'entrada no portao'
+    Assert-Igual 'AA:00:00:00:00:01' $e.Portao 'portao de entrada'
+    $res = New-ResultadoTeste -Ok $false -MacTrocado $true -MacLido 'AA:00:00:00:00:02'
+    $r2 = Step-FimDoJob -Estado $e -Mac 'AA:00:00:00:00:01' -Resultado $res
+    Assert-Igual 'pendente' $r2.Estado.Posicoes[0].Estado 'saida pendente'
+    Assert-Igual 'reservada' $e.Posicoes[0].Estado 'entrada reservada'
+    Assert-Igual 1 (Get-Camera $e 1).Indice 'indice de entrada'
 }
 
 # ------------------------------------------------------------------- resultado

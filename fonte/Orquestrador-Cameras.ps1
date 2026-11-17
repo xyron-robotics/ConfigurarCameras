@@ -117,7 +117,8 @@ function Get-InitOrquestrador {
 
 <#
     Cópia do estado para o Step devolver sem mutar a entrada: câmeras,
-    posições e avisados são clonados; os campos das câmeras são escalares.
+    posições e avisados são clonados; os campos das câmeras são escalares,
+    menos Falha, que os Steps trocam inteira e nunca alteram por dentro.
 #>
 function Copy-EstadoParalelo {
     param([Parameter(Mandatory = $true)]$Estado)
@@ -275,6 +276,110 @@ function Step-Admissao {
         Tipo = 'despachar'; Mac = [string]$camera.Mac; AteEtapa = 'rede'
         Posicao = [int]$posicao.Posicao; Destino = [string]$posicao.Ip
     }
+
+    return @{ Estado = $novo; Acoes = $acoes }
+}
+
+<#
+    Step-FimDoJob: o job de uma câmera terminou. Resultado vem no formato de
+    Invoke-ConfiguracaoCamera (Ok, Etapa = última feita, Falhou, Erro,
+    Recusa, LoginRecusado, Bloqueada e, da frente motor, MacTrocado e
+    MacLido). Geracao é a geração da senha da sessão usada no job: o servidor
+    conhece a senha, o orquestrador só guarda o número.
+    O ramo sai da fase da câmera, não do resultado:
+      - portão com Ok: 'soltar' e 'despachar' da conferência (AteEtapa vazio,
+        mesma Posicao e Destino), fase 'conferindo', portão livre;
+      - conferência com Ok: fase 'feita' e a posição 'feita' com o MAC;
+      - falha: fase 'decisao' só daquele MAC (D6), com 'soltar' e portão
+        livre se estava no portão. Falha guarda etapa, erro, recusa, login
+        recusado, bloqueada e geração; login recusado grava a geração em
+        GeracaoLogin, para o "Tentar de novo" não repetir a mesma senha.
+        A posição continua reservada para o cartão de decisão;
+      - MacTrocado (D7): 'soltar' se estava no portão; a câmera escolhida
+        volta para espera sem posição nem falha, a posição volta a
+        'pendente' e não há decisão. O MAC lido volta para espera se já é
+        conhecido e está em espera (fica no lugar dele da fila). MAC lido
+        desconhecido não entra: só o DHIP diz se ele é de fábrica (D8).
+    Evento de MAC desconhecido ou de câmera fora de 'portao'/'conferindo'
+    (job atrasado) não muda nada. Admitindo nunca muda aqui.
+#>
+function Step-FimDoJob {
+    param(
+        [Parameter(Mandatory = $true)]$Estado,
+        [Parameter(Mandatory = $true)]$Mac,
+        [Parameter(Mandatory = $true)]$Resultado,
+        [int]$Geracao = 0
+    )
+
+    $novo = Copy-EstadoParalelo -Estado $Estado
+    $acoes = @()
+    $nada = @{ Estado = $novo; Acoes = $acoes }
+
+    $chave = Get-ChaveMac $Mac
+    if ($chave -eq '') { return $nada }
+
+    $camera = $null
+    foreach ($c in @($novo.Cameras)) { if ((Get-ChaveMac $c.Mac) -eq $chave) { $camera = $c; break } }
+    if ($null -eq $camera) { return $nada }
+
+    $faseAntes = [string]$camera.Fase
+    if ($faseAntes -ne 'portao' -and $faseAntes -ne 'conferindo') { return $nada }
+
+    $posicao = $null
+    foreach ($p in @($novo.Posicoes)) {
+        if ([int]$p.Posicao -eq [int]$camera.Indice -and (Get-ChaveMac $p.Mac) -eq $chave) { $posicao = $p; break }
+    }
+
+    $estavaNoPortao = ($faseAntes -eq 'portao')
+    if ($estavaNoPortao) {
+        $acoes += @{ Tipo = 'soltar'; Mac = [string]$camera.Mac }
+        if ((Get-ChaveMac $novo.Portao) -eq $chave) { $novo.Portao = $null }
+    }
+
+    if ([bool]$Resultado.MacTrocado) {
+        $camera.Fase = 'espera'
+        $camera.Indice = 0
+        $camera.Etapa = ''
+        $camera.Falha = $null
+        $camera.Motivo = ''
+        if ($null -ne $posicao) {
+            $posicao.Estado = 'pendente'
+            $posicao.Mac = ''
+            $posicao.Motivo = ''
+        }
+        $chaveLida = Get-ChaveMac $Resultado.MacLido
+        foreach ($c in @($novo.Cameras)) {
+            if ($chaveLida -ne '' -and $chaveLida -ne $chave -and (Get-ChaveMac $c.Mac) -eq $chaveLida -and $c.Fase -eq 'espera') {
+                $c.Motivo = ''
+            }
+        }
+        return @{ Estado = $novo; Acoes = $acoes }
+    }
+
+    $camera.Etapa = [string]$Resultado.Etapa
+
+    if ([bool]$Resultado.Ok) {
+        if ($estavaNoPortao) {
+            $camera.Fase = 'conferindo'
+            $destino = ''
+            if ($null -ne $posicao) { $destino = [string]$posicao.Ip }
+            $acoes += @{
+                Tipo = 'despachar'; Mac = [string]$camera.Mac; AteEtapa = ''
+                Posicao = [int]$camera.Indice; Destino = $destino
+            }
+        } else {
+            $camera.Fase = 'feita'
+            if ($null -ne $posicao) { $posicao.Estado = 'feita' }
+        }
+        return @{ Estado = $novo; Acoes = $acoes }
+    }
+
+    $camera.Fase = 'decisao'
+    $camera.Falha = @{
+        Etapa = [string]$Resultado.Falhou; Erro = [string]$Resultado.Erro; Recusa = [bool]$Resultado.Recusa
+        LoginRecusado = [bool]$Resultado.LoginRecusado; Bloqueada = [bool]$Resultado.Bloqueada; Geracao = $Geracao
+    }
+    if ([bool]$Resultado.LoginRecusado) { $camera.GeracaoLogin = $Geracao }
 
     return @{ Estado = $novo; Acoes = $acoes }
 }
