@@ -3470,6 +3470,44 @@ function Set-CameraRegistro {
     $Registro.Cameras = [object[]]($outros + @($Entrada))
 }
 
+# Nome do Mutex do registro: hash do caminho completo (minusculo), para dois
+# caminhos escritos de jeito diferente cairem no mesmo Mutex. Sem prefixo
+# Global: o painel e os jobs rodam na mesma sessao do Windows.
+function Get-NomeMutexRegistro {
+    param([Parameter(Mandatory)][string]$Caminho)
+    $c = [IO.Path]::GetFullPath($Caminho).ToLowerInvariant()
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $h = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($c)) } finally { $sha.Dispose() }
+    return ('ConfigurarCameras-Registro-' + (($h | ForEach-Object { $_.ToString('x2') }) -join ''))
+}
+
+<#
+    Upsert de UMA camera no registro em disco, seguro entre runspaces: sob o
+    Mutex do caminho, rele o arquivo (o que outro job gravou entra), mescla
+    pelo MAC (Set-CameraRegistro) e grava atomico. Sem o Mutex, dois jobs leem
+    a mesma versao e o ultimo a gravar apaga a camera do outro. Devolve o
+    registro gravado. Mutex preso alem de -EsperaMs: estoura sem gravar.
+#>
+function Update-RegistroCamera {
+    param([Parameter(Mandatory)][string]$Caminho, [Parameter(Mandatory)]$Entrada, [int]$EsperaMs = 30000)
+    $mutex = New-Object Threading.Mutex($false, (Get-NomeMutexRegistro $Caminho))
+    try {
+        $pegou = $false
+        try { $pegou = $mutex.WaitOne($EsperaMs) }
+        catch [Threading.AbandonedMutexException] { $pegou = $true }   # dono anterior morreu sem soltar: o Mutex e nosso
+        if (-not $pegou) {
+            throw ('O registro de câmeras está ocupado por outra gravação há mais de ' + [math]::Round($EsperaMs / 1000, 1) +
+                   ' s (' + $Caminho + '). Nada foi gravado; tente de novo.')
+        }
+        try {
+            $reg = Read-Registro -Caminho $Caminho
+            Set-CameraRegistro -Registro $reg -Entrada $Entrada
+            Save-JsonAtomico -Caminho $Caminho -Objeto $reg
+            return $reg
+        } finally { $mutex.ReleaseMutex() }
+    } finally { $mutex.Dispose() }
+}
+
 # ------------------------------------------------------- fila e relatorio
 
 <#

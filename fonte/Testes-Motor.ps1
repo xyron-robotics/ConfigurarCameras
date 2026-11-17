@@ -935,6 +935,92 @@ T 'Dois runspaces gravam o mesmo arquivo 50 vezes cada: sem excecao, JSON valido
     }
 }
 
+T 'Update-RegistroCamera: dois runspaces com 25 MACs cada terminam com 50 entradas' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $largada = New-Object Threading.Barrier 2
+    $trabalhos = @()
+    try {
+        $null = New-Item -ItemType Directory -Path $d
+        $bloco = {
+            param($Motor, $Arq, $Largada, $Prefixo)
+            $ErrorActionPreference = 'Stop'
+            . $Motor
+            if (-not $Largada.SignalAndWait(60000)) { throw 'largada sem o outro runspace' }
+            for ($i = 1; $i -le 25; $i++) {
+                $mac = $Prefixo + ('{0:X2}' -f $i)
+                $null = Update-RegistroCamera -Caminho $Arq -Entrada (New-EntradaRegistro -Mac $mac -Ip ('10.0.0.' + $i))
+            }
+        }
+        foreach ($pref in @('AA:00:00:00:01:', 'AA:00:00:00:02:')) {
+            $ps = [PowerShell]::Create()
+            $null = $ps.AddScript($bloco).AddArgument($motor).AddArgument($arq).AddArgument($largada).AddArgument($pref)
+            $trabalhos += [pscustomobject]@{ Ps = $ps; H = $ps.BeginInvoke() }
+        }
+        $erros = @()
+        foreach ($t in $trabalhos) {
+            try { $null = $t.Ps.EndInvoke($t.H) } catch { $erros += $_.Exception.Message }
+            foreach ($e in $t.Ps.Streams.Error) { $erros += [string]$e }
+        }
+        Assert-Igual 0 $erros.Count ('erros nos runspaces (' + ($erros -join ' | ') + ')')
+        $reg = Read-Registro $arq
+        Assert-Igual 50 @($reg.Cameras).Count 'registro final com as 50 cameras'
+        Assert-Igual 50 @(@($reg.Cameras) | ForEach-Object { $_.Mac } | Sort-Object -Unique).Count '50 MACs distintos'
+        Assert-Igual '10.0.0.25' (Find-CameraRegistro $reg 'AA:00:00:00:02:19').Ip 'entrada da segunda leva achada pelo MAC'
+    } finally {
+        foreach ($t in $trabalhos) { $t.Ps.Dispose() }
+        $largada.Dispose()
+        Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+T 'Update-RegistroCamera substitui pelo MAC e devolve o registro gravado' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    try {
+        $null = Update-RegistroCamera -Caminho $arq -Entrada (New-EntradaRegistro -Mac 'aa0000000001' -Ip '10.0.0.5')
+        $e = New-EntradaRegistro -Mac 'AA:00:00:00:00:01' -Ip '10.0.0.6'
+        $e.Status = 'Instalada'
+        $reg = Update-RegistroCamera -Caminho $arq -Entrada $e
+        Assert-Igual 1 @($reg.Cameras).Count 'mesmo MAC = uma entrada'
+        Assert-Igual '10.0.0.6' (Find-CameraRegistro (Read-Registro $arq) 'AA:00:00:00:00:01').Ip 'no disco, a nova'
+        Assert-Igual 'Instalada' (Find-CameraRegistro $reg 'AA:00:00:00:00:01').Status 'devolvido = gravado'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Update-RegistroCamera com o Mutex preso estoura com erro claro, sem gravar' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $dono = [PowerShell]::Create()
+    try {
+        $null = New-Item -ItemType Directory -Path $d
+        # Outro thread segura o Mutex (Mutex e por thread: o proprio teste
+        # entraria de novo sem esperar).
+        $pronto = New-Object Threading.ManualResetEventSlim($false)
+        $solta = New-Object Threading.ManualResetEventSlim($false)
+        $null = $dono.AddScript({
+            param($Nome, $Pronto, $Solta)
+            $mx = New-Object Threading.Mutex($false, $Nome)
+            $null = $mx.WaitOne()
+            $Pronto.Set()
+            $null = $Solta.Wait(60000)
+            $mx.ReleaseMutex(); $mx.Dispose()
+        }).AddArgument((Get-NomeMutexRegistro $arq)).AddArgument($pronto).AddArgument($solta)
+        $h = $dono.BeginInvoke()
+        Assert-Verdade ($pronto.Wait(10000)) 'outro thread pegou o Mutex'
+        $msg = ''
+        try { $null = Update-RegistroCamera -Caminho $arq -Entrada (New-EntradaRegistro -Mac 'AA:00:00:00:00:01' -Ip '10.0.0.5') -EsperaMs 200 }
+        catch { $msg = $_.Exception.Message }
+        $solta.Set()
+        $null = $dono.EndInvoke($h)
+        Assert-Verdade ($msg -match 'registro') ('erro fala do registro: ' + $msg)
+        Assert-Falso (Test-Path $arq) 'nada gravado'
+    } finally {
+        $dono.Dispose()
+        Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # ------------------------------------------------------ relatorio
 
 Write-Host ""
