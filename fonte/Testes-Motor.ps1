@@ -1644,6 +1644,43 @@ T 'Remove-VizinhoEstatico: tira a entrada do IP na placa; sem entrada, nada a fa
     Assert-Verdade ($r.Erro -match '^Nao consegui remover o vizinho estatico 192\.168\.1\.108: Acesso negado') ('erro: ' + $r.Erro)
 }
 
+# Duas cameras de fabrica no mesmo IP: a tabela de vizinhos alterna o MAC. As
+# leituras vem de um Get-VizinhosMac falso, uma por chamada; o Start-Sleep falso
+# so anota o intervalo, para o teste nao dormir.
+T 'Test-MacTrocandoNoIp: leituras diferentes dao verdadeiro, iguais dao falso' {
+    function Get-NetNeighbor { throw 'Get-NetNeighbor real chamado' }
+    function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) $script:dormiu += $Milliseconds }
+    function Get-VizinhosMac {
+        param([string[]]$Ips)
+        $script:pedidos += ($Ips -join ',')
+        $mac = $script:leituras[$script:pedidos.Count - 1]
+        $m = @{}
+        if ($mac) { $m[$Ips[0]] = $mac }
+        return $m
+    }
+    function Use-Leituras { param([string[]]$Macs) $script:leituras = @($Macs); $script:pedidos = @(); $script:dormiu = @() }
+
+    Use-Leituras 'AA0000000001', 'AA0000000002'
+    Assert-Verdade (Test-MacTrocandoNoIp -Ip '192.168.1.108' -IntervaloMs 300) 'MAC mudou entre as leituras'
+    Assert-Igual '192.168.1.108|192.168.1.108' ($script:pedidos -join '|') 'duas leituras do IP pedido'
+    Assert-Igual '300' ($script:dormiu -join '|') 'um intervalo, o pedido'
+
+    Use-Leituras 'AA0000000001', 'AA0000000001'
+    Assert-Falso (Test-MacTrocandoNoIp -Ip '192.168.1.108' -IntervaloMs 300) 'mesmo MAC nas duas leituras'
+    Assert-Igual 2 @($script:pedidos).Count 'duas leituras'
+
+    # Intervalo zero: nem chama o Start-Sleep.
+    Use-Leituras 'AA0000000003', 'AA0000000004'
+    Assert-Verdade (Test-MacTrocandoNoIp -Ip '192.168.1.108' -IntervaloMs 0) 'mudou sem intervalo'
+    Assert-Igual 0 @($script:dormiu).Count 'sem dormir'
+
+    # Leitura sem MAC nao prova troca: some da tabela nao e outro MAC.
+    Use-Leituras 'AA0000000001', ''
+    Assert-Falso (Test-MacTrocandoNoIp -Ip '192.168.1.108' -IntervaloMs 0) 'segunda leitura vazia'
+    Use-Leituras '', 'AA0000000001'
+    Assert-Falso (Test-MacTrocandoNoIp -Ip '192.168.1.108' -IntervaloMs 0) 'primeira leitura vazia'
+}
+
 T 'Vizinho estatico: as funcoes pequenas usam Permanent em ActiveStore (so leitura do codigo)' {
     $novo = (Get-Command New-VizinhoPlaca -CommandType Function).Definition
     Assert-Verdade ($novo -match 'New-NetNeighbor') 'New-NetNeighbor'

@@ -664,6 +664,20 @@ function Get-VizinhosMac {
     return $mapa
 }
 
+# Duas cameras de fabrica no mesmo IP fazem a tabela de vizinhos alternar o MAC.
+# Le o vizinho do IP duas vezes, com IntervaloMs entre as leituras (0 = sem
+# espera); verdadeiro so se as duas leituras tem MAC e eles diferem. Leitura
+# sem MAC nao prova troca. So le a tabela: nao manda pacote nem cria entrada.
+function Test-MacTrocandoNoIp {
+    param([Parameter(Mandatory)][string]$Ip, [int]$IntervaloMs = 500)
+
+    $antes = (Get-VizinhosMac -Ips @($Ip))[$Ip]
+    if ($IntervaloMs -gt 0) { Start-Sleep -Milliseconds $IntervaloMs }
+    $depois = (Get-VizinhosMac -Ips @($Ip))[$Ip]
+    if (-not $antes -or -not $depois) { return $false }
+    return ([string]$antes -ne [string]$depois)
+}
+
 function Read-RespostaInit {
     param([string]$Bruto)
 
