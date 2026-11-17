@@ -1525,6 +1525,134 @@ T 'Preparar com IPs da sessao: usa os IPs exatos; recusa IP que ja e de outra pl
     Assert-Verdade (($script:Linhas -join "`n") -match 'PULADO +192\.168\.1\.230 responde ao ping.*Troque o IP do PC em Opcoes') 'pulado com dica'
 }
 
+# Vizinho estatico (o portao do IP de fabrica): as chamadas Get/New/Remove-NetNeighbor
+# ficam em funcoes pequenas do motor, trocadas aqui por falsas sobre uma tabela em
+# memoria. Os cmdlets reais sao sombreados por funcoes que estouram: se o motor
+# chamar um deles direto, o teste falha em vez de mexer na placa.
+function Use-ArpFalso {
+    param([object[]]$Inicial = @())
+    $script:arp = @($Inicial)
+    $script:chamadasViz = @()
+}
+
+T 'Set-VizinhoEstatico: entrada dinamica pre-existente sai e entra a Permanent, conferida' {
+    function Get-NetNeighbor { throw 'Get-NetNeighbor real chamado' }
+    function New-NetNeighbor { throw 'New-NetNeighbor real chamado' }
+    function Remove-NetNeighbor { throw 'Remove-NetNeighbor real chamado' }
+    function Get-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasViz += ('get ' + $IfIndex + ' ' + $Ip); return @($script:arp | Where-Object { $_.IfIndex -eq $IfIndex -and $_.IPAddress -eq $Ip }) }
+    function Remove-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasViz += ('remove ' + $IfIndex + ' ' + $Ip); $script:arp = @($script:arp | Where-Object { -not ($_.IfIndex -eq $IfIndex -and $_.IPAddress -eq $Ip) }) }
+    function New-VizinhoPlaca { param([int]$IfIndex, [string]$Ip, [string]$Mac) $script:chamadasViz += ('new ' + $IfIndex + ' ' + $Ip + ' ' + $Mac); $script:arp += [pscustomobject]@{ IfIndex = $IfIndex; IPAddress = $Ip; LinkLayerAddress = $Mac; State = 'Permanent' } }
+
+    # A outra camera de fabrica respondeu antes: a entrada dinamica aponta para ela.
+    Use-ArpFalso @([pscustomobject]@{ IfIndex = 8; IPAddress = '192.168.1.108'; LinkLayerAddress = 'AA-00-00-00-00-02'; State = 'Reachable' },
+                   [pscustomobject]@{ IfIndex = 8; IPAddress = '192.168.1.1'; LinkLayerAddress = 'AA-00-00-00-00-09'; State = 'Reachable' })
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108' -Mac 'aa:00:00:00:00:01'
+    Assert-Verdade $r.Ok ('ok: ' + $r.Erro)
+    Assert-Igual '' $r.Erro 'sem erro'
+    Assert-Igual 'get 8 192.168.1.108|remove 8 192.168.1.108|new 8 192.168.1.108 AA-00-00-00-00-01|get 8 192.168.1.108' ($script:chamadasViz -join '|') 'remove, cria e confere pelos falsos'
+    $e = @($script:arp | Where-Object { $_.IPAddress -eq '192.168.1.108' })
+    Assert-Igual 1 $e.Count 'uma entrada para o IP de fabrica'
+    Assert-Igual 'AA-00-00-00-00-01|Permanent' ($e[0].LinkLayerAddress + '|' + $e[0].State) 'Permanent com o MAC pedido'
+    Assert-Igual 2 @($script:arp).Count 'a entrada de outro IP ficou'
+
+    # Sem entrada anterior: nao remove nada, so cria e confere.
+    Use-ArpFalso
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108' -Mac 'AA0000000003'
+    Assert-Verdade $r.Ok 'ok sem entrada anterior'
+    Assert-Igual 'get 8 192.168.1.108|new 8 192.168.1.108 AA-00-00-00-00-03|get 8 192.168.1.108' ($script:chamadasViz -join '|') 'sem remove'
+}
+
+T 'Set-VizinhoEstatico: conferencia que nao bate devolve Ok falso com erro em pt-BR' {
+    function Get-NetNeighbor { throw 'Get-NetNeighbor real chamado' }
+    function New-NetNeighbor { throw 'New-NetNeighbor real chamado' }
+    function Remove-NetNeighbor { throw 'Remove-NetNeighbor real chamado' }
+    function Get-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasViz += 'get'; return @($script:arp | Where-Object { $_.IfIndex -eq $IfIndex -and $_.IPAddress -eq $Ip }) }
+    function Remove-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasViz += 'remove'; $script:arp = @($script:arp | Where-Object { -not ($_.IfIndex -eq $IfIndex -and $_.IPAddress -eq $Ip) }) }
+
+    # A placa aceitou, mas a tabela ficou com outro MAC.
+    function New-VizinhoPlaca { param([int]$IfIndex, [string]$Ip, [string]$Mac) $script:chamadasViz += 'new'; $script:arp += [pscustomobject]@{ IfIndex = $IfIndex; IPAddress = $Ip; LinkLayerAddress = 'AA-00-00-00-00-02'; State = 'Permanent' } }
+    Use-ArpFalso
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108' -Mac 'AA:00:00:00:00:01'
+    Assert-Falso $r.Ok 'MAC diferente'
+    Assert-Verdade ($r.Erro -match '^O vizinho estatico 192\.168\.1\.108 -> AA-00-00-00-00-01 nao conferiu') ('erro: ' + $r.Erro)
+    Assert-Verdade ($r.Erro -match 'AA-00-00-00-00-02') 'cita o que ficou na tabela'
+    Assert-Igual 'get|new|get' ($script:chamadasViz -join '|') 'falsos chamados'
+
+    # Mesmo MAC, mas a entrada nao ficou Permanent.
+    function New-VizinhoPlaca { param([int]$IfIndex, [string]$Ip, [string]$Mac) $script:arp += [pscustomobject]@{ IfIndex = $IfIndex; IPAddress = $Ip; LinkLayerAddress = $Mac; State = 'Stale' } }
+    Use-ArpFalso
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108' -Mac 'AA:00:00:00:00:01'
+    Assert-Falso $r.Ok 'nao ficou Permanent'
+    Assert-Verdade ($r.Erro -match 'nao conferiu.*Stale') ('erro: ' + $r.Erro)
+
+    # Nada na tabela depois de criar.
+    function New-VizinhoPlaca { param([int]$IfIndex, [string]$Ip, [string]$Mac) }
+    Use-ArpFalso
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108' -Mac 'AA:00:00:00:00:01'
+    Assert-Falso $r.Ok 'tabela vazia'
+    Assert-Verdade ($r.Erro -match 'nao conferiu.*nenhuma entrada') ('erro: ' + $r.Erro)
+
+    # A placa recusou a criacao.
+    function New-VizinhoPlaca { param([int]$IfIndex, [string]$Ip, [string]$Mac) throw 'Acesso negado' }
+    Use-ArpFalso
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108' -Mac 'AA:00:00:00:00:01'
+    Assert-Falso $r.Ok 'criacao recusada'
+    Assert-Verdade ($r.Erro -match '^Nao consegui criar o vizinho estatico 192\.168\.1\.108 -> AA-00-00-00-00-01: Acesso negado') ('erro: ' + $r.Erro)
+
+    # A entrada anterior nao saiu.
+    function Remove-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) throw 'Elemento nao encontrado' }
+    function New-VizinhoPlaca { param([int]$IfIndex, [string]$Ip, [string]$Mac) $script:chamadasViz += 'new' }
+    Use-ArpFalso @([pscustomobject]@{ IfIndex = 8; IPAddress = '192.168.1.108'; LinkLayerAddress = 'AA-00-00-00-00-02'; State = 'Reachable' })
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108' -Mac 'AA:00:00:00:00:01'
+    Assert-Falso $r.Ok 'remocao recusada'
+    Assert-Verdade ($r.Erro -match '^Nao consegui remover a entrada anterior de 192\.168\.1\.108: Elemento nao encontrado') ('erro: ' + $r.Erro)
+    Assert-Falso ($script:chamadasViz -contains 'new') 'nao tenta criar depois de falhar a remocao'
+
+    # Entrada invalida: nem consulta a tabela.
+    Use-ArpFalso
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1' -Mac 'AA:00:00:00:00:01'
+    Assert-Verdade ((-not $r.Ok) -and $r.Erro -match 'IP invalido') ('ip: ' + $r.Erro)
+    $r = Set-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108' -Mac 'AA:00:00'
+    Assert-Verdade ((-not $r.Ok) -and $r.Erro -match 'MAC invalido') ('mac: ' + $r.Erro)
+    Assert-Igual 0 @($script:chamadasViz).Count 'nenhuma chamada'
+}
+
+T 'Remove-VizinhoEstatico: tira a entrada do IP na placa; sem entrada, nada a fazer' {
+    function Get-NetNeighbor { throw 'Get-NetNeighbor real chamado' }
+    function New-NetNeighbor { throw 'New-NetNeighbor real chamado' }
+    function Remove-NetNeighbor { throw 'Remove-NetNeighbor real chamado' }
+    function Get-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasViz += ('get ' + $IfIndex + ' ' + $Ip); return @($script:arp | Where-Object { $_.IfIndex -eq $IfIndex -and $_.IPAddress -eq $Ip }) }
+    function Remove-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasViz += ('remove ' + $IfIndex + ' ' + $Ip); $script:arp = @($script:arp | Where-Object { -not ($_.IfIndex -eq $IfIndex -and $_.IPAddress -eq $Ip) }) }
+
+    Use-ArpFalso @([pscustomobject]@{ IfIndex = 8; IPAddress = '192.168.1.108'; LinkLayerAddress = 'AA-00-00-00-00-01'; State = 'Permanent' },
+                   [pscustomobject]@{ IfIndex = 15; IPAddress = '192.168.1.108'; LinkLayerAddress = 'AA-00-00-00-00-05'; State = 'Reachable' })
+    $r = Remove-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108'
+    Assert-Verdade $r.Ok ('ok: ' + $r.Erro)
+    Assert-Igual 'get 8 192.168.1.108|remove 8 192.168.1.108' ($script:chamadasViz -join '|') 'pelos falsos'
+    Assert-Igual 0 @($script:arp | Where-Object { $_.IfIndex -eq 8 }).Count 'saiu da placa 8'
+    Assert-Igual 1 @($script:arp | Where-Object { $_.IfIndex -eq 15 }).Count 'a outra placa ficou'
+
+    $script:chamadasViz = @()
+    $r = Remove-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108'
+    Assert-Verdade $r.Ok 'sem entrada: ok'
+    Assert-Igual 'get 8 192.168.1.108' ($script:chamadasViz -join '|') 'sem remove'
+
+    function Remove-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) throw 'Acesso negado' }
+    Use-ArpFalso @([pscustomobject]@{ IfIndex = 8; IPAddress = '192.168.1.108'; LinkLayerAddress = 'AA-00-00-00-00-01'; State = 'Permanent' })
+    $r = Remove-VizinhoEstatico -IfIndex 8 -Ip '192.168.1.108'
+    Assert-Falso $r.Ok 'remocao recusada'
+    Assert-Verdade ($r.Erro -match '^Nao consegui remover o vizinho estatico 192\.168\.1\.108: Acesso negado') ('erro: ' + $r.Erro)
+}
+
+T 'Vizinho estatico: as funcoes pequenas usam Permanent em ActiveStore (so leitura do codigo)' {
+    $novo = (Get-Command New-VizinhoPlaca -CommandType Function).Definition
+    Assert-Verdade ($novo -match 'New-NetNeighbor') 'New-NetNeighbor'
+    Assert-Verdade ($novo -match '-State Permanent') 'Permanent'
+    Assert-Verdade ($novo -match '-PolicyStore ActiveStore') 'ActiveStore (some no reboot)'
+    Assert-Verdade ((Get-Command Remove-VizinhoPlaca -CommandType Function).Definition -match 'Remove-NetNeighbor') 'Remove-NetNeighbor'
+    Assert-Verdade ((Get-Command Get-VizinhoPlaca -CommandType Function).Definition -match 'Get-NetNeighbor') 'Get-NetNeighbor'
+}
+
 # ------------------------------------------------------ placa escolhida
 
 Write-Host ""

@@ -1160,6 +1160,70 @@ function Add-RotaHostPlaca {
     return $msgs
 }
 
+<#
+    Vizinho estatico: o portao do IP de fabrica. Com varias cameras de fabrica
+    no mesmo IP, a entrada ARP Permanent IP -> MAC faz o PC falar so com a
+    camera daquele MAC. ActiveStore: some no reboot. As tres funcoes pequenas
+    abaixo sao as unicas que tocam a tabela de vizinhos; os testes as trocam
+    por falsas.
+#>
+function Get-VizinhoPlaca {
+    param([int]$IfIndex, [string]$Ip)
+    return @(Get-NetNeighbor -InterfaceIndex $IfIndex -IPAddress $Ip -AddressFamily IPv4 -ErrorAction SilentlyContinue)
+}
+
+function New-VizinhoPlaca {
+    param([int]$IfIndex, [string]$Ip, [string]$Mac)
+    $null = New-NetNeighbor -InterfaceIndex $IfIndex -IPAddress $Ip -LinkLayerAddress $Mac -State Permanent -PolicyStore ActiveStore -ErrorAction Stop
+}
+
+function Remove-VizinhoPlaca {
+    param([int]$IfIndex, [string]$Ip)
+    Remove-NetNeighbor -InterfaceIndex $IfIndex -IPAddress $Ip -AddressFamily IPv4 -Confirm:$false -ErrorAction Stop
+}
+
+# MAC no formato da tabela de vizinhos do Windows: AA-00-00-00-00-01.
+function Format-MacVizinho {
+    param([string]$Mac)
+    $n = Get-MacNormalizado $Mac
+    return ($n -replace '(..)(?!$)', '$1-')
+}
+
+# Remove a entrada que houver para o IP na placa (dinamica ou nao), cria a
+# Permanent IP -> MAC e confere na tabela. Devolve { Ok; Erro }; nao grava log.
+function Set-VizinhoEstatico {
+    param([Parameter(Mandatory)][int]$IfIndex, [Parameter(Mandatory)][string]$Ip, [Parameter(Mandatory)][string]$Mac)
+
+    if (-not (Test-Ipv4Estrito $Ip)) { return [pscustomobject]@{ Ok = $false; Erro = ('IP invalido para o vizinho estatico: ' + $Ip) } }
+    if ((Get-MacNormalizado $Mac).Length -ne 12) { return [pscustomobject]@{ Ok = $false; Erro = ('MAC invalido para o vizinho estatico: ' + $Mac) } }
+    $macTabela = Format-MacVizinho $Mac
+    $alvo = $Ip + ' -> ' + $macTabela
+
+    if (@(Get-VizinhoPlaca -IfIndex $IfIndex -Ip $Ip).Count -gt 0) {
+        try { Remove-VizinhoPlaca -IfIndex $IfIndex -Ip $Ip }
+        catch { return [pscustomobject]@{ Ok = $false; Erro = ('Nao consegui remover a entrada anterior de ' + $Ip + ': ' + $_.Exception.Message) } }
+    }
+    try { New-VizinhoPlaca -IfIndex $IfIndex -Ip $Ip -Mac $macTabela }
+    catch { return [pscustomobject]@{ Ok = $false; Erro = ('Nao consegui criar o vizinho estatico ' + $alvo + ': ' + $_.Exception.Message) } }
+
+    $agora = @(Get-VizinhoPlaca -IfIndex $IfIndex -Ip $Ip)
+    $bate = @($agora | Where-Object { (Get-MacNormalizado ([string]$_.LinkLayerAddress)) -eq (Get-MacNormalizado $Mac) -and [string]$_.State -eq 'Permanent' })
+    if ($bate.Count -gt 0) { return [pscustomobject]@{ Ok = $true; Erro = '' } }
+    if ($agora.Count -eq 0) { $visto = 'nenhuma entrada para o IP na placa depois de criar' }
+    else { $visto = 'a tabela tem ' + (@($agora | ForEach-Object { (Format-MacVizinho ([string]$_.LinkLayerAddress)) + ' (' + [string]$_.State + ')' }) -join ', ') }
+    return [pscustomobject]@{ Ok = $false; Erro = ('O vizinho estatico ' + $alvo + ' nao conferiu: ' + $visto + '.') }
+}
+
+# Tira a entrada do IP na placa. Sem entrada, nada a fazer (Ok). Devolve { Ok; Erro }.
+function Remove-VizinhoEstatico {
+    param([Parameter(Mandatory)][int]$IfIndex, [Parameter(Mandatory)][string]$Ip)
+
+    if (@(Get-VizinhoPlaca -IfIndex $IfIndex -Ip $Ip).Count -eq 0) { return [pscustomobject]@{ Ok = $true; Erro = '' } }
+    try { Remove-VizinhoPlaca -IfIndex $IfIndex -Ip $Ip }
+    catch { return [pscustomobject]@{ Ok = $false; Erro = ('Nao consegui remover o vizinho estatico ' + $Ip + ': ' + $_.Exception.Message) } }
+    return [pscustomobject]@{ Ok = $true; Erro = '' }
+}
+
 function Find-CamerasNaRede {
     param(
         [string]$IpFabrica          = '192.168.1.108',
