@@ -28,7 +28,18 @@
   /* Borda de campo: 3:1 contra a superficie (WCAG 1.4.11). */
   --borda-campo: light-dark(#7E878D, #7A8389);
   --log-amarelo: light-dark(#8A6408, #E9BD58);
-  --raio: 6px;
+  /* Raio: --r-sm em controle, fita e etapas; --r-md em cartao. */
+  --r-sm: 4px;
+  --r-md: 8px;
+  /* Espaco em passos de 4 px. */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  /* Altura de botao e campo: painel de mouse, nao precisa de 44/48. */
+  --controle: 38px;
   --sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --sans-titulo: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
@@ -53,8 +64,9 @@ body {
 }
 [hidden] { display: none !important; }
 .mono { font-family: var(--mono); font-size: 0.92em; }
-.apoio { color: var(--apoio); margin: 0.25rem 0; }
-.nota { color: var(--apoio); font-size: 13px; margin: 0.5rem 0 0; max-width: 70ch; }
+/* Texto de ajuda: linha de leitura curta. */
+.apoio { color: var(--apoio); margin: 0.25rem 0; max-width: 64ch; }
+.nota { color: var(--apoio); font-size: 13px; margin: 0.5rem 0 0; max-width: 64ch; }
 h1, h2, h3 { font-family: var(--sans-titulo); font-weight: 600; margin: 0; }
 h2 { font-size: 19px; margin-bottom: 0.5rem; }
 h3 { font-size: 16px; margin-bottom: 0.25rem; }
@@ -67,7 +79,7 @@ a { color: inherit; }
 /* Pular para o conteudo: primeiro Tab da pagina; so aparece com foco. */
 .pular {
   position: absolute; left: 0.75rem; top: -3rem; z-index: 60;
-  padding: 0.45rem 0.9rem; border-radius: var(--raio);
+  padding: 0.45rem 0.9rem; border-radius: var(--r-sm);
   background: var(--texto); color: var(--sup); font-weight: 600; text-decoration: none;
 }
 .pular:focus-visible { top: 0.5rem; }
@@ -120,7 +132,7 @@ progress { display: block; width: 100%; max-width: 32rem; height: 0.6rem; margin
 .menu { display: flex; flex-direction: column; padding: 1rem 0.5rem; gap: 2px; border-right: 1px solid var(--linha); }
 .menu a {
   color: var(--texto); text-decoration: none;
-  padding: 0.45rem 0.75rem; border-radius: var(--raio);
+  padding: 0.45rem 0.75rem; border-radius: var(--r-sm);
   border-left: 3px solid transparent;
 }
 .menu a:hover { background: var(--sup); }
@@ -146,13 +158,15 @@ body.no-inicio main { max-width: 52rem; margin: 0 auto; }
 }
 
 /* ---------------------------------------------------------------- campos */
-label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 13px; color: var(--apoio); }
+label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 13px; font-weight: 500; color: var(--apoio); }
 input, select {
-  font: inherit; font-size: 15px; color: var(--texto);
-  background: var(--sup); border: 1px solid var(--borda-campo); border-radius: var(--raio);
+  font: inherit; font-size: 15px; font-weight: 400; color: var(--texto);
+  background: var(--sup); border: 1px solid var(--borda-campo); border-radius: var(--r-sm);
   padding: 0.4rem 0.55rem; min-width: 0;
   transition: border-color var(--m-out) var(--ease), box-shadow var(--m-out) var(--ease);
 }
+/* Campo de uma linha na altura do botao: alinham pela base em .linha-campos. */
+input:not([type="checkbox"]):not([type="radio"]), select { height: var(--controle); }
 /* Lista aberta do select no Windows escuro: sem isto vem branca com texto claro. */
 select { background-color: var(--sup); color: var(--texto); }
 option { background-color: var(--sup); color: var(--texto); }
@@ -164,19 +178,20 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--fa
 .erro-campo { color: var(--falha); font-size: 13px; }
 .linha-campos { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; }
 .linha-campos label { flex: 1 1 9rem; }
-label.check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(--texto); font-size: 15px; }
+/* Rotulo de opcao (check, radio) le como texto, nao como rotulo de campo. */
+label.check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(--texto); font-size: 15px; font-weight: 400; }
 /* Grade dos formularios de secao: 2 a 3 colunas conforme a largura. */
 .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem 0.9rem; align-items: end; }
 .campos label.largo { grid-column: 1 / -1; }
 .secao-form { display: flex; flex-direction: column; gap: 0.75rem; }
 fieldset {
   margin: 0; padding: 0.7rem 0.9rem 0.9rem;
-  background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--raio);
+  background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--r-md);
 }
 legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; padding: 0 0.3rem; }
 .erros, .avisos-leves, .aviso { overflow-wrap: anywhere; }
-.erros { margin: 0; padding: 0.6rem 0.9rem 0.6rem 2rem; background: var(--falha-fraco); border-radius: var(--raio); }
-.avisos-leves { margin: 0; padding: 0.6rem 0.9rem 0.6rem 2rem; background: var(--acento-fraco); border-radius: var(--raio); }
+.erros { margin: 0; padding: 0.6rem 0.9rem 0.6rem 2rem; background: var(--falha-fraco); border-radius: var(--r-sm); }
+.avisos-leves { margin: 0; padding: 0.6rem 0.9rem 0.6rem 2rem; background: var(--acento-fraco); border-radius: var(--r-sm); }
 /* Faixa usual do bitrate, embaixo dos campos do stream. */
 .faixa-encoder { margin: 0.45rem 0 0; font-size: 13px; color: var(--apoio); }
 .faixa-encoder:empty { display: none; }
@@ -184,9 +199,9 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .btn {
   font: inherit; font-size: 14px; font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center;
-  padding: 0.45rem 0.9rem; min-height: 2.25rem;
+  padding: 0.45rem 0.9rem; min-height: var(--controle);
   color: var(--texto); background: var(--sup-2);
-  border: 1px solid var(--linha); border-radius: var(--raio);
+  border: 1px solid var(--linha); border-radius: var(--r-sm);
   cursor: pointer; text-decoration: none; white-space: nowrap;
   transition:
     background-color var(--m-out) var(--ease),
@@ -218,7 +233,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 #inicio fieldset .campos { grid-template-columns: repeat(4, 1fr); }
 
 .aviso {
-  padding: 0.6rem 0.9rem; border-radius: var(--raio);
+  padding: 0.6rem 0.9rem; border-radius: var(--r-sm);
   background: var(--falha-fraco); color: var(--texto); border-left: 4px solid var(--falha);
 }
 /* "Aguarde": nao e erro, some sozinho. */
@@ -235,23 +250,23 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 }
 .passos li { counter-increment: passo; }
 .passo-botao {
-  font: inherit; font-size: 12.5px; width: 100%; text-align: left;
-  padding: 0.45rem 0.6rem; border-radius: 3px; cursor: pointer;
+  font: inherit; font-size: 13px; width: 100%; text-align: left;
+  padding: 0.45rem 0.6rem; border-radius: var(--r-sm); cursor: pointer;
   background: var(--sup-2); border: 1px solid var(--linha); border-top: 3px solid var(--linha); color: var(--apoio);
 }
 .passo-botao::before { content: counter(passo) "  "; font-family: var(--mono); }
 .passo-botao:disabled { cursor: default; opacity: 0.7; }
 .passos li.feito .passo-botao { border-top-color: var(--ok); color: var(--texto); }
 .passos li.agora .passo-botao { border-top-color: var(--acento); background: var(--sup); color: var(--texto); font-weight: 600; }
-@media (max-width: 760px) { .passos { grid-template-columns: repeat(4, 1fr); } .passo-botao { font-size: 12px; } }
+@media (max-width: 760px) { .passos { grid-template-columns: repeat(4, 1fr); } .passo-botao { font-size: 13px; } }
 
 .passo {
   background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--acento);
-  border-radius: var(--raio); padding: 1.1rem 1.25rem 1.25rem;
-  display: flex; flex-direction: column; gap: 0.8rem;
+  border-radius: var(--r-md); padding: var(--s-4) var(--s-5) var(--s-5);
+  display: flex; flex-direction: column; gap: var(--s-3);
 }
 .passo h2 { font-size: 22px; letter-spacing: -0.015em; margin: 0; }
-.passo .explica { margin: 0; max-width: 72ch; }
+.passo .explica { margin: 0; max-width: 64ch; }
 .passo .slot { display: contents; }
 .passo-acoes {
   display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
@@ -259,7 +274,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 }
 .passo-acoes .espaco { flex: 1; }
 .passo-escolha {
-  background: var(--acento-fraco); border-radius: var(--raio); padding: 0.8rem 1rem;
+  background: var(--acento-fraco); border-radius: var(--r-md); padding: 0.8rem 1rem;
   display: flex; flex-direction: column; gap: 0.6rem;
 }
 .passo-escolha p { margin: 0; }
@@ -269,20 +284,20 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .placas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .placa-item {
   flex-direction: row; align-items: flex-start; gap: 0.7rem; cursor: pointer;
-  padding: 0.7rem 0.9rem; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--sup);
-  color: var(--texto); font-size: 15px;
+  padding: 0.7rem 0.9rem; border: 1px solid var(--linha); border-radius: var(--r-md); background: var(--sup);
+  color: var(--texto); font-size: 15px; font-weight: 400;
 }
 .placa-item input { margin-top: 0.25rem; accent-color: var(--acento); }
 .placa-item:has(input:checked) { border-color: var(--acento); box-shadow: inset 0 0 0 1px var(--acento); }
 .placa-corpo { display: flex; flex-direction: column; gap: 0.15rem; }
 .placa-nome { font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .placa-detalhe { font-size: 13px; color: var(--apoio); }
-.selo { font-size: 11.5px; font-weight: 600; padding: 0.1rem 0.45rem; border-radius: 999px; background: var(--acento-fraco); color: var(--acento-fraco-texto); }
+.selo { font-size: 13px; font-weight: 600; padding: 0.1rem 0.45rem; border-radius: 999px; background: var(--acento-fraco); color: var(--acento-fraco-texto); }
 .selo.internet { background: var(--sup-2); color: var(--apoio); border: 1px solid var(--linha); }
 
 /* Resumo: um cartao por secao, com "Alterar". */
 .resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.75rem; }
-.resumo-secao { background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 0.7rem 0.9rem; }
+.resumo-secao { background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--r-md); padding: 0.7rem 0.9rem; }
 .resumo-cabeca { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
 .resumo-cabeca a { font-size: 13px; color: var(--apoio); }
 .resumo-secao dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.7rem; margin: 0.4rem 0 0; font-size: 14px; }
@@ -290,7 +305,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .resumo-secao dd { margin: 0; font-family: var(--mono); font-size: 13.5px; overflow-wrap: anywhere; }
 
 /* ---------------------------------------------------------------- painel */
-.painel-sem-fila { background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--acento); border-radius: var(--raio); padding: 1.1rem 1.25rem; }
+.painel-sem-fila { background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--acento); border-radius: var(--r-md); padding: var(--s-4) var(--s-5); }
 .painel-sem-fila h2 { font-size: 22px; }
 .fita-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
 
@@ -303,11 +318,11 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
   position: relative;
   font-family: var(--mono); font-size: 13px;
   padding: 0.4rem 0.55rem 0.35rem;
-  background: var(--sup); border: 1px solid var(--linha); border-radius: 3px;
+  background: var(--sup); border: 1px solid var(--linha); border-radius: var(--r-sm);
   display: flex; flex-direction: column; gap: 1px;
 }
-.fita li .pos { font-family: var(--sans); font-size: 11px; color: var(--apoio); }
-.fita li .motivo { font-family: var(--sans); font-size: 11px; line-height: 1.3; color: var(--apoio); overflow-wrap: anywhere; }
+.fita li .pos { font-family: var(--sans); font-size: 13px; color: var(--apoio); }
+.fita li .motivo { font-family: var(--sans); font-size: 13px; line-height: 1.3; color: var(--apoio); overflow-wrap: anywhere; }
 .fita li .estado { font-weight: 600; }
 .fita li.feita { background: var(--ok-fraco); border-color: transparent; }
 .fita li.feita .estado { color: var(--ok); }
@@ -324,7 +339,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 
 .bancada {
   background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--acento);
-  border-radius: var(--raio); padding: 1.1rem 1.25rem;
+  border-radius: var(--r-md); padding: var(--s-4) var(--s-5);
 }
 .bancada-pos { font-family: var(--sans-titulo); font-size: 24px; font-weight: 600; margin: 0 0 0.1rem; letter-spacing: -0.015em; }
 .bancada-destino { margin: 0 0 0.5rem; font-size: 17px; }
@@ -334,20 +349,20 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .vigia { margin-bottom: 1.1rem; padding-bottom: 0.9rem; border-bottom: 1px solid var(--linha); }
 .vigia-cabeca { display: flex; align-items: center; gap: 0.5rem; }
 .vigia-cabeca h3 { margin: 0; }
-.vigia .apoio { max-width: 70ch; }
+.vigia .apoio { max-width: 64ch; }
 .bancada .vigia form { margin-top: 0.5rem; }
 .retomar { margin-top: 0.75rem; }
 .retomar summary { cursor: pointer; color: var(--apoio); font-size: 14px; }
 .retomar[open] summary { margin-bottom: 0.4rem; }
 .retomar label { max-width: 16rem; margin-top: 0.5rem; }
-.decisao-erro { font-family: var(--mono); font-size: 14px; background: var(--falha-fraco); padding: 0.6rem 0.8rem; border-radius: var(--raio); overflow-wrap: anywhere; }
+.decisao-erro { font-family: var(--mono); font-size: 14px; background: var(--falha-fraco); padding: 0.6rem 0.8rem; border-radius: var(--r-sm); overflow-wrap: anywhere; }
 #bancada-fim .btn { margin-top: 0.6rem; }
 
 /* Etapas: sequencia real, por isso numerada. */
 .etapas { list-style: none; counter-reset: etapa; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0; margin: 0.75rem 0; }
 .etapas li {
   counter-increment: etapa;
-  padding: 0.55rem 0.7rem; border-radius: 3px;
+  padding: 0.55rem 0.7rem; border-radius: var(--r-sm);
   background: var(--sup-2); border: 1px solid var(--linha); color: var(--apoio);
 }
 .etapas li::before { content: counter(etapa) "  "; font-family: var(--mono); }
@@ -370,11 +385,11 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 
 .escolha { list-style: none; padding: 0; margin: 0.75rem 0; display: flex; flex-direction: column; gap: 6px; }
 .escolha button { width: 100%; justify-content: flex-start; gap: 1rem; font-family: var(--mono); font-weight: 500; }
-.ultimo { margin: 0; padding: 0.5rem 0.8rem; border-left: 4px solid var(--ok); background: var(--ok-fraco); border-radius: var(--raio); }
+.ultimo { margin: 0; padding: 0.5rem 0.8rem; border-left: 4px solid var(--ok); background: var(--ok-fraco); border-radius: var(--r-sm); }
 .registro-bloco { margin-top: 0.5rem; }
 
 /* ---------------------------------------------------------------- registro */
-.tabela-rolagem { overflow-x: auto; background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio); }
+.tabela-rolagem { overflow-x: auto; background: var(--sup); border: 1px solid var(--linha); border-radius: var(--r-md); }
 .tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tabela th { text-align: left; font-weight: 600; font-size: 13px; color: var(--apoio); padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--linha); white-space: nowrap; }
 .tabela td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--linha); vertical-align: top; overflow-wrap: anywhere; }
@@ -385,13 +400,13 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .sit.Instalada { color: var(--ok); }
 .sit.Falhou { color: var(--falha); }
 .sit.Resetada { color: var(--apoio); }
-.sit-detalhe { display: block; font-weight: 400; color: var(--apoio); font-size: 12px; max-width: 28ch; }
+.sit-detalhe { display: block; font-weight: 400; color: var(--apoio); font-size: 13px; max-width: 28ch; }
 
 /* ---------------------------------------------------------------- ferramentas */
 .ferramentas { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
-.ferramenta { background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio); padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
+.ferramenta { background: var(--sup); border: 1px solid var(--linha); border-radius: var(--r-md); padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); align-items: flex-start; }
 .ferramenta .linha-campos { width: 100%; }
-.resultado { background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio); padding: 1rem; }
+.resultado { background: var(--sup); border: 1px solid var(--linha); border-radius: var(--r-md); padding: 1rem; }
 .resultado dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0.5rem 0 0; }
 .resultado dt { color: var(--apoio); }
 .resultado dd { margin: 0; font-family: var(--mono); font-size: 14px; overflow-wrap: anywhere; }
@@ -399,8 +414,8 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 /* ---------------------------------------------------------------- opcoes */
 .opcoes { gap: 1rem; }
 .secao {
-  background: var(--sup); border: 1px solid var(--linha); border-radius: var(--raio);
-  padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.6rem;
+  background: var(--sup); border: 1px solid var(--linha); border-radius: var(--r-md);
+  padding: var(--s-4) var(--s-5) var(--s-5); display: flex; flex-direction: column; gap: var(--s-3);
 }
 .secao > h3 { font-size: 17px; }
 .secao > .apoio { margin-top: -0.3rem; }
@@ -409,10 +424,10 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
    (so invisivel), entao setas, Tab e leitor de tela funcionam como radio. */
 .tema { border: 0; padding: 0; margin: 0; background: transparent; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .tema legend { float: left; padding: 0; margin-right: 0.25rem; font-family: var(--sans); font-weight: 500; font-size: 14px; }
-.segmentos { display: inline-flex; border: 1px solid var(--borda-campo); border-radius: var(--raio); overflow: hidden; }
+.segmentos { display: inline-flex; border: 1px solid var(--borda-campo); border-radius: var(--r-sm); overflow: hidden; }
 .segmentos label {
   position: relative; flex-direction: row; align-items: center;
-  padding: 0.4rem 0.9rem; font-size: 14px; color: var(--texto); cursor: pointer;
+  padding: 0.4rem 0.9rem; min-height: calc(var(--controle) - 2px); font-size: 14px; color: var(--texto); cursor: pointer;
   background: var(--sup);
 }
 .segmentos label + label { border-left: 1px solid var(--borda-campo); }
@@ -426,7 +441,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .log summary { cursor: pointer; font-weight: 600; color: var(--apoio); padding: 0.25rem 0; }
 .log-linhas {
   height: 15rem; overflow-y: auto; margin-top: 0.4rem;
-  background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--raio);
+  background: var(--sup-2); border: 1px solid var(--linha); border-radius: var(--r-md);
   padding: 0.5rem 0.7rem; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .log-linhas .ts { color: var(--apoio); margin-right: 0.6rem; }
