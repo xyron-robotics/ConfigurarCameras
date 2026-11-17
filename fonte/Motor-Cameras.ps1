@@ -42,15 +42,25 @@
 # ------------------------------------------------------------------- log
 
 # $script:LogFile vazio = sem arquivo. $script:LogSink = scriptblock
-# { param($Ts, $Msg, $Cor) } que recebe cada linha (o servidor manda para o
-# painel). Sem sink, a linha vai para a tela, como no CLI.
+# { param($Ts, $Msg, $Cor, $Contexto) } que recebe cada linha (o servidor manda
+# para o painel). Sem sink, a linha vai para a tela, como no CLI.
+#
+# Log por runspace: o estado vive no $script: de quem fez o dot-source, entao
+# cada runspace (um job por camera) tem o seu. O default e SEM arquivo: sem
+# -Arquivo, Write-Log nao toca o disco e so chama o sink (ou a tela). Varios
+# runspaces gravando o mesmo arquivo de log nao e suportado - quem junta as
+# linhas e o sink. -Contexto (ex.: o MAC da camera do job) vai como 4o
+# argumento do sink em toda linha, para o coordenador saber de quem e a linha;
+# sink de 3 parametros continua valendo (o 4o cai em $args).
 $script:LogFile = ''
 $script:LogSink = $null
+$script:LogContexto = $null
 
 function Set-MotorLog {
-    param([string]$Arquivo = '', [scriptblock]$Sink = $null)
+    param([string]$Arquivo = '', [scriptblock]$Sink = $null, $Contexto = $null)
     $script:LogFile = $Arquivo
     $script:LogSink = $Sink
+    $script:LogContexto = $Contexto
 }
 
 function Write-Log {
@@ -62,7 +72,7 @@ function Write-Log {
     }
     if ($SemTela) { return }
     if ($null -ne $script:LogSink) {
-        try { & $script:LogSink $ts $Msg $Cor } catch { }
+        try { & $script:LogSink $ts $Msg $Cor $script:LogContexto } catch { }
     } else {
         Write-Host $Msg -ForegroundColor $Cor
     }

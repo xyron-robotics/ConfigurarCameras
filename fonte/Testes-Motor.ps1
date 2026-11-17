@@ -1127,6 +1127,50 @@ T 'Duas configuracoes simuladas concorrentes no mesmo registro terminam as duas 
     }
 }
 
+# Um job por camera = um runspace com o seu log. Sem -Arquivo nada vai para o
+# disco (Add-Content sombreado conta qualquer tentativa) e o sink de cada
+# runspace recebe so as suas linhas, com o MAC da sua camera.
+T 'Log por runspace sem arquivo nao grava em disco e o sink recebe o MAC da camera' {
+    $d = New-Temp
+    $saida = [Collections.ArrayList]::Synchronized((New-Object Collections.ArrayList))
+    $trabalhos = @()
+    try {
+        $null = New-Item -ItemType Directory -Path $d
+        $bloco = {
+            param($Motor, $Pasta, $Saida, $Mac)
+            $ErrorActionPreference = 'Stop'
+            Set-Location -LiteralPath $Pasta
+            . $Motor
+            $tentativas = New-Object Collections.ArrayList
+            function Add-Content { $null = $tentativas.Add(($args -join ' ')) }
+            $sink = { param($Ts, $Msg, $Cor, $Contexto) $null = $Saida.Add([string]$Contexto + '|' + $Msg) }.GetNewClosure()
+            Set-MotorLog -Sink $sink -Contexto $Mac
+            Write-Log ('linha de ' + $Mac) 'White'
+            Write-Log 'linha so para o arquivo' 'Gray' -SemTela
+            $tentativas.Count
+        }
+        foreach ($mac in @('AA:00:00:00:00:01', 'AA:00:00:00:00:02')) {
+            $ps = [PowerShell]::Create()
+            $null = $ps.AddScript($bloco).AddArgument($motor).AddArgument($d).AddArgument($saida).AddArgument($mac)
+            $trabalhos += [pscustomobject]@{ Ps = $ps; H = $ps.BeginInvoke() }
+        }
+        $erros = @()
+        $gravacoes = 0
+        foreach ($t in $trabalhos) {
+            try { foreach ($n in $t.Ps.EndInvoke($t.H)) { $gravacoes += [int]$n } } catch { $erros += $_.Exception.Message }
+            foreach ($e in $t.Ps.Streams.Error) { $erros += [string]$e }
+        }
+        Assert-Igual 0 $erros.Count ('erros nos runspaces (' + ($erros -join ' | ') + ')')
+        Assert-Igual 0 $gravacoes 'tentativas de Add-Content'
+        Assert-Igual 0 @(Get-ChildItem -LiteralPath $d -Force).Count 'arquivos criados na pasta do job'
+        $linhas = @($saida | Sort-Object)
+        Assert-Igual 'AA:00:00:00:00:01|linha de AA:00:00:00:00:01;AA:00:00:00:00:02|linha de AA:00:00:00:00:02' ($linhas -join ';') 'linhas no sink'
+    } finally {
+        foreach ($t in $trabalhos) { $t.Ps.Dispose() }
+        Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 T 'Falha na rede grava Falhou e a nova tentativa retoma sem reinicializar' {
     $d = New-Temp
     $arq = Join-Path $d 'registro.json'
