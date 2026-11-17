@@ -1973,19 +1973,23 @@ function Get-PropriedadeOuVazio {
 # sessao.json): o que o painel fez na placa, para desfazer ao encerrar. Vai
 # para placa-sessao.json (servidor). Antes = foto da placa; Adicionados = IPs
 # que o painel pos (Para: fabrica | cameras | temporario); Rotas = rotas de
-# host /32 que o painel pos (camera na faixa de outra placa); Devolvidos/
+# host /32 que o painel pos (camera na faixa de outra placa); Vizinhos =
+# entradas Permanent IP -> MAC que o painel pos na tabela de vizinhos (o
+# portao do IP de fabrica, Set-VizinhoEstatico), { Ip; Mac }; Devolvidos/
 # Rota/Dns = o que Restore-ConexaoPlaca recolocou como estatico.
 function New-SessaoPlaca {
     param($Placa, $Antes)
     return @{
         Quando = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); Placa = [string]$Placa.Name; IfIndex = [int]$Placa.ifIndex
-        Antes = $Antes; Adicionados = @(); Rotas = @(); Devolvidos = @(); Rota = $null; Dns = @(); Mexida = $false
+        Antes = $Antes; Adicionados = @(); Rotas = @(); Vizinhos = @(); Devolvidos = @(); Rota = $null; Dns = @(); Mexida = $false
     }
 }
 
 # Junta uma sessao gravada com uma nova da mesma placa: a foto e o Quando
 # sao os da primeira (e o estado de antes do painel), os IPs e as rotas de
-# host somam sem repetir, e o que foi devolvido vem de quem devolveu. Puro.
+# host somam sem repetir, os vizinhos somam pelo IP com o MAC mais novo (a
+# tabela guarda uma entrada por IP), e o que foi devolvido vem de quem
+# devolveu. Rastro antigo sem Rotas ou Vizinhos vale como lista vazia. Puro.
 function Merge-SessaoPlaca {
     param($Antiga, $Nova)
     if ($null -eq $Antiga) { return $Nova }
@@ -1993,7 +1997,7 @@ function Merge-SessaoPlaca {
     if ([string]$Antiga.Placa -ne [string]$Nova.Placa) { return $Nova }
     $r = @{
         Quando = $Antiga.Quando; Placa = $Antiga.Placa; IfIndex = $Antiga.IfIndex; Antes = $Antiga.Antes
-        Adicionados = @(); Rotas = @(); Devolvidos = @(); Rota = $Antiga.Rota; Dns = @($Antiga.Dns); Mexida = ([bool]$Antiga.Mexida -or [bool]$Nova.Mexida)
+        Adicionados = @(); Rotas = @(); Vizinhos = @(); Devolvidos = @(); Rota = $Antiga.Rota; Dns = @($Antiga.Dns); Mexida = ([bool]$Antiga.Mexida -or [bool]$Nova.Mexida)
     }
     $vistos = @{}
     foreach ($a in @(@($Antiga.Adicionados) + @($Nova.Adicionados))) {
@@ -2009,6 +2013,13 @@ function Merge-SessaoPlaca {
         $vistos[[string]$h.Destino] = $true
         $r.Rotas += @{ Destino = [string]$h.Destino; NextHop = [string]$h.NextHop; Para = [string]$h.Para; Camera = [string]$h.Camera }
     }
+    $ordem = @(); $macDe = @{}
+    foreach ($v in @(@(Get-PropriedadeOuVazio $Antiga 'Vizinhos') + @(Get-PropriedadeOuVazio $Nova 'Vizinhos'))) {
+        if ($null -eq $v -or [string]::IsNullOrWhiteSpace($v.Ip)) { continue }
+        if (-not $macDe.ContainsKey([string]$v.Ip)) { $ordem += [string]$v.Ip }
+        $macDe[[string]$v.Ip] = [string]$v.Mac
+    }
+    foreach ($ip in $ordem) { $r.Vizinhos += @{ Ip = $ip; Mac = $macDe[$ip] } }
     $vistos = @{}
     foreach ($d in @(@($Antiga.Devolvidos) + @($Nova.Devolvidos))) {
         if ($null -eq $d -or [string]::IsNullOrWhiteSpace($d.Ip)) { continue }
@@ -2175,9 +2186,15 @@ function Set-RedeLocalCameras {
 
 # Enderecos manuais da placa que estao na faixa de fabrica (/24) ou na rede
 # do gateway (pela mascara), mais os que a sessao diz que o painel pos.
+# Com -Vizinhos: os IPs dos vizinhos estaticos do rastro (sem rastro, ou
+# rastro antigo sem Vizinhos, nenhum: a tabela de vizinhos nao e varrida).
 # Puro: recebe a lista de enderecos {Ip; Prefixo; Origem}.
 function Get-IpsARemover {
-    param($Enderecos, [string]$Gateway, [string]$IpFabrica, [string]$Mascara = '255.255.255.0', $Sessao = $null)
+    param($Enderecos, [string]$Gateway, [string]$IpFabrica, [string]$Mascara = '255.255.255.0', $Sessao = $null, [switch]$Vizinhos)
+    if ($Vizinhos) {
+        $ips = @(@(Get-PropriedadeOuVazio $Sessao 'Vizinhos') | Where-Object { $null -ne $_ -and (Test-Ipv4Estrito ([string]$_.Ip)) } | ForEach-Object { [string]$_.Ip })
+        return @($ips | Select-Object -Unique)
+    }
     $pFab = Get-Prefixo24 $IpFabrica
     $daSessao = @(); $deAntes = @(); $devolvidos = @(); $eraDhcp = $true
     if ($null -ne $Sessao) {
@@ -2216,10 +2233,12 @@ function Get-IpsARemover {
     DHCP, como antes.
     As rotas de host /32 que o painel pos (camera na faixa de outra placa)
     saem ANTES dos IPs, pelo rastro; sem rastro, toda /32 on-link da placa
-    criada por NetMgmt (e como o painel as cria).
+    criada por NetMgmt (e como o painel as cria). Os vizinhos estaticos (o
+    portao do IP de fabrica) saem tambem antes dos IPs, so pelo rastro, via
+    Remove-VizinhoEstatico; sem rastro a tabela de vizinhos fica.
     -Placa: { Nome; IfIndex; Mac } da sessao; o rastro (IfIndex/Placa) manda
     sobre ela quando existe.
-    Retorna { Ok; Removidos; RotasHostRemovidas; RotaRemovida; DhcpReligado }.
+    Retorna { Ok; Removidos; RotasHostRemovidas; VizinhosRemovidos; RotaRemovida; DhcpReligado }.
 #>
 function Reset-RedeLocalCameras {
     param(
@@ -2231,7 +2250,7 @@ function Reset-RedeLocalCameras {
         $Sessao = $null
     )
 
-    $res = [pscustomobject]@{ Ok = $false; Removidos = @(); RotasHostRemovidas = @(); RotaRemovida = ''; DhcpReligado = $false }
+    $res = [pscustomobject]@{ Ok = $false; Removidos = @(); RotasHostRemovidas = @(); VizinhosRemovidos = @(); RotaRemovida = ''; DhcpReligado = $false }
     Write-Log "Devolvendo a placa de rede deste PC ao estado de antes." 'Cyan'
 
     if (-not (Test-EhAdministrador)) {
@@ -2249,6 +2268,7 @@ function Reset-RedeLocalCameras {
 
     $foto = Get-ConfigIpv4Placa -Placa $adaptador
     $remover = @(Get-IpsARemover -Enderecos $foto.Enderecos -Gateway $Gateway -IpFabrica $IpFabrica -Mascara $Mascara -Sessao $Sessao)
+    $vizinhos = @(Get-IpsARemover -Enderecos $foto.Enderecos -Gateway $Gateway -IpFabrica $IpFabrica -Mascara $Mascara -Sessao $Sessao -Vizinhos)
 
     # Sem sessao nao da para saber como a placa era: assume DHCP (o caso
     # comum) e nao deixa rota estatica sobrando.
@@ -2275,6 +2295,19 @@ function Reset-RedeLocalCameras {
             } catch {
                 if ($_.Exception.Message -match 'No matching|n.o encontr|ObjectNotFound') { $msgs += @{ Msg = ("  rota de host " + $rh + " ja nao estava na placa"); Cor = 'DarkGray' } }
                 else { $msgs += @{ Msg = ("  FALHOU remover a rota de host " + $rh + ": " + $_.Exception.Message); Cor = 'Red' } }
+            }
+        }
+        foreach ($vz in $vizinhos) {
+            if (@(Get-VizinhoPlaca -IfIndex ([int]$adaptador.ifIndex) -Ip $vz).Count -eq 0) {
+                $msgs += @{ Msg = ("  vizinho estatico " + $vz + " ja nao estava na placa"); Cor = 'DarkGray' }
+                continue
+            }
+            $rv = Remove-VizinhoEstatico -IfIndex ([int]$adaptador.ifIndex) -Ip $vz
+            if ($rv.Ok) {
+                $res.VizinhosRemovidos += $vz
+                $msgs += @{ Msg = ("  REMOVIDO   vizinho estatico " + $vz); Cor = 'Green' }
+            } else {
+                $msgs += @{ Msg = ("  FALHOU remover o vizinho estatico " + $vz + ": " + ($rv.Erro -replace '^Nao consegui remover o vizinho estatico [^:]+: ', '')); Cor = 'Red' }
             }
         }
         foreach ($ip in $remover) {

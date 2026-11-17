@@ -1653,6 +1653,116 @@ T 'Vizinho estatico: as funcoes pequenas usam Permanent em ActiveStore (so leitu
     Assert-Verdade ((Get-Command Get-VizinhoPlaca -CommandType Function).Definition -match 'Get-NetNeighbor') 'Get-NetNeighbor'
 }
 
+# Rastro dos vizinhos estaticos: o que o painel pos na tabela de vizinhos vai
+# para placa-sessao.json e sai ao encerrar, pelas mesmas funcoes pequenas.
+T 'Rastro: New-SessaoPlaca comeca sem Vizinhos; Merge soma pelo IP com o MAC mais novo; rastro antigo sem Vizinhos le sem erro' {
+    $s = New-SessaoPlaca -Placa ([pscustomobject]@{ Name = 'Ethernet'; ifIndex = 8 }) -Antes @{ Dhcp = $true }
+    Assert-Verdade ($s.ContainsKey('Vizinhos')) 'campo Vizinhos no rastro novo'
+    Assert-Igual 0 @($s.Vizinhos).Count 'rastro novo: lista vazia'
+
+    $a = @{ Quando = 'ontem'; Placa = 'Ethernet'; IfIndex = 8; Antes = @{ Dhcp = $true }; Adicionados = @(); Devolvidos = @(); Dns = @()
+            Vizinhos = @(@{ Ip = '192.168.1.108'; Mac = 'AA:00:00:00:00:01' }) }
+    $b = @{ Quando = 'hoje'; Placa = 'Ethernet'; IfIndex = 8; Adicionados = @(); Devolvidos = @(); Dns = @()
+            Vizinhos = @(@{ Ip = '192.168.1.108'; Mac = 'AA:00:00:00:00:02' }, @{ Ip = '192.168.1.109'; Mac = 'AA:00:00:00:00:03' }, @{ Ip = ''; Mac = 'AA:00:00:00:00:04' }, $null) }
+    $fmt = { param($m) (@($m.Vizinhos | ForEach-Object { $_.Ip + '=' + $_.Mac }) -join ',') }
+    $m = Merge-SessaoPlaca -Antiga $a -Nova $b
+    Assert-Igual '192.168.1.108=AA:00:00:00:00:02,192.168.1.109=AA:00:00:00:00:03' (& $fmt $m) 'soma sem repetir o IP; a tabela guarda o MAC mais novo; vazio e nulo fora'
+
+    $d = New-Temp
+    try {
+        # Rastro de versao anterior (sem Vizinhos), lido do disco, dos dois lados.
+        $velho = @{ Quando = 'ontem'; Placa = 'Ethernet'; IfIndex = 8; Antes = @{ Dhcp = $true }; Adicionados = @(@{ Ip = '192.168.1.220'; Prefixo = 24; Para = 'fabrica' }); Devolvidos = @(); Dns = @() }
+        Save-JsonAtomico -Caminho (Join-Path $d 'velho.json') -Objeto $velho
+        $lidoVelho = Read-JsonArquivo (Join-Path $d 'velho.json')
+        Assert-Igual '192.168.1.108=AA:00:00:00:00:02,192.168.1.109=AA:00:00:00:00:03' (& $fmt (Merge-SessaoPlaca -Antiga $lidoVelho -Nova $b)) 'antigo sem Vizinhos + novo'
+        $m0 = Merge-SessaoPlaca -Antiga $lidoVelho -Nova $lidoVelho
+        Assert-Igual 0 @($m0.Vizinhos).Count 'dois antigos: lista vazia, sem erro'
+        # Vizinhos sobrevivem ao disco (PSCustomObject do JSON, com um item so).
+        Save-JsonAtomico -Caminho (Join-Path $d 'm.json') -Objeto (Merge-SessaoPlaca -Antiga $a -Nova $null)
+        $lido = Read-JsonArquivo (Join-Path $d 'm.json')
+        Assert-Igual '192.168.1.108=AA:00:00:00:00:01' (& $fmt (Merge-SessaoPlaca -Antiga $lido -Nova $lidoVelho)) 'lido do disco + antigo'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Get-IpsARemover -Vizinhos: IPs dos vizinhos do rastro, sem repetir; sem rastro ou rastro antigo, nenhum' {
+    $end = @(@{ Ip = '192.168.1.220'; Prefixo = 24; Origem = 'Manual' })
+    $sessao = @{ Antes = @{ Dhcp = $true; Enderecos = @() }; Adicionados = @(@{ Ip = '192.168.1.220'; Prefixo = 24; Para = 'fabrica' }); Devolvidos = @()
+                 Vizinhos = @(@{ Ip = '192.168.1.108'; Mac = 'AA:00:00:00:00:01' }, @{ Ip = '192.168.1.108'; Mac = 'AA:00:00:00:00:02' },
+                              @{ Ip = ''; Mac = 'AA:00:00:00:00:03' }, @{ Ip = '192.168.1'; Mac = 'AA:00:00:00:00:04' }, @{ Ip = '192.168.1.109'; Mac = 'AA:00:00:00:00:05' }) }
+    Assert-Igual '192.168.1.108,192.168.1.109' (@(Get-IpsARemover -Enderecos $end -Gateway '' -IpFabrica '192.168.1.108' -Sessao $sessao -Vizinhos) -join ',') 'vizinhos do rastro'
+    Assert-Igual '192.168.1.220' (@(Get-IpsARemover -Enderecos $end -Gateway '' -IpFabrica '192.168.1.108' -Sessao $sessao) -join ',') 'sem o switch: enderecos da placa, como antes'
+    Assert-Igual 0 @(Get-IpsARemover -Enderecos $end -Gateway '' -IpFabrica '192.168.1.108' -Vizinhos).Count 'sem rastro: nenhum'
+    $d = New-Temp
+    try {
+        $sessao.Remove('Vizinhos')
+        Save-JsonAtomico -Caminho (Join-Path $d 's.json') -Objeto $sessao
+        $lido = Read-JsonArquivo (Join-Path $d 's.json')
+        Assert-Igual 0 @(Get-IpsARemover -Enderecos $end -Gateway '' -IpFabrica '192.168.1.108' -Sessao $lido -Vizinhos).Count 'rastro antigo: nenhum'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Reset tira os vizinhos do rastro antes dos IPs, pelas funcoes pequenas; sem Vizinhos ou sem rastro, a tabela fica' {
+    function Get-NetNeighbor { throw 'Get-NetNeighbor real chamado' }
+    function New-NetNeighbor { throw 'New-NetNeighbor real chamado' }
+    function Remove-NetNeighbor { throw 'Remove-NetNeighbor real chamado' }
+    function Get-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasViz += ('get ' + $IfIndex + ' ' + $Ip); return @($script:arp | Where-Object { $_.IfIndex -eq $IfIndex -and $_.IPAddress -eq $Ip }) }
+    function Remove-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasViz += ('remove ' + $IfIndex + ' ' + $Ip); $script:feitoRede += ('rmviz ' + $Ip); $script:arp = @($script:arp | Where-Object { -not ($_.IfIndex -eq $IfIndex -and $_.IPAddress -eq $Ip) }) }
+    function New-VizinhoPlaca { param([int]$IfIndex, [string]$Ip, [string]$Mac) throw 'o reset nao cria vizinho' }
+    function Test-EhAdministrador { return $true }
+    function Resolve-PlacaSessao { param($Placa) return [pscustomobject]@{ Name = 'Ethernet'; ifIndex = 8 } }
+    function Get-ConfigIpv4Placa { param($Placa) return @{ Dhcp = $false; TemLeaseDhcp = $false; Gateway = ''; GatewayMetrica = 0; Dns = @()
+                                                           Enderecos = @(@{ Ip = '192.168.1.220'; Prefixo = 24; Origem = 'Manual' }) } }
+    function Get-NetRoute { return @() }
+    function Get-IpsLocais { return @() }
+    function Start-Sleep { param($Seconds) }
+    function Remove-NetIPAddress { param($InterfaceIndex, $IPAddress) $script:feitoRede += ('rm ' + $IPAddress) }
+    function Remove-NetRoute { param($InterfaceIndex, $DestinationPrefix, $NextHop) $script:feitoRede += ('rmrota ' + $DestinationPrefix) }
+    function Set-NetIPInterface { $script:feitoRede += 'dhcp' }
+    function Set-DnsClientServerAddress { $script:feitoRede += 'dns' }
+    function Invoke-RenovarDhcp { $script:feitoRede += 'renew' }
+    $tabela = @([pscustomobject]@{ IfIndex = 8; IPAddress = '192.168.1.108'; LinkLayerAddress = 'AA-00-00-00-00-01'; State = 'Permanent' },
+                [pscustomobject]@{ IfIndex = 8; IPAddress = '10.9.9.9'; LinkLayerAddress = 'AA-00-00-00-00-09'; State = 'Permanent' })
+    $sessao = @{ Placa = 'Ethernet'; IfIndex = 8; Antes = @{ Dhcp = $false; TemLeaseDhcp = $false; Enderecos = @() }
+                 Adicionados = @(@{ Ip = '192.168.1.220'; Prefixo = 24; Para = 'fabrica' }); Rotas = @(); Devolvidos = @(); Rota = $null; Dns = @()
+                 Vizinhos = @(@{ Ip = '192.168.1.108'; Mac = 'AA:00:00:00:00:01' }, @{ Ip = '192.168.1.109'; Mac = 'AA:00:00:00:00:02' }) }
+
+    Use-ArpFalso $tabela; $script:feitoRede = @(); $script:Linhas.Clear()
+    $r = Reset-RedeLocalCameras -Gateway '' -Sessao $sessao
+    Assert-Verdade $r.Ok 'ok'
+    Assert-Igual 'rmviz 192.168.1.108|rm 192.168.1.220' ($script:feitoRede -join '|') 'vizinho antes do IP'
+    Assert-Igual '192.168.1.108' ($r.VizinhosRemovidos -join ',') 'VizinhosRemovidos: so o que estava na tabela'
+    Assert-Igual '10.9.9.9' (@($script:arp | ForEach-Object { $_.IPAddress }) -join ',') 'entrada alheia ao rastro fica'
+    Assert-Verdade (@($script:chamadasViz | Where-Object { $_ -match '^(get|remove) 8 ' }).Count -eq @($script:chamadasViz).Count) 'pela placa do rastro'
+    $log = $script:Linhas -join "`n"
+    Assert-Verdade ($log -match 'REMOVIDO   vizinho estatico 192\.168\.1\.108') 'log do removido'
+    Assert-Verdade ($log -match 'vizinho estatico 192\.168\.1\.109 ja nao estava na placa') 'log do que ja tinha saido'
+
+    # Remocao recusada: loga em vermelho e segue para os IPs.
+    function Remove-VizinhoPlaca { param([int]$IfIndex, [string]$Ip) throw 'Acesso negado' }
+    Use-ArpFalso $tabela; $script:feitoRede = @(); $script:Linhas.Clear()
+    $r = Reset-RedeLocalCameras -Gateway '' -Sessao $sessao
+    Assert-Verdade $r.Ok 'ok mesmo com a falha (como rota e IP)'
+    Assert-Igual 'rm 192.168.1.220' ($script:feitoRede -join '|') 'IPs saem mesmo assim'
+    Assert-Igual 0 @($r.VizinhosRemovidos).Count 'nada removido'
+    Assert-Verdade (($script:Linhas -join "`n") -match 'FALHOU remover o vizinho estatico 192\.168\.1\.108: .*Acesso negado') 'log da falha'
+
+    # Rastro antigo (sem Vizinhos) lido do disco e sem rastro: a tabela nao e tocada.
+    $d = New-Temp
+    try {
+        $sessao.Remove('Vizinhos')
+        Save-JsonAtomico -Caminho (Join-Path $d 's.json') -Objeto $sessao
+        Use-ArpFalso $tabela; $script:feitoRede = @()
+        $r = Reset-RedeLocalCameras -Gateway '' -Sessao (Read-JsonArquivo (Join-Path $d 's.json'))
+        Assert-Verdade $r.Ok 'rastro antigo: ok'
+        Assert-Igual 'rm 192.168.1.220' ($script:feitoRede -join '|') 'rastro antigo: so o IP'
+        Assert-Igual 0 @($script:chamadasViz).Count 'rastro antigo: tabela nao consultada'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+    Use-ArpFalso $tabela; $script:feitoRede = @()
+    $r = Reset-RedeLocalCameras -Gateway '' -Placa @{ Nome = 'Ethernet'; IfIndex = 8 }
+    Assert-Igual 0 @($script:chamadasViz).Count 'sem rastro: tabela nao consultada'
+    Assert-Igual 2 @($script:arp).Count 'sem rastro: tabela intacta'
+}
+
 # ------------------------------------------------------ placa escolhida
 
 Write-Host ""
