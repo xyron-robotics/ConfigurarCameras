@@ -32,6 +32,8 @@ const MOTIVO_VIGIA = {
   '5 tentativas sem configurar': '5 tentativas seguidas sem configurar; resolva o aviso e ligue de novo',
   'rede da sessao alterada': 'a rede da sessão mudou', 'sessao incompleta': 'sessão incompleta', 'passo a passo reaberto': 'passo a passo reaberto',
 };
+// Espaco que nao quebra entre numero e unidade ("20 fps", "1596 kbps").
+const NBSP = String.fromCharCode(160);
 // Valores prontos do encoder (GET /api/sessao): fps, degraus de bitrate,
 // faixa por resolucao e o que a camera de referencia aceitou ou recusou.
 let catalogo = null;
@@ -475,7 +477,7 @@ function desenharAtualizacao(a, e) {
   else if (e.admin === false) motivo = 'Atualizar exige o painel aberto como Administrador.';
   if (estadoA === 'disponivel') {
     txt.textContent = 'Versão ' + a.versao + ' disponível (esta é a ' + a.versaoAtual + ').';
-    btn.textContent = 'Atualizar';
+    btn.textContent = 'Atualizar o painel';
   } else if (estadoA === 'erro') {
     txt.textContent = 'A atualização para a ' + a.versao + ' falhou: ' + (a.erro || 'erro') + '. Nada foi instalado.';
     btn.textContent = 'Tentar de novo';
@@ -701,7 +703,7 @@ function desenharVigia(e, visivel, ctx) {
 
 // Uma linha por stream: "1920 × 1080, 20 fps, 1596 kbps, H.264", sem os campos vazios.
 function textoStream(res, fps, kbps, codec, gop) {
-  return [res ? String(res).replace('x', ' × ') : '', fps ? fps + ' fps' : '', kbps ? kbps + ' kbps' : '', codec || '',
+  return [res ? String(res).replace('x', ' × ') : '', fps ? fps + NBSP + 'fps' : '', kbps ? kbps + NBSP + 'kbps' : '', codec || '',
     gop ? 'GOP ' + gop : ''].filter(Boolean).join(', ');
 }
 
@@ -993,7 +995,7 @@ function desenharBitrates(stream) {
   const valores = fx ? catalogo.bitrates.filter((v) => v >= fx.min && v <= fx.max) : catalogo.bitrates;
   montarListaValor(listaDoCampo(s.br), valores, (v) => (fx && v === fx.rec ? v + ' (recomendado)' : String(v)));
   $(s.faixa).textContent = fx
-    ? 'Bitrate usual para ' + resolucaoLegivel(fx.res) + ' em ' + fx.codec + ': ' + fx.min + ' a ' + fx.max + ' kbps; recomendado ' + fx.rec + '.'
+    ? 'Bitrate usual para ' + resolucaoLegivel(fx.res) + ' em ' + fx.codec + ': ' + fx.min + ' a ' + fx.max + NBSP + 'kbps; recomendado ' + fx.rec + '.'
     : '';
 }
 
@@ -1043,8 +1045,8 @@ function desenharAvisosCamera() {
     const fx = faixaDoStream(stream);
     const br = Number(f[s.br].value);
     if (fx && f[s.br].value !== '' && (br < fx.min || br > fx.max)) {
-      lista.push('O bitrate do stream ' + s.nome + ' (' + br + ' kbps) fica fora da faixa usual para ' + resolucaoLegivel(fx.res) + ' em ' + fx.codec +
-        ' (' + fx.min + ' a ' + fx.max + ' kbps). Confira se é isso mesmo.');
+      lista.push('O bitrate do stream ' + s.nome + ' (' + br + NBSP + 'kbps) fica fora da faixa usual para ' + resolucaoLegivel(fx.res) + ' em ' + fx.codec +
+        ' (' + fx.min + ' a ' + fx.max + NBSP + 'kbps). Confira se é isso mesmo.');
     }
     for (const [tipo, campo, texto] of [['resolucoes', s.res, resolucaoLegivel], ['codecs', s.codec, String]]) {
       if (recusadoNaReferencia(stream, tipo, f[campo].value)) {
@@ -1272,7 +1274,7 @@ function mostrarSenha(ligado) {
   f.senha.type = f.senha2.type = ligado ? 'text' : 'password';
   const b = $('btn-senha-mostrar');
   b.setAttribute('aria-pressed', String(ligado));
-  b.textContent = ligado ? 'Ocultar' : 'Mostrar';
+  b.textContent = ligado ? 'Ocultar senhas' : 'Mostrar senhas';
 }
 
 // POST /api/senha. Em simulacao, campos vazios = sem senha (nao precisa).

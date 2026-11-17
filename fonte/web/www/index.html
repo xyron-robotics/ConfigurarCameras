@@ -23,7 +23,7 @@
 <div id="atualizacao" class="atualizacao" role="status" aria-live="polite" hidden>
   <span id="atualizacao-texto"></span>
   <a id="atualizacao-notas" href="#" target="_blank" rel="noopener" hidden>o que mudou</a>
-  <button type="button" class="btn" id="btn-atualizar">Atualizar</button>
+  <button type="button" class="btn" id="btn-atualizar">Atualizar o painel</button>
 </div>
 
 <header class="topo">
@@ -193,7 +193,7 @@
           <p class="bancada-pos">Mais de uma câmera de fábrica na rede</p>
           <p class="apoio">Confira o MAC (ou o serial) na etiqueta da câmera que está na bancada. Câmera fora das faixas da placa escolhida: a placa recebe um IP temporário na rede dela.</p>
           <ul id="escolha-lista" class="escolha"></ul>
-          <button type="button" class="btn discreto" id="btn-escolha-cancelar">Cancelar</button>
+          <button type="button" class="btn discreto" id="btn-escolha-cancelar">Cancelar a escolha</button>
         </div>
 
         <div id="bancada-decisao" hidden>
@@ -221,7 +221,7 @@
         <div class="fita-cabeca">
           <h2 id="registro-titulo">Registro</h2>
           <div class="acoes">
-            <button type="button" class="btn discreto" id="btn-registro-atualizar">Atualizar</button>
+            <button type="button" class="btn discreto" id="btn-registro-atualizar">Atualizar registro</button>
             <a class="btn" id="btn-exportar" href="/api/relatorio.csv">Exportar relatório</a>
           </div>
         </div>
@@ -247,7 +247,7 @@
           <p class="apoio">Lê uma câmera pelo IP. Sem senha na sessão, mostra apenas se está de fábrica.</p>
           <div class="linha-campos">
             <label>IP<input name="ip" class="mono" translate="no" data-ip spellcheck="false" required autocomplete="off"></label>
-            <button class="btn" type="submit" data-so-real>Sondar</button>
+            <button class="btn" type="submit" data-so-real>Sondar câmera</button>
           </div>
           <p class="nota" data-nota-simular hidden>Desligado em simulação: lê a rede de verdade.</p>
           <p class="aviso" data-aviso-de="sondar" role="alert" hidden></p>
@@ -255,14 +255,14 @@
         <div class="ferramenta">
           <h3>Procurar câmeras na rede</h3>
           <p class="apoio">Broadcast <span translate="no">DHIP</span> pela placa escolhida (responde de qualquer faixa, com modelo, serial e firmware) e, se nada vier, varredura por ping. Lista câmeras de fábrica, já inicializadas, NVRs e controladores.</p>
-          <button type="button" class="btn" id="btn-descobrir" data-so-real>Procurar</button>
+          <button type="button" class="btn" id="btn-descobrir" data-so-real>Procurar câmeras</button>
           <p class="nota" data-nota-simular hidden>Desligado em simulação: lê a rede de verdade.</p>
           <p class="aviso" data-aviso-de="descobrir" role="alert" hidden></p>
         </div>
         <div class="ferramenta">
           <h3>Verificar câmeras instaladas</h3>
           <p class="apoio">Faz login em cada câmera do registro e confere IP e MAC. Para na primeira senha recusada.</p>
-          <button type="button" class="btn" id="btn-verificar">Verificar</button>
+          <button type="button" class="btn" id="btn-verificar">Verificar câmeras</button>
           <p class="aviso" data-aviso-de="verificar" role="alert" hidden></p>
         </div>
       </div>
@@ -283,7 +283,7 @@
             <div class="campos">
               <label>Senha<input name="senha" type="password" autocomplete="new-password"></label>
               <label>Repita a senha<input name="senha2" type="password" autocomplete="new-password"></label>
-              <button class="btn discreto" type="button" id="btn-senha-mostrar" aria-pressed="false">Mostrar</button>
+              <button class="btn discreto" type="button" id="btn-senha-mostrar" aria-pressed="false">Mostrar senhas</button>
             </div>
             <p id="senha-erro" class="aviso" role="alert" hidden>As duas senhas não conferem. Digite a repetição de novo.</p>
             <ul class="erros" role="alert" hidden></ul>
