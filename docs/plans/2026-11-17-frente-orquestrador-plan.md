@@ -1,6 +1,8 @@
 # Frente orquestrador: máquina de estado pura do paralelo (F3)
 
-**Status:** Ativo · **Frente:** `orquestrador`
+**Status:** Concluído · **Frente:** `orquestrador`
+
+A F3 do mapa (`docs/plans/2026-11-cameras-em-paralelo.md`) está feita: `fonte/Orquestrador-Cameras.ps1` existe e é testado por `fonte/Testes-Orquestrador.ps1`. O contrato de saída dos `Step-*`, o da seção Decisões (`@{ Estado; Acoes }`), é o que a F4 consome.
 
 **Goal:** criar `fonte/Orquestrador-Cameras.ps1`, uma máquina de estado pura que decide o paralelo. Recebe estado mais evento ou tique e devolve o novo estado e uma lista de ações (`prender`, `soltar`, `despachar`, `publicar`, `avisar`). Não chama rede, placa nem disco: quem executa as ações é o servidor, na F4 do mapa. Este é o módulo que torna o paralelo testável sem hardware.
 
