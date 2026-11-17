@@ -897,6 +897,44 @@ T 'Registro com UMA camera volta como lista depois de gravar e ler' {
     } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+T 'Dois runspaces gravam o mesmo arquivo 50 vezes cada: sem excecao, JSON valido, sem .tmp sobrando' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $largada = New-Object Threading.Barrier 2
+    $trabalhos = @()
+    try {
+        $null = New-Item -ItemType Directory -Path $d
+        $bloco = {
+            param($Motor, $Arq, $Largada, $Quem)
+            $ErrorActionPreference = 'Stop'
+            . $Motor
+            if (-not $Largada.SignalAndWait(60000)) { throw 'largada sem o outro runspace' }
+            for ($i = 1; $i -le 50; $i++) {
+                Save-JsonAtomico -Caminho $Arq -Objeto ([pscustomobject]@{ Quem = $Quem; I = $i })
+            }
+        }
+        foreach ($quem in @('a', 'b')) {
+            $ps = [PowerShell]::Create()
+            $null = $ps.AddScript($bloco).AddArgument($motor).AddArgument($arq).AddArgument($largada).AddArgument($quem)
+            $trabalhos += [pscustomobject]@{ Ps = $ps; H = $ps.BeginInvoke() }
+        }
+        $erros = @()
+        foreach ($t in $trabalhos) {
+            try { $null = $t.Ps.EndInvoke($t.H) } catch { $erros += $_.Exception.Message }
+            foreach ($e in $t.Ps.Streams.Error) { $erros += [string]$e }
+        }
+        Assert-Igual 0 $erros.Count ('erros nos runspaces (' + ($erros -join ' | ') + ')')
+        $final = [IO.File]::ReadAllText($arq) | ConvertFrom-Json
+        Assert-Verdade (@('a', 'b') -contains $final.Quem) 'final de um dos dois'
+        Assert-Igual 50 $final.I 'ultima gravacao de cada um e a 50'
+        Assert-Igual 0 @(Get-ChildItem -LiteralPath $d -Filter '*.tmp').Count 'sem .tmp sobrando'
+    } finally {
+        foreach ($t in $trabalhos) { $t.Ps.Dispose() }
+        $largada.Dispose()
+        Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # ------------------------------------------------------ relatorio
 
 Write-Host ""

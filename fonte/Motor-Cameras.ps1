@@ -3284,12 +3284,28 @@ function Save-JsonAtomico {
     $pasta = Split-Path -Parent $Caminho
     if (-not (Test-Path -LiteralPath $pasta)) { $null = New-Item -ItemType Directory -Force -Path $pasta }
     $json = ConvertTo-Json -InputObject $Objeto -Depth 30
-    $tmp = $Caminho + '.tmp'
+    # .tmp de nome unico: dois runspaces gravando o mesmo arquivo nao disputam
+    # o mesmo .tmp. A troca em si ainda pode colidir (o outro esta no meio do
+    # Replace do mesmo destino/.bak), entao tenta de novo com espera curta,
+    # com limite; esgotou, apaga o .tmp e estoura o ultimo erro.
+    $tmp = $Caminho + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
     [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding($false)))
-    if (Test-Path -LiteralPath $Caminho) {
-        [IO.File]::Replace($tmp, $Caminho, ($Caminho + '.bak'))
-    } else {
-        [IO.File]::Move($tmp, $Caminho)
+    $tentativas = 40
+    for ($n = 1; ; $n++) {
+        try {
+            if ([IO.File]::Exists($Caminho)) {
+                [IO.File]::Replace($tmp, $Caminho, ($Caminho + '.bak'))
+            } else {
+                [IO.File]::Move($tmp, $Caminho)
+            }
+            return
+        } catch {
+            if ($n -ge $tentativas) {
+                if ([IO.File]::Exists($tmp)) { [IO.File]::Delete($tmp) }
+                throw
+            }
+            Start-Sleep -Milliseconds (Get-Random -Minimum 5 -Maximum 30)
+        }
     }
 }
 
