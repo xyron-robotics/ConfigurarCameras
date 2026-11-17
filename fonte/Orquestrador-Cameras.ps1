@@ -18,9 +18,12 @@
       Cameras    câmeras por MAC, na ordem do primeiro aparecimento no DHIP:
                  { Mac, Serial, Modelo, IpOrigem, HttpPort, Indice,
                    Fase: espera|portao|conferindo|decisao|feita|pulada,
-                   Etapa, Falha, GeracaoLogin }
+                   Etapa, Falha, GeracaoLogin, Motivo }
+                 Indice é o número da posição (0 = ainda sem posição);
+                 Motivo diz por que a câmera continua em espera
       Posicoes   cópia da fila ({ Posicao, Ip, Estado, Motivo, Mac }, o
-                 formato de New-FilaDeFaixa)
+                 formato de New-FilaDeFaixa). Além dos estados da fila,
+                 'reservada' = presa a uma câmera em curso (Mac preenchido)
       Portao     MAC da câmera presa no IP de fábrica, ou $null (1 vaga)
       Max        0 = sem limite (padrão); 1 = uma por vez (reserva sem DHIP)
       Admitindo  $false depois de "encerrar": quem está em curso termina
@@ -191,11 +194,87 @@ function Step-Descoberta {
         $novas += @{
             Mac = [string]$a.Mac; Serial = [string]$a.Serial; Modelo = [string]$a.Modelo
             IpOrigem = [string]$a.Ip; HttpPort = $porta; Indice = 0
-            Fase = 'espera'; Etapa = ''; Falha = $null; GeracaoLogin = 0
+            Fase = 'espera'; Etapa = ''; Falha = $null; GeracaoLogin = 0; Motivo = ''
         }
     }
 
     if ($novas.Count -gt 0) { $novo.Cameras = @($novo.Cameras) + $novas }
+
+    return @{ Estado = $novo; Acoes = $acoes }
+}
+
+<#
+    Step-Admissao: a primeira câmera em espera (ordem de chegada) entra no
+    portão quando tudo abaixo vale ao mesmo tempo:
+      - portão livre (1 vaga sempre, D2);
+      - Admitindo (depois de "encerrar" ninguém entra);
+      - vaga: Max 0 = sem limite; senão, câmeras em 'portao' + 'conferindo'
+        abaixo de Max (decisão não ocupa vaga, D6);
+      - posição livre: a primeira posição 'pendente' da fila (D10).
+    IpsOcupados (dado de entrada: o servidor pinga, o orquestrador não toca
+    a rede) pula a posição como Invoke-Conectada faz hoje: 'pulada', motivo
+    "IP já responde na rede", e tenta a seguinte. Só pula quando há câmera
+    para admitir. Sem posição livre, todas as câmeras em espera ficam com o
+    motivo "sem posição livre" e nada sai.
+    Na entrada: Indice = número da posição, fase 'portao', Portao = MAC,
+    posição 'reservada' com o MAC, e as ações 'prender' (MAC no IP de origem)
+    e 'despachar' com AteEtapa 'rede', Posicao e Destino. Admite no máximo
+    uma por chamada, porque o portão tem uma vaga.
+#>
+function Step-Admissao {
+    param(
+        [Parameter(Mandatory = $true)]$Estado,
+        $IpsOcupados = @()
+    )
+
+    $novo = Copy-EstadoParalelo -Estado $Estado
+    $acoes = @()
+    $nada = @{ Estado = $novo; Acoes = $acoes }
+
+    if ($null -ne $novo.Portao -or -not $novo.Admitindo) { return $nada }
+
+    $cameras = @($novo.Cameras)
+    if ($novo.Max -gt 0) {
+        $emCurso = @($cameras | Where-Object { $_.Fase -eq 'portao' -or $_.Fase -eq 'conferindo' }).Count
+        if ($emCurso -ge $novo.Max) { return $nada }
+    }
+
+    $camera = $null
+    foreach ($c in $cameras) { if ($c.Fase -eq 'espera') { $camera = $c; break } }
+    if ($null -eq $camera) { return $nada }
+
+    $ocupados = @{}
+    foreach ($ip in @($IpsOcupados)) { if ($null -ne $ip) { $ocupados[([string]$ip).Trim()] = $true } }
+
+    $posicao = $null
+    foreach ($p in @($novo.Posicoes)) {
+        if ($p.Estado -ne 'pendente') { continue }
+        if ($ocupados.ContainsKey([string]$p.Ip)) {
+            $p.Estado = 'pulada'
+            $p.Motivo = 'IP já responde na rede'
+            continue
+        }
+        $posicao = $p
+        break
+    }
+
+    if ($null -eq $posicao) {
+        foreach ($c in $cameras) { if ($c.Fase -eq 'espera') { $c.Motivo = 'sem posição livre' } }
+        return $nada
+    }
+
+    $posicao.Estado = 'reservada'
+    $posicao.Mac = [string]$camera.Mac
+    $camera.Indice = [int]$posicao.Posicao
+    $camera.Fase = 'portao'
+    $camera.Motivo = ''
+    $novo.Portao = [string]$camera.Mac
+
+    $acoes += @{ Tipo = 'prender'; Mac = [string]$camera.Mac; Ip = [string]$camera.IpOrigem }
+    $acoes += @{
+        Tipo = 'despachar'; Mac = [string]$camera.Mac; AteEtapa = 'rede'
+        Posicao = [int]$posicao.Posicao; Destino = [string]$posicao.Ip
+    }
 
     return @{ Estado = $novo; Acoes = $acoes }
 }

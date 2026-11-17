@@ -7,7 +7,8 @@
     entao aqui ele e carregado por dot-source direto. Cobre:
       - estado inicial (posicoes copiadas, Max, portao livre, admitindo);
       - resumo por fase;
-      - descoberta (achados DHIP -> espera, dedup por MAC, marca nao suportada).
+      - descoberta (achados DHIP -> espera, dedup por MAC, marca nao suportada);
+      - admissao (portao de 1 vaga, Max, posicao na entrada, destino ocupado).
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -302,6 +303,174 @@ T 'Descoberta: achado sem MAC e lista vazia nao mexem no estado' {
     $r0 = Step-Descoberta -Estado $e -Achados @()
     Assert-Igual 0 @($r0.Estado.Cameras).Count 'lista vazia'
     Assert-Igual 0 @($r0.Acoes).Count 'lista vazia sem acao'
+}
+
+# -------------------------------------------------------------------- admissao
+
+# Textos com acento, sem acento neste arquivo.
+$script:TextoSemPosicao = ('sem posi' + [char]0x00E7 + [char]0x00E3 + 'o livre')
+$script:TextoIpOcupado = ('IP j' + [char]0x00E1 + ' responde na rede')
+
+# Estado com as cameras 1..N em espera, na ordem.
+function New-EstadoComEspera {
+    param([int]$Cameras = 3, [int]$Posicoes = 3, [int]$Max = 0)
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste $Posicoes) -Max $Max
+    $e.Cameras = @(1..$Cameras | ForEach-Object { New-CameraTeste $_ 'espera' })
+    return $e
+}
+
+function Get-Camera {
+    param($Estado, [int]$N)
+    $mac = ('AA:00:00:00:00:0' + $N)
+    return @(@($Estado.Cameras) | Where-Object { $_.Mac -eq $mac })[0]
+}
+
+T 'Admissao: Max 0 e 3 em espera, so a primeira entra no portao com a posicao 1' {
+    $e = New-EstadoComEspera -Cameras 3 -Posicoes 3 -Max 0
+    $r = Step-Admissao -Estado $e
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'portao' $c1.Fase 'fase da 1'
+    Assert-Igual 1 $c1.Indice 'indice da 1'
+    Assert-Igual 'AA:00:00:00:00:01' $r.Estado.Portao 'portao'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 2).Fase 'fase da 2'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 3).Fase 'fase da 3'
+    Assert-Igual 0 (Get-Camera $r.Estado 2).Indice 'indice da 2'
+    Assert-Igual 'reservada' $r.Estado.Posicoes[0].Estado 'posicao 1 reservada'
+    Assert-Igual 'AA:00:00:00:00:01' $r.Estado.Posicoes[0].Mac 'mac da posicao 1'
+    Assert-Igual 'pendente' $r.Estado.Posicoes[1].Estado 'posicao 2 livre'
+
+    $a = @($r.Acoes)
+    Assert-Igual 2 $a.Count 'duas acoes'
+    Assert-Igual 'prender' $a[0].Tipo 'primeiro prender'
+    Assert-Igual 'AA:00:00:00:00:01' $a[0].Mac 'mac do prender'
+    Assert-Igual '192.168.1.108' $a[0].Ip 'ip do prender (fabrica)'
+    Assert-Igual 'despachar' $a[1].Tipo 'depois despachar'
+    Assert-Igual 'AA:00:00:00:00:01' $a[1].Mac 'mac do despachar'
+    Assert-Igual 'rede' $a[1].AteEtapa 'despachar ate a rede'
+    Assert-Igual 1 $a[1].Posicao 'posicao do despachar'
+    Assert-Igual '192.0.2.11' $a[1].Destino 'destino do despachar'
+
+    # Portao ocupado: as outras aguardam so o portao, sem acao nem motivo.
+    $r2 = Step-Admissao -Estado $r.Estado
+    Assert-Igual 0 @($r2.Acoes).Count 'portao ocupado: nenhuma acao'
+    Assert-Igual 'espera' (Get-Camera $r2.Estado 2).Fase 'a 2 aguarda o portao'
+    Assert-Verdade ([string]::IsNullOrEmpty((Get-Camera $r2.Estado 2).Motivo)) 'sem motivo enquanto aguarda o portao'
+
+    # Portao livre com a 1 conferindo: Max 0 admite a 2 na posicao 2.
+    $s = $r2.Estado
+    (Get-Camera $s 1).Fase = 'conferindo'
+    $s.Portao = $null
+    $r3 = Step-Admissao -Estado $s
+    Assert-Igual 'portao' (Get-Camera $r3.Estado 2).Fase 'a 2 entra com a 1 conferindo'
+    Assert-Igual 2 (Get-Camera $r3.Estado 2).Indice 'indice da 2'
+    Assert-Igual '192.0.2.12' @($r3.Acoes)[1].Destino 'destino da 2'
+    Assert-Igual 'espera' (Get-Camera $r3.Estado 3).Fase 'a 3 continua em espera'
+}
+
+T 'Admissao: Max 1, a segunda espera a primeira terminar a conferencia' {
+    $e = New-EstadoComEspera -Cameras 2 -Posicoes 3 -Max 1
+    $r = Step-Admissao -Estado $e
+    Assert-Igual 'portao' (Get-Camera $r.Estado 1).Fase 'a 1 entra'
+    $s = $r.Estado
+    (Get-Camera $s 1).Fase = 'conferindo'
+    $s.Portao = $null
+    $r2 = Step-Admissao -Estado $s
+    Assert-Igual 0 @($r2.Acoes).Count 'sem vaga: nenhuma acao'
+    Assert-Igual 'espera' (Get-Camera $r2.Estado 2).Fase 'a 2 espera'
+    Assert-Verdade ($null -eq $r2.Estado.Portao) 'portao continua livre'
+    (Get-Camera $r2.Estado 1).Fase = 'feita'
+    $r3 = Step-Admissao -Estado $r2.Estado
+    Assert-Igual 'portao' (Get-Camera $r3.Estado 2).Fase 'a 2 entra depois da conferencia'
+    Assert-Igual 2 (Get-Camera $r3.Estado 2).Indice 'posicao 2 (a 1 continua reservada)'
+}
+
+T 'Admissao: Max 1 com a primeira em decisao libera a vaga' {
+    $e = New-EstadoComEspera -Cameras 2 -Posicoes 3 -Max 1
+    (Get-Camera $e 1).Fase = 'decisao'
+    $r = Step-Admissao -Estado $e
+    Assert-Igual 'portao' (Get-Camera $r.Estado 2).Fase 'decisao nao ocupa vaga'
+}
+
+T 'Admissao: sem posicao livre, a camera fica em espera com o motivo' {
+    $e = New-EstadoComEspera -Cameras 2 -Posicoes 2 -Max 0
+    $e.Posicoes[0].Estado = 'feita'
+    $e.Posicoes[1].Estado = 'pulada'
+    $r = Step-Admissao -Estado $e
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    Assert-Verdade ($null -eq $r.Estado.Portao) 'portao livre'
+    $c1 = Get-Camera $r.Estado 1
+    Assert-Igual 'espera' $c1.Fase 'fase'
+    Assert-Igual 0 $c1.Indice 'sem indice'
+    Assert-Igual $script:TextoSemPosicao $c1.Motivo 'motivo'
+}
+
+T 'Admissao: posicao reservada nao e reaproveitada; motivo some na admissao' {
+    $e = New-EstadoComEspera -Cameras 1 -Posicoes 1 -Max 0
+    (Get-Camera $e 1).Motivo = $script:TextoSemPosicao
+    $r = Step-Admissao -Estado $e
+    Assert-Verdade ([string]::IsNullOrEmpty((Get-Camera $r.Estado 1).Motivo)) 'motivo limpo ao entrar'
+    $s = $r.Estado
+    (Get-Camera $s 1).Fase = 'conferindo'
+    $s.Portao = $null
+    $s.Cameras = @($s.Cameras) + @((New-CameraTeste 2 'espera'))
+    $r2 = Step-Admissao -Estado $s
+    Assert-Igual 0 @($r2.Acoes).Count 'unica posicao ja reservada'
+    Assert-Igual $script:TextoSemPosicao (Get-Camera $r2.Estado 2).Motivo 'a 2 sem posicao'
+}
+
+T 'Admissao: IP de destino ocupado pula a posicao e usa a seguinte' {
+    $e = New-EstadoComEspera -Cameras 1 -Posicoes 3 -Max 0
+    $r = Step-Admissao -Estado $e -IpsOcupados @('192.0.2.11', '192.0.2.12')
+    Assert-Igual 'pulada' $r.Estado.Posicoes[0].Estado 'posicao 1 pulada'
+    Assert-Igual $script:TextoIpOcupado $r.Estado.Posicoes[0].Motivo 'motivo da 1'
+    Assert-Igual 'pulada' $r.Estado.Posicoes[1].Estado 'posicao 2 pulada'
+    Assert-Igual 'reservada' $r.Estado.Posicoes[2].Estado 'posicao 3 reservada'
+    Assert-Igual 3 (Get-Camera $r.Estado 1).Indice 'indice 3'
+    Assert-Igual '192.0.2.13' @($r.Acoes)[1].Destino 'destino 3'
+}
+
+T 'Admissao: todos os destinos ocupados viram sem posicao livre' {
+    $e = New-EstadoComEspera -Cameras 1 -Posicoes 2 -Max 0
+    $r = Step-Admissao -Estado $e -IpsOcupados @('192.0.2.11', '192.0.2.12')
+    Assert-Igual 'pulada' $r.Estado.Posicoes[0].Estado 'posicao 1 pulada'
+    Assert-Igual 'pulada' $r.Estado.Posicoes[1].Estado 'posicao 2 pulada'
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    Assert-Igual $script:TextoSemPosicao (Get-Camera $r.Estado 1).Motivo 'motivo'
+}
+
+T 'Admissao: destino ocupado sem camera em espera nao pula nada' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 2)
+    $r = Step-Admissao -Estado $e -IpsOcupados @('192.0.2.11')
+    Assert-Igual 'pendente' $r.Estado.Posicoes[0].Estado 'posicao 1 intacta'
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+}
+
+T 'Admissao: sem Admitindo nada entra' {
+    $e = New-EstadoComEspera -Cameras 2 -Posicoes 2 -Max 0
+    $e.Admitindo = $false
+    $r = Step-Admissao -Estado $e
+    Assert-Igual 0 @($r.Acoes).Count 'nenhuma acao'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 1).Fase 'a 1 espera'
+    Assert-Igual 'pendente' $r.Estado.Posicoes[0].Estado 'posicao livre'
+}
+
+T 'Admissao: a primeira em espera e a da ordem de chegada, apos as ja feitas' {
+    $e = New-EstadoParalelo -Posicoes (New-PosicoesTeste 3)
+    $e.Cameras = @((New-CameraTeste 4 'feita'), (New-CameraTeste 5 'decisao'), (New-CameraTeste 2 'espera'), (New-CameraTeste 1 'espera'))
+    $r = Step-Admissao -Estado $e
+    Assert-Igual 'AA:00:00:00:00:02' $r.Estado.Portao 'a 2 chegou antes da 1'
+    Assert-Igual 'espera' (Get-Camera $r.Estado 1).Fase 'a 1 espera'
+}
+
+T 'Admissao: estado de entrada nao e mutado' {
+    $e = New-EstadoComEspera -Cameras 2 -Posicoes 2 -Max 0
+    $r = Step-Admissao -Estado $e -IpsOcupados @('192.0.2.11')
+    Assert-Verdade ($null -eq $e.Portao) 'portao de entrada'
+    Assert-Igual 'espera' (Get-Camera $e 1).Fase 'fase de entrada'
+    Assert-Igual 0 (Get-Camera $e 1).Indice 'indice de entrada'
+    Assert-Igual 'pendente' $e.Posicoes[0].Estado 'posicao 1 de entrada'
+    Assert-Igual 'pendente' $e.Posicoes[1].Estado 'posicao 2 de entrada'
+    Assert-Igual 'portao' (Get-Camera $r.Estado 1).Fase 'fase de saida'
 }
 
 # ------------------------------------------------------------------- resultado
