@@ -1252,10 +1252,12 @@ function Find-CamerasNaRede {
 
     # Confirmado: o Init veio do DevInit.getStatus por HTTP (so se age nele).
     # Alcancavel: o PC tem IP na rede da camera. Modelo/Serial/Firmware/
-    # Mascara/Gateway/HttpPort/Classe: so o broadcast traz.
+    # Mascara/Gateway/HttpPort/Classe: so o broadcast traz. IpDividido: o
+    # broadcast achou mais de um aparelho nesse IP (MACs distintos).
     function Add-Achado {
         param($Ip, $Mac, $Init, $EhCamera, $Oui, $Bruto, $Como, $Confirmado = $true, $Alcancavel = $true,
-              $Modelo = '', $Serial = '', $Firmware = '', $Mascara = '', $Gateway = '', $HttpPort = 80, $Classe = '')
+              $Modelo = '', $Serial = '', $Firmware = '', $Mascara = '', $Gateway = '', $HttpPort = 80, $Classe = '',
+              $IpDividido = $false)
         $lista.Add([pscustomobject]@{
             Ip            = $Ip
             Mac           = $Mac
@@ -1274,6 +1276,7 @@ function Find-CamerasNaRede {
             Gateway       = [string]$Gateway
             HttpPort      = [int]$HttpPort
             Classe        = [string]$Classe
+            IpDividido    = [bool]$IpDividido
         })
     }
     function Test-JaAchado { param([string]$Ip, [string]$Mac)
@@ -1297,27 +1300,37 @@ function Find-CamerasNaRede {
         $portas = @{}
         foreach ($u in $unicos) { Set-CamPortaHttp -Ip $u.Ip -Porta $u.HttpPort; if ($u.HttpPort -ne 80) { $portas[$u.Ip] = $u.HttpPort } }
         $alcancaveis = @($unicos | Where-Object { Test-IpAlcancavel -Ip $_.Ip -Locais $faixasPlaca } | ForEach-Object { $_.Ip })
+        # IP dividido: dois aparelhos distintos (MACs diferentes) no mesmo IP,
+        # o caso de duas cameras de fabrica no 192.168.1.108. O HTTP nesse IP
+        # responde por uma so, sem dizer qual: a resposta nao pode virar o
+        # Init confirmado de nenhuma. Fica o Init do broadcast, sem confirmar.
+        $porIp = @{}
+        foreach ($u in $unicos) { $porIp[$u.Ip] = 1 + $(if ($porIp.ContainsKey($u.Ip)) { $porIp[$u.Ip] } else { 0 }) }
+        $divididos = @($porIp.Keys | Where-Object { $porIp[$_] -gt 1 })
         # So quem o broadcast diz ser de fabrica (ou nao diz) vai ao HTTP: e
         # nessas que o painel age. Sondar 30 cameras ja instaladas a cada
         # tique do vigia prenderia o worker por segundos sem ganho.
-        $aConfirmar = @($unicos | Where-Object { ($alcancaveis -contains $_.Ip) -and ($_.Init -eq 1 -or $_.Init -lt 0) } | ForEach-Object { $_.Ip })
+        $aConfirmar = @($unicos | Where-Object { ($alcancaveis -contains $_.Ip) -and ($divididos -notcontains $_.Ip) -and ($_.Init -eq 1 -or $_.Init -lt 0) } |
+                        ForEach-Object { $_.Ip })
         $respostas = @{}
         if ($aConfirmar.Count -gt 0) {
             $respostas = Invoke-ProbeInitLote -Ips $aConfirmar -TimeoutSegProbe $TimeoutSegProbe -Paralelo $Paralelo -Portas $portas
         }
         foreach ($u in $unicos) {
             $alc = ($alcancaveis -contains $u.Ip)
+            $div = ($divididos -contains $u.Ip)
             $init = $u.Init; $conf = $false; $bruto = $u.Bruto
-            if ($alc -and $respostas.ContainsKey($u.Ip) -and $null -ne $respostas[$u.Ip] -and $respostas[$u.Ip].EhCamera -and $respostas[$u.Ip].Init -ge 0) {
+            if ($alc -and -not $div -and $respostas.ContainsKey($u.Ip) -and $null -ne $respostas[$u.Ip] -and $respostas[$u.Ip].EhCamera -and $respostas[$u.Ip].Init -ge 0) {
                 # O HTTP manda: se ele diz inicializada, o bit do broadcast nao vale.
                 $init = Get-InitNormalizado $respostas[$u.Ip].Init; $conf = $true; $bruto = $respostas[$u.Ip].Bruto
             }
             Add-Achado -Ip $u.Ip -Mac $u.Mac -Init $init -EhCamera $true -Oui (Test-OuiConhecido $u.Mac $ouis) -Bruto $bruto `
                        -Como 'broadcast DHIP' -Confirmado $conf -Alcancavel $alc -Modelo $u.Modelo -Serial $u.Serial -Firmware $u.Firmware `
-                       -Mascara $u.Mascara -Gateway $u.Gateway -HttpPort $u.HttpPort -Classe $u.Classe
+                       -Mascara $u.Mascara -Gateway $u.Gateway -HttpPort $u.HttpPort -Classe $u.Classe -IpDividido $div
             if (-not $Silencioso) {
                 Write-Log ("  " + $u.Ip + $(if ($u.HttpPort -ne 80) { ':' + $u.HttpPort } else { '' }) + "  " + $u.Modelo + "  " +
-                           $(if ($init -eq 1) { 'DE FABRICA' } else { 'inicializada' }) + $(if (-not $alc) { ' (fora das faixas do PC)' } elseif (-not $conf) { ' (nao confirmada por HTTP)' } else { '' })) `
+                           $(if ($init -eq 1) { 'DE FABRICA' } else { 'inicializada' }) +
+                           $(if ($div) { ' (IP dividido com outro aparelho, sem HTTP)' } elseif (-not $alc) { ' (fora das faixas do PC)' } elseif (-not $conf) { ' (nao confirmada por HTTP)' } else { '' })) `
                           $(if ($init -eq 1) { 'Green' } else { 'Gray' })
             }
         }

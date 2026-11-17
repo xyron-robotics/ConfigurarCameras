@@ -640,6 +640,71 @@ T 'Porta HTTP por IP e URL da camera' {
     Assert-Igual 80 (Get-CamPortaHttp 'lixo') 'IP invalido nao registra'
 }
 
+# ----------------------------------------- broadcast com IP dividido entre MACs
+
+Write-Host ""
+Write-Host "Find-CamerasNaRede: duas cameras no mesmo IP" -ForegroundColor Cyan
+
+# Duas cameras de fabrica no mesmo 192.168.1.108 (MACs AA:00:00:00:00:01 e
+# :02). O HTTP nesse IP responde por uma so, e nao da para saber qual: a
+# resposta nao pode virar o Init confirmado de nenhuma das duas.
+$script:dhipDuas = @(([IO.File]::ReadAllText((Join-Path $raiz 'testes\dhip-duas-de-fabrica-mesmo-ip.json'), [Text.Encoding]::ASCII)) | ConvertFrom-Json) |
+    ForEach-Object { $_ } | ForEach-Object { ConvertFrom-RespostaDhip -Json ($_ | ConvertTo-Json -Depth 10 -Compress) }
+
+# Tudo que toca rede e falso aqui: broadcast, faixas da placa, probe HTTP,
+# ping e ARP. O probe falso diz "camera de fabrica" para qualquer IP, entao
+# so a regra do IP dividido impede a atribuicao cruzada.
+function Invoke-DescobertaDivididaFalsa {
+    param([array]$Achados)
+    $script:ipsSondados = New-Object 'System.Collections.Generic.List[string]'
+    $script:achadosFalsos = $Achados
+    function Invoke-DescobertaDhip { param($Segundos, $IfIndex) return $script:achadosFalsos }
+    function Get-FaixasDaPlaca { param($IfIndex) return @(@{ Ip = '192.168.1.220'; Prefixo = 24 }) }
+    function Invoke-ProbeInitLote {
+        param([string[]]$Ips, $TimeoutSegProbe, $Paralelo, $Portas)
+        $r = @{}
+        foreach ($ip in $Ips) {
+            $script:ipsSondados.Add($ip)
+            $r[$ip] = [pscustomobject]@{ EhCamera = $true; Init = 1; Bruto = 'http falso'; PareceJson = $true }
+        }
+        return $r
+    }
+    function Invoke-PingSweep { throw 'ping real nao pode ser chamado no teste' }
+    function Get-VizinhosMac { throw 'ARP real nao pode ser chamado no teste' }
+    return @(Find-CamerasNaRede -Silencioso -SemVarredura)
+}
+
+T 'Find-CamerasNaRede: dois MACs no mesmo IP saem com IpDividido, sem probe HTTP, Init do broadcast' {
+    Assert-Igual 2 $script:dhipDuas.Count 'fixture com 2 respostas'
+    $r = @(Invoke-DescobertaDivididaFalsa -Achados $script:dhipDuas)
+    Assert-Igual 2 $r.Count 'achados'
+    Assert-Igual 'AA0000000001,AA0000000002' (($r | ForEach-Object { $_.Mac }) -join ',') 'MACs'
+    Assert-Igual 'SIM-1,SIM-2' (($r | ForEach-Object { $_.Serial }) -join ',') 'seriais'
+    foreach ($a in $r) {
+        Assert-Igual '192.168.1.108' $a.Ip ('IP de ' + $a.Mac)
+        Assert-Verdade ($a.IpDividido -eq $true) ('IpDividido de ' + $a.Mac)
+        Assert-Falso $a.Confirmado ('Confirmado de ' + $a.Mac)
+        Assert-Igual 1 $a.Init ('Init do broadcast de ' + $a.Mac)
+        Assert-Verdade ($a.Bruto -like '*client.notifyDevInfo*') ('Bruto do broadcast de ' + $a.Mac)
+    }
+    Assert-Igual 0 $script:ipsSondados.Count 'nenhum IP foi ao probe HTTP'
+}
+
+T 'Find-CamerasNaRede: camera sozinha no IP dela continua confirmada por HTTP e sem IpDividido' {
+    $json3 = (($script:dhipDuas[0].Bruto -replace 'aa:00:00:00:00:01', 'aa:00:00:00:00:03') -replace '192\.168\.1\.108', '192.168.1.109') -replace 'SIM-1', 'SIM-3'
+    $todos = @($script:dhipDuas) + @(ConvertFrom-RespostaDhip -Json $json3)
+    $r = @(Invoke-DescobertaDivididaFalsa -Achados $todos)
+    Assert-Igual 3 $r.Count 'achados'
+    $so = @($r | Where-Object { $_.Mac -eq 'AA0000000003' })
+    Assert-Igual 1 $so.Count 'a terceira'
+    Assert-Igual '192.168.1.109' $so[0].Ip 'IP da terceira'
+    Assert-Falso $so[0].IpDividido 'terceira nao divide IP'
+    Assert-Verdade $so[0].Confirmado 'terceira confirmada'
+    Assert-Igual 'http falso' $so[0].Bruto 'Bruto do HTTP'
+    Assert-Igual 2 @($r | Where-Object { $_.IpDividido }).Count 'as duas do .108 seguem divididas'
+    Assert-Igual '192.168.1.109' ($script:ipsSondados -join ',') 'so o .109 foi ao probe'
+}
+
 # ------------------------------------------------------------------- resultado
 
 Write-Host ""
