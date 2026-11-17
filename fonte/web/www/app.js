@@ -34,6 +34,26 @@ const MOTIVO_VIGIA = {
 };
 // Espaco que nao quebra entre numero e unidade ("20 fps", "1596 kbps").
 const NBSP = String.fromCharCode(160);
+// Data, hora e numero no formato do pt-BR (Intl), num lugar so.
+const FMT_DIA_HORA = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const FMT_DATA_HORA = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+const FMT_HORA = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const FMT_NUMERO = new Intl.NumberFormat('pt-BR');
+// "yyyy-MM-dd HH:mm[:ss]" do servidor (hora local da maquina) vira Date; fora disso, null.
+function dataDoServidor(q) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(q || ''));
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+  return isNaN(d) ? null : d;
+}
+function formatarData(q, fmt) {
+  const d = dataDoServidor(q);
+  return d ? fmt.format(d) : String(q || '');
+}
+function numero(v) {
+  const n = Number(v);
+  return v !== '' && v !== null && Number.isFinite(n) ? FMT_NUMERO.format(n) : String(v);
+}
 // Valores prontos do encoder (GET /api/sessao): fps, degraus de bitrate,
 // faixa por resolucao e o que a camera de referencia aceitou ou recusou.
 let catalogo = null;
@@ -307,8 +327,7 @@ function montarOpcoes() {
 }
 
 function dataCurta(q) {
-  const t = String(q || '');
-  return t.length >= 16 ? t.slice(8, 10) + '/' + t.slice(5, 7) + ' ' + t.slice(11, 16) : t;
+  return formatarData(q, FMT_DIA_HORA);
 }
 
 function textoDaEscolha(s) {
@@ -653,8 +672,8 @@ function desenharPrevia() {
   if (p.hidden) return;
   const n = numIp(b) - numIp(a) + 1;
   if (n <= 0) p.textContent = 'O primeiro IP vem depois do último: troque os dois.';
-  else if (n > 254) p.textContent = n + ' endereços: acima do máximo de 254. Divida em faixas menores.';
-  else p.textContent = (n === 1 ? '1 endereço: ' + a : n + ' endereços, de ' + a + ' a ' + b) + '.';
+  else if (n > 254) p.textContent = numero(n) + ' endereços: acima do máximo de 254. Divida em faixas menores.';
+  else p.textContent = (n === 1 ? '1 endereço: ' + a : numero(n) + ' endereços, de ' + a + ' a ' + b) + '.';
 }
 
 function desenharVigia(e, visivel, ctx) {
@@ -703,7 +722,7 @@ function desenharVigia(e, visivel, ctx) {
 
 // Uma linha por stream: "1920 × 1080, 20 fps, 1596 kbps, H.264", sem os campos vazios.
 function textoStream(res, fps, kbps, codec, gop) {
-  return [res ? String(res).replace('x', ' × ') : '', fps ? fps + NBSP + 'fps' : '', kbps ? kbps + NBSP + 'kbps' : '', codec || '',
+  return [res ? String(res).replace('x', ' × ') : '', fps ? numero(fps) + NBSP + 'fps' : '', kbps ? numero(kbps) + NBSP + 'kbps' : '', codec || '',
     gop ? 'GOP ' + gop : ''].filter(Boolean).join(', ');
 }
 
@@ -995,7 +1014,7 @@ function desenharBitrates(stream) {
   const valores = fx ? catalogo.bitrates.filter((v) => v >= fx.min && v <= fx.max) : catalogo.bitrates;
   montarListaValor(listaDoCampo(s.br), valores, (v) => (fx && v === fx.rec ? v + ' (recomendado)' : String(v)));
   $(s.faixa).textContent = fx
-    ? 'Bitrate usual para ' + resolucaoLegivel(fx.res) + ' em ' + fx.codec + ': ' + fx.min + ' a ' + fx.max + NBSP + 'kbps; recomendado ' + fx.rec + '.'
+    ? 'Bitrate usual para ' + resolucaoLegivel(fx.res) + ' em ' + fx.codec + ': ' + numero(fx.min) + ' a ' + numero(fx.max) + NBSP + 'kbps; recomendado ' + numero(fx.rec) + '.'
     : '';
 }
 
@@ -1045,8 +1064,8 @@ function desenharAvisosCamera() {
     const fx = faixaDoStream(stream);
     const br = Number(f[s.br].value);
     if (fx && f[s.br].value !== '' && (br < fx.min || br > fx.max)) {
-      lista.push('O bitrate do stream ' + s.nome + ' (' + br + NBSP + 'kbps) fica fora da faixa usual para ' + resolucaoLegivel(fx.res) + ' em ' + fx.codec +
-        ' (' + fx.min + ' a ' + fx.max + NBSP + 'kbps). Confira se é isso mesmo.');
+      lista.push('O bitrate do stream ' + s.nome + ' (' + numero(br) + NBSP + 'kbps) fica fora da faixa usual para ' + resolucaoLegivel(fx.res) + ' em ' + fx.codec +
+        ' (' + numero(fx.min) + ' a ' + numero(fx.max) + NBSP + 'kbps). Confira se é isso mesmo.');
     }
     for (const [tipo, campo, texto] of [['resolucoes', s.res, resolucaoLegivel], ['codecs', s.codec, String]]) {
       if (recusadoNaReferencia(stream, tipo, f[campo].value)) {
@@ -1068,7 +1087,7 @@ function desenharAvisosCamera() {
 function marcarSalvo(form, texto) {
   const ok = form.querySelector('[data-ok]');
   if (!ok) return;
-  const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const agora = FMT_HORA.format(new Date());
   ok.textContent = (texto || 'Salvo') + ' às ' + agora + '.';
   ok.hidden = false;
 }
@@ -1253,7 +1272,7 @@ async function carregarRegistro() {
         h('td', { class: 'mono' }, enc ? [h('div', { text: 'Principal: ' + enc.principal }), h('div', { class: 'enc-sec', text: 'Secundário: ' + enc.secundario })] : null),
         h('td', { text: c.Local || '' }),
         h('td', { text: [c.Rack, c.Porta].filter(Boolean).join(' / ') }),
-        h('td', { class: 'mono', text: c.Data || '' }));
+        h('td', { class: 'mono', text: formatarData(c.Data, FMT_DATA_HORA) }));
     }));
   } catch (e) { mostrarAviso(e.message); }
 }
