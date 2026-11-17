@@ -189,10 +189,14 @@ label.check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(
 /* Grade dos formularios de secao: 2 a 3 colunas conforme a largura. */
 .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem 0.9rem; align-items: end; }
 .campos label.largo { grid-column: 1 / -1; }
+.campos label.duplo { grid-column: span 2; }
+/* Botao dentro da grade fica do tamanho do texto, nao da coluna. */
+.campos > .btn { justify-self: start; }
 .secao-form { display: flex; flex-direction: column; gap: 0.75rem; }
 /* Sem fundo proprio: no maximo dois niveis de caixa (pagina e cartao). */
+/* min-width 0: sem isso o fieldset cresce ate o min-content e vaza do cartao. */
 fieldset {
-  margin: 0; padding: 0.7rem 0.9rem 0.9rem;
+  margin: 0; padding: 0.7rem 0.9rem 0.9rem; min-width: 0;
   background: transparent; border: 1px solid var(--linha); border-radius: var(--r-md);
 }
 legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; padding: 0 0.3rem; }
@@ -236,8 +240,9 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .acoes { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 /* Linha de acoes por contexto: no passo a passo quem avanca e o rodape. */
 #inicio .so-opcoes, #inicio [data-ok] { display: none !important; }
-/* Formularios de secao dentro do passo: o encoder cabe em 4 colunas sem rolar. */
-#inicio fieldset .campos { grid-template-columns: repeat(4, 1fr); }
+/* Encoder dentro do passo: o cartao do passo e estreito para 4 colunas (os
+   selects de resolucao e codec vazavam a 1366 px); 2 por linha cabem inteiros. */
+#inicio fieldset .campos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .aviso {
   padding: 0.6rem 0.9rem; border-radius: var(--r-sm);
@@ -257,7 +262,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 }
 .passos li { counter-increment: passo; }
 .passo-botao {
-  font: inherit; font-size: 13px; width: 100%; text-align: left;
+  font: inherit; font-size: 13px; width: 100%; height: 100%; text-align: left;
   padding: 0.45rem 0.6rem; border-radius: var(--r-sm); cursor: pointer;
   background: var(--sup-2); border: 1px solid var(--linha); border-top: 3px solid var(--linha); color: var(--apoio);
 }

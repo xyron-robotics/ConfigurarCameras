@@ -302,7 +302,11 @@ function montarPasso(n) {
     if (temEscolha) $('escolha-texto').textContent = textoDaEscolha(s);
     $('senha-definida').hidden = !senhaOk();
     $('form-senha').hidden = senhaOk() && !trocarSenhaAberta;
-    $('btn-avancar').hidden = senhaOk() && !trocarSenhaAberta;
+    // Senha ja definida e sem a escolha da sessao: o rodape ainda avanca
+    // (sem ele o passo 1 so tinha saida pelas abas).
+    const senhaFechada = senhaOk() && !trocarSenhaAberta;
+    $('btn-avancar').hidden = senhaFechada && temEscolha;
+    if (senhaFechada) $('btn-avancar').textContent = 'Avançar';
   }
   if (n === 2) carregarPlacas();
   if (n >= 2 && n <= 6) carregarSessao();
@@ -1222,6 +1226,7 @@ function desenharResumo() {
 async function avancar() {
   const n = passoAtual;
   if (n === 1) {
+    if (senhaOk() && !trocarSenhaAberta) { irPara(2); return; }
     const ok = await enviarSenha($('form-senha'));
     if (!ok) return;
     trocarSenhaAberta = false;
