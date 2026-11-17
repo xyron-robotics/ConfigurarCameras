@@ -1174,6 +1174,56 @@ function Add-RotaHostPlaca {
     return $msgs
 }
 
+# Unica funcao que tira IP da placa no caminho do IP temporario; os testes a
+# trocam por uma falsa.
+function Remove-IpPlaca {
+    param([int]$IfIndex, [string]$Ip)
+    Remove-NetIPAddress -InterfaceIndex $IfIndex -IPAddress $Ip -AddressFamily IPv4 -Confirm:$false -ErrorAction Stop
+}
+
+<#
+    A camera do portao saiu do IP de origem: o IP temporario que a placa
+    ganhou para alcanca-la (Add-IpTemporarioPlaca) sai tambem. Guiada so pelo
+    rastro: tira os Adicionados com Para = 'temporario' e Camera = -IpCamera
+    (o IP de origem), na placa do rastro (IfIndex), e nada fora dele. Quem
+    chama decide o momento. IP retirado, ou que ja nao estava na placa, sai
+    do rastro; remocao recusada fica nele, para o Restaurar DHCP / Encerrar
+    tentar de novo. Nao toca a rota de host nem grava log.
+    Retorna { Ok; Removidos; JaFora; Erro; Sessao }: Sessao = copia do
+    rastro sem os IPs que sairam (nula sem rastro); o rastro recebido nao muda.
+#>
+function Remove-IpTemporarioPlaca {
+    param($Sessao, [Parameter(Mandatory)][string]$IpCamera)
+
+    $res = [pscustomobject]@{ Ok = $true; Removidos = @(); JaFora = @(); Erro = ''; Sessao = $null }
+    if ($null -eq $Sessao) { return $res }
+    # Copia normalizada em hashtable (o rastro pode vir do JSON).
+    $nova = Merge-SessaoPlaca -Antiga $Sessao -Nova $Sessao
+    $res.Sessao = $nova
+    $alvos = @(@($nova.Adicionados) | Where-Object { [string]$_.Para -eq 'temporario' -and [string]$_.Camera -eq $IpCamera } | ForEach-Object { [string]$_.Ip })
+    if ($alvos.Count -eq 0) { return $res }
+    $ifIndex = [int](Get-PropriedadeOuVazio $Sessao 'IfIndex' 0)
+    if ($ifIndex -le 0) {
+        $res.Ok = $false
+        $res.Erro = 'O rastro nao diz a placa do IP temporario de ' + $IpCamera + '; ele fica para o Restaurar DHCP.'
+        return $res
+    }
+
+    $fora = @(); $erros = @()
+    foreach ($ip in $alvos) {
+        try {
+            Remove-IpPlaca -IfIndex $ifIndex -Ip $ip
+            $res.Removidos += $ip; $fora += $ip
+        } catch {
+            if ($_.Exception.Message -match 'No matching|n.o encontr|ObjectNotFound') { $res.JaFora += $ip; $fora += $ip }
+            else { $erros += ('Nao consegui remover o IP temporario ' + $ip + ': ' + $_.Exception.Message) }
+        }
+    }
+    $nova.Adicionados = @(@($nova.Adicionados) | Where-Object { $fora -notcontains [string]$_.Ip })
+    if ($erros.Count -gt 0) { $res.Ok = $false; $res.Erro = $erros -join ' ' }
+    return $res
+}
+
 <#
     Vizinho estatico: o portao do IP de fabrica. Com varias cameras de fabrica
     no mesmo IP, a entrada ARP Permanent IP -> MAC faz o PC falar so com a

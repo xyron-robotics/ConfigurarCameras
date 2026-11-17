@@ -1828,6 +1828,85 @@ T 'Reset tira os vizinhos do rastro antes dos IPs, pelas funcoes pequenas; sem V
     Assert-Igual 2 @($script:arp).Count 'sem rastro: tabela intacta'
 }
 
+# IP temporario da camera do portao: quando ela sai do IP de origem, o IP que
+# a placa ganhou para alcanca-la (Add-IpTemporarioPlaca) sai tambem, guiado
+# pelo rastro. A placa falsa e uma lista de IPs; Remove-IpPlaca e a falsa.
+T 'Remove-IpTemporarioPlaca: tira da placa e do rastro so o temporario da camera; o resto fica' {
+    function Remove-NetIPAddress { throw 'Remove-NetIPAddress real chamado' }
+    function Remove-IpPlaca { param([int]$IfIndex, [string]$Ip) $script:chamadasIp += ('remove ' + $IfIndex + ' ' + $Ip); $script:ipsPlaca = @($script:ipsPlaca | Where-Object { $_ -ne $Ip }) }
+    $script:ipsPlaca = @('192.168.1.220', '192.168.1.50', '10.0.0.50'); $script:chamadasIp = @()
+    $sessao = @{ Quando = 'hoje'; Placa = 'Ethernet'; IfIndex = 8; Antes = @{ Dhcp = $true; Enderecos = @() }; Rotas = @(); Vizinhos = @(); Devolvidos = @(); Rota = $null; Dns = @()
+                 Adicionados = @(@{ Ip = '192.168.1.220'; Prefixo = 24; Para = 'fabrica' },
+                                 @{ Ip = '192.168.1.50'; Prefixo = 24; Para = 'temporario'; Camera = '192.168.1.108' },
+                                 @{ Ip = '10.0.0.50'; Prefixo = 24; Para = 'temporario'; Camera = '10.0.0.108' }) }
+    $ipsDoRastro = { param($s) (@(@($s.Adicionados) | ForEach-Object { $_.Ip }) -join ',') }
+
+    $r = Remove-IpTemporarioPlaca -Sessao $sessao -IpCamera '192.168.1.108'
+    Assert-Verdade $r.Ok 'ok'
+    Assert-Igual '192.168.1.50' ($r.Removidos -join ',') 'Removidos'
+    Assert-Igual 'remove 8 192.168.1.50' ($script:chamadasIp -join '|') 'pela placa do rastro, so o temporario da camera'
+    Assert-Igual '192.168.1.220,10.0.0.50' ($script:ipsPlaca -join ',') 'o IP saiu da placa; fabrica e o temporario de outra camera ficam'
+    Assert-Igual '192.168.1.220,10.0.0.50' (& $ipsDoRastro $r.Sessao) 'rastro atualizado sem o IP'
+    Assert-Igual '192.168.1.220,192.168.1.50,10.0.0.50' (& $ipsDoRastro $sessao) 'o rastro recebido nao muda'
+    $end = @($script:ipsPlaca | ForEach-Object { @{ Ip = $_; Prefixo = 24; Origem = 'Manual' } })
+    Assert-Igual '192.168.1.220,10.0.0.50' (@(Get-IpsARemover -Enderecos $end -Gateway '' -IpFabrica '192.168.1.108' -Sessao $r.Sessao) -join ',') 'o encerrar nao procura mais o IP'
+
+    # Camera sem temporario no rastro, e sem rastro: nada a fazer.
+    $script:chamadasIp = @()
+    $r2 = Remove-IpTemporarioPlaca -Sessao $r.Sessao -IpCamera '192.168.1.108'
+    Assert-Verdade $r2.Ok 'sem temporario: ok'
+    Assert-Igual 0 @($r2.Removidos).Count 'sem temporario: nada removido'
+    $r3 = Remove-IpTemporarioPlaca -Sessao $null -IpCamera '192.168.1.108'
+    Assert-Verdade $r3.Ok 'sem rastro: ok'
+    Assert-Verdade ($null -eq $r3.Sessao) 'sem rastro: rastro segue nulo'
+    Assert-Igual 0 @($script:chamadasIp).Count 'placa nao tocada'
+
+    # Rastro lido do disco (PSCustomObject, um item so na lista).
+    $d = New-Temp
+    try {
+        $so = @{ Quando = 'hoje'; Placa = 'Ethernet'; IfIndex = 8; Antes = @{ Dhcp = $true; Enderecos = @() }; Devolvidos = @(); Dns = @()
+                 Adicionados = @(@{ Ip = '10.0.0.50'; Prefixo = 24; Para = 'temporario'; Camera = '10.0.0.108' }) }
+        Save-JsonAtomico -Caminho (Join-Path $d 's.json') -Objeto $so
+        $script:chamadasIp = @()
+        $r4 = Remove-IpTemporarioPlaca -Sessao (Read-JsonArquivo (Join-Path $d 's.json')) -IpCamera '10.0.0.108'
+        Assert-Verdade $r4.Ok 'do disco: ok'
+        Assert-Igual 'remove 8 10.0.0.50' ($script:chamadasIp -join '|') 'do disco: pela placa do rastro'
+        Assert-Igual 0 @($r4.Sessao.Adicionados).Count 'do disco: rastro sem o IP'
+        Assert-Igual '192.168.1.220' ($script:ipsPlaca -join ',') 'do disco: o IP saiu da placa'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Remove-IpTemporarioPlaca: IP que ja saiu deixa o rastro; remocao recusada fica no rastro com erro em pt-BR' {
+    function Remove-NetIPAddress { throw 'Remove-NetIPAddress real chamado' }
+    $sessao = @{ Placa = 'Ethernet'; IfIndex = 8; Antes = @{ Dhcp = $true; Enderecos = @() }; Devolvidos = @(); Dns = @()
+                 Adicionados = @(@{ Ip = '192.168.1.50'; Prefixo = 24; Para = 'temporario'; Camera = '192.168.1.108' }) }
+
+    function Remove-IpPlaca { param([int]$IfIndex, [string]$Ip) throw 'No matching MSFT_NetIPAddress objects found' }
+    $r = Remove-IpTemporarioPlaca -Sessao $sessao -IpCamera '192.168.1.108'
+    Assert-Verdade $r.Ok 'ja fora: ok'
+    Assert-Igual '192.168.1.50' ($r.JaFora -join ',') 'JaFora'
+    Assert-Igual 0 @($r.Removidos).Count 'ja fora: nao conta como removido'
+    Assert-Igual 0 @($r.Sessao.Adicionados).Count 'ja fora: sai do rastro'
+
+    function Remove-IpPlaca { param([int]$IfIndex, [string]$Ip) throw 'Acesso negado' }
+    $r = Remove-IpTemporarioPlaca -Sessao $sessao -IpCamera '192.168.1.108'
+    Assert-Falso $r.Ok 'recusada: Ok falso'
+    Assert-Verdade ($r.Erro -match 'Nao consegui remover o IP temporario 192\.168\.1\.50: Acesso negado') 'erro em pt-BR'
+    Assert-Igual '192.168.1.50' (@(@($r.Sessao.Adicionados) | ForEach-Object { $_.Ip }) -join ',') 'recusada: fica no rastro para o encerrar'
+
+    # Rastro sem placa: nao adivinha a placa.
+    $sessao.IfIndex = 0
+    $r = Remove-IpTemporarioPlaca -Sessao $sessao -IpCamera '192.168.1.108'
+    Assert-Falso $r.Ok 'sem placa no rastro: Ok falso'
+    Assert-Igual '192.168.1.50' (@(@($r.Sessao.Adicionados) | ForEach-Object { $_.Ip }) -join ',') 'sem placa: fica no rastro'
+}
+
+T 'Remove-IpPlaca usa Remove-NetIPAddress (so leitura do codigo)' {
+    $def = (Get-Command Remove-IpPlaca -CommandType Function).Definition
+    Assert-Verdade ($def -match 'Remove-NetIPAddress') 'Remove-NetIPAddress'
+    Assert-Verdade ($def -match '-Confirm:\$false') 'sem confirmacao'
+}
+
 # ------------------------------------------------------ placa escolhida
 
 Write-Host ""
