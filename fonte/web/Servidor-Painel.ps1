@@ -214,8 +214,13 @@ $E = [hashtable]::Synchronized(@{
     SimularCameras = [int]$SimularCameras
     SimularEscala  = [double]$SimularEscala
     Parar   = $false
-    # Cameras em portao ou conferindo (Publicar): as guardas do listener leem daqui.
+    # Cameras em portao ou conferindo (Publicar, e o worker logo depois de
+    # cada despacho e drenagem de eventos): as guardas do listener leem daqui.
     EmCurso = 0
+    # Teto da espera pelos jobs em curso ao encerrar (S4 b): conferencia =
+    # Wait-CamOnline de 120 s mais o login. O thread principal espera o
+    # worker esse teto mais uma margem.
+    EsperaJobsSeg = 180
     # Ultimo GET /api/estado: a pagina sumiu quando isso envelhece (auto-encerrar).
     UltimoPoll = (Get-Date)
     # Atualizacao (runspace atualizador): retrato JSON, pedido do operador e o
@@ -306,6 +311,7 @@ $scriptWorker = {
     # Em simulacao nada pode tocar a rede real, nem so para ler.
     $TextoSoReal = 'Em simulação, Sondar e Procurar ficam desligados: eles leem a rede real.'
     $TextoSemSenha = 'Informe a senha da sessão antes: em Opções, seção Senha.'
+    $TextoAguardeAtualizacao = 'Aguarde a atualização terminar.'
     $TextoSemSessao = 'Conclua o passo a passo antes (placa de rede, rede das câmeras e faixa de fábrica). Para revisar, abra Opções.'
     # Lockout Dahua: ~5 senhas erradas trancam o admin por minutos. Nunca repetir.
     $TextoSenhaRecusada = 'A câmera recusou a senha da sessão. Troque a senha (Opções, seção Senha) antes de tentar de novo: cada tentativa com a senha errada conta para o bloqueio da câmera.'
@@ -623,6 +629,27 @@ $scriptWorker = {
         if ($null -ne $W.Coord) { Close-PoolCameras -Pool $W.Coord.Pool }
         $W.Coord = $null; $W.Fila = $null; $W.Manual = $null
         $W.AcoesPendentes.Clear()
+    }
+
+    # Camera em portao ou conferindo, para as guardas do listener, logo depois
+    # do despacho e da drenagem de eventos (S4 a), sem esperar o Publicar.
+    function Update-EmCurso {
+        if ($null -ne $W.Coord) { $E.EmCurso = Get-EmCursoCoordenador -Estado $W.Coord.Estado }
+    }
+
+    # Atualizacao pedida ou em curso (S4 c): o worker nao comeca camera.
+    function Test-AtualizandoAgora {
+        $estado = ''
+        try { $estado = [string]($E.Atualizacao | ConvertFrom-Json).estado } catch { }
+        return (Test-AtualizacaoEmCurso -Pedido ([bool]$E.AtualizarPedido) -Estado $estado)
+    }
+
+    # Comando que comeca camera durante a atualizacao: recusado com aviso.
+    # $true = recusado.
+    function Test-RecusaAtualizando {
+        if (-not (Test-AtualizandoAgora)) { return $false }
+        $W.Aviso = $TextoAguardeAtualizacao
+        return $true
     }
 
     # Guarda global (Step-Comando): com camera em portao ou conferindo, o
@@ -1075,11 +1102,17 @@ $scriptWorker = {
                 } elseif ($W.FalharEm) { $txtFalha = '; falha forcada em ' + $W.FalharEm }
                 Write-Log ("Simulacao " + $(if ($novo) { 'LIGADA - nada e enviado para camera nem para a placa' } else { 'desligada' }) + $txtFalha) 'Yellow'
             }
+            # Fila, conectada, vigia ligado e tentar de novo comecam camera:
+            # recusados durante a atualizacao (S4 c).
             'fila' {
+                if (Test-RecusaAtualizando) { return }
                 if ($null -ne $W.Manual) { $W.Aviso = 'Termine a câmera atual antes de montar outra fila.'; return }
                 $null = Invoke-MontarFila -Inicio ([string]$Cmd.inicio) -Fim ([string]$Cmd.fim) -Local ([string]$Cmd.local) -Rack ([string]$Cmd.rack) -Andar ([string]$Cmd.andar)
             }
-            'conectada' { Invoke-Conectada $Cmd }
+            'conectada' {
+                if (Test-RecusaAtualizando) { return }
+                Invoke-Conectada $Cmd
+            }
             'vigia' {
                 if (-not [bool]$Cmd.ligado) { Set-VigiaDesligado 'pelo operador'; return }
                 # Ja ligado (pedido repetido): so porta, canal e broadcast; sem
@@ -1090,6 +1123,7 @@ $scriptWorker = {
                     $W.Vigia.Broadcast = [bool]$Cmd.broadcast
                     return
                 }
+                if (Test-RecusaAtualizando) { return }
                 if ($null -eq $W.Coord -or (Get-FaseAtual) -in @('ocioso', 'concluida', 'encerrada')) { $W.Aviso = 'Monte uma fila com posição livre antes de ligar o vigia.'; return }
                 if (-not $W.Simular -and [string]::IsNullOrEmpty($W.Senha)) { $W.Aviso = $TextoSemSenha; return }
                 $p = Get-SessaoPronta
@@ -1112,6 +1146,7 @@ $scriptWorker = {
             'decisao' {
                 $acao = [string]$Cmd.acao
                 if ($acao -notin @('tentar', 'pular', 'encerrar')) { return }
+                if ($acao -eq 'tentar' -and (Test-RecusaAtualizando)) { return }
                 $mac = [string]$Cmd.mac
                 if (-not $mac -and $null -ne $W.Manual -and $W.Manual.Fase -eq 'decisao') {
                     $f = $W.Manual.Falha
@@ -1363,6 +1398,10 @@ $scriptWorker = {
         if ($null -ne $coord) {
             try {
                 Receive-EventosCoordenador -Coord $coord -Log $logJob
+                Update-EmCurso
+                # Encerrando (S4 b): nada de tique, admissao nem despacho; o
+                # fim do laco espera os jobs em curso.
+                if ($E.Parar) { continue }
                 if (Test-VezDoVigia) {
                     try {
                         Invoke-TiqueVigia
@@ -1377,11 +1416,15 @@ $scriptWorker = {
                 }
                 # Admissao: com camera em espera e o portao livre, pinga so as
                 # proximas posicoes pendentes (IP ja ocupado fica de fora).
-                foreach ($a in @(Invoke-AdmissaoCoordenador -Coord $coord)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
+                # Durante a atualizacao nenhuma camera comeca (S4 c).
+                if (-not (Test-AtualizandoAgora)) {
+                    foreach ($a in @(Invoke-AdmissaoCoordenador -Coord $coord)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
+                }
                 if ($W.AcoesPendentes.Count -gt 0) {
                     $acoes = $W.AcoesPendentes.ToArray()
                     $W.AcoesPendentes.Clear()
                     Invoke-AcoesCoordenador -Coord $coord -Acoes $acoes
+                    Update-EmCurso
                 }
                 if ([string]$coord.AvisoGlobal) {
                     $W.AvisoOrigem = 'vigia'
@@ -1406,7 +1449,22 @@ $scriptWorker = {
         }
         if (-not $temComando) { Start-Sleep -Milliseconds 50 }
     }
-    if ($null -ne $W.Coord) { Close-PoolCameras -Pool $W.Coord.Pool }
+    # Encerrando (S4 b): camera em curso termina antes de o pool fechar. O
+    # fim do portao solta a camera e o despacho da conferencia e pulado (com
+    # log: ela fica "Em andamento" no registro), ate o teto EsperaJobsSeg.
+    if ($null -ne $W.Coord) {
+        $nJobs = [int]$W.Coord.Jobs.Count
+        if ($nJobs -gt 0) {
+            Write-Log ("Encerrando: esperando " + $nJobs + " camera(s) em curso terminar (ate " + [int]$E.EsperaJobsSeg + " s).") 'Yellow'
+            $sobra = $nJobs
+            try { $sobra = Wait-JobsCoordenador -Coord $W.Coord -LimiteSeg ([double]$E.EsperaJobsSeg) -Log $logJob }
+            catch { Write-Log ("ERRO interno ao esperar as cameras em curso: " + $_.Exception.Message) 'Red' }
+            if ($sobra -gt 0) { Write-Log ("Encerrando: " + $sobra + " camera(s) ainda em curso no teto; o trabalho delas foi cortado.") 'Red' }
+            else { Write-Log "Encerrando: as cameras em curso terminaram." 'Green' }
+            try { Publicar } catch { }
+        }
+        Close-PoolCameras -Pool $W.Coord.Pool
+    }
 }
 
 $rs = [runspacefactory]::CreateRunspace()
@@ -1499,6 +1557,9 @@ $scriptAtualizador = {
                 $real = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
                 if ($real -ne $esperado) { throw 'SHA-256 nao confere: o arquivo baixado nao e o publicado' }
 
+                # S4 c: o worker nao comeca camera durante a atualizacao, mas
+                # uma pode ter comecado na corrida do pedido: nada de cortar.
+                if ([int]$E.EmCurso -gt 0) { throw 'Uma câmera começou durante o download. Atualize de novo quando ela terminar.' }
                 Write-Log ("Atualizacao: instalador " + $info.Versao + " conferido (SHA-256 ok). Instalando: o painel fecha e reabre sozinho.") 'Green'
                 $E.InstaladorPronto = $exe
                 Publish-Atualizacao 'instalando'
@@ -1884,8 +1945,9 @@ try {
 } finally {
     $E.Parar = $true
     try { $listener.Stop(); $listener.Close() } catch { }
-    # 30 s: o worker pode estar no meio de uma gravacao na camera.
-    try { $null = $handleWorker.AsyncWaitHandle.WaitOne(30000); $ps.Dispose(); $rs.Close() } catch { }
+    # O worker espera as cameras em curso ate EsperaJobsSeg (S4 b); aqui, o
+    # mesmo teto mais 20 s de margem (comando em andamento, fechar o pool).
+    try { $null = $handleWorker.AsyncWaitHandle.WaitOne(([int]$E.EsperaJobsSeg + 20) * 1000); $ps.Dispose(); $rs.Close() } catch { }
     try { $null = $handleAtu.AsyncWaitHandle.WaitOne(5000); $psAtu.Dispose(); $rsAtu.Close() } catch { }
     # A placa volta ao estado de antes do painel (sessao gravada em disco).
     # Roda aqui, no thread principal, com o worker ja parado: vale para

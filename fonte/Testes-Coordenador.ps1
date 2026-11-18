@@ -30,7 +30,10 @@
       - porta/canal por camera: edicao durante a conferencia corrige o
         registro no 'feita', sem edicao o registro nao e tocado, recusa
         para camera fora da fila, 'feita' ou 'pulada', registro sem a
-        camera vira aviso; FalharEm de uma vez so (portao x conferencia).
+        camera vira aviso; FalharEm de uma vez so (portao x conferencia);
+      - encerrar e atualizar (S4): -SemDespacho pula o despacho com log,
+        Wait-JobsCoordenador com pool real (portao termina e solta; teto
+        menor que o job devolve 1) e a tabela do Test-AtualizacaoEmCurso.
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -1454,6 +1457,93 @@ T 'pool: tabela com mac-trocado na camera 2: volta a espera sem decisao e termin
         $trocados = @($script:eventos | Where-Object { $_.Tipo -eq 'log' -and $_.Texto -like '*MAC TROCADO*' } | ForEach-Object { $_.Mac })
         Assert-Igual 'AA:00:00:00:00:02' ($trocados -join ',') 'so a 2 levou a trava de MAC'
         Assert-Igual 0 $coord.AvisosCamera.Count 'nenhum aviso de camera'
+    } finally { Remove-CoordPool $coord }
+}
+
+# ------------------------------------------------------------ encerrar e atualizar (S4)
+
+Write-Host ""
+Write-Host "Encerrar e atualizar sem cortar camera (S4)" -ForegroundColor Cyan
+
+T 'SemDespacho: fim do portao solta a camera e pula o despacho da conferencia, com log por camera' {
+    $coord = New-CoordComEspera -N 1
+    $p = Step-Admissao -Estado $coord.Estado
+    $coord.Estado = $p.Estado
+    Invoke-AcoesCoordenador -Coord $coord -Acoes $p.Acoes
+    $script:chamadas = @()
+
+    $f = Step-FimDoJob -Estado $coord.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $true; Etapa = 'rede' } -Geracao 0
+    $coord.Estado = $f.Estado
+    $script:logsS4 = New-Object 'System.Collections.Generic.List[object]'
+    Invoke-AcoesCoordenador -Coord $coord -Acoes $f.Acoes -SemDespacho -Log { param($Ev) $script:logsS4.Add($Ev) }
+
+    Assert-Igual 'soltar AA:00:00:00:00:01 192.168.1.108' ($script:chamadas -join '|') 'so o soltar, sem despachar'
+    Assert-Igual 1 $script:logsS4.Count 'um log'
+    Assert-Igual 'AA:00:00:00:00:01' ([string]$script:logsS4[0].Mac) 'log da camera'
+    Assert-Verdade ([string]$script:logsS4[0].Texto -like '*pulad*') ('texto do log: ' + $script:logsS4[0].Texto)
+    Assert-Igual 'conferindo' (Get-Camera $coord.Estado 1).Fase 'fase'
+}
+
+T 'SemDespacho: prender e avisar continuam; sem -Log nao estoura' {
+    $coord = New-CoordComEspera -N 1
+    $p = Step-Admissao -Estado $coord.Estado
+    $coord.Estado = $p.Estado
+    $acoes = @($p.Acoes) + @(@{ Tipo = 'avisar'; Mac = ''; Texto = 'aviso de teste' })
+    Invoke-AcoesCoordenador -Coord $coord -Acoes $acoes -SemDespacho
+    Assert-Igual 'prender AA:00:00:00:00:01 192.168.1.108' ($script:chamadas -join '|') 'prender sim, despachar nao'
+    Assert-Igual 'aviso de teste' $coord.AvisoGlobal 'avisar executado'
+}
+
+T 'Test-AtualizacaoEmCurso: pedido feito ou baixando/verificando/instalando' {
+    $casos = @(
+        @($false, 'nenhuma', $false), @($false, 'disponivel', $false), @($false, 'erro', $false), @($false, 'desligada', $false),
+        @($false, '', $false), @($true, 'disponivel', $true), @($true, '', $true),
+        @($false, 'baixando', $true), @($false, 'verificando', $true), @($false, 'instalando', $true)
+    )
+    foreach ($c in $casos) {
+        Assert-Igual $c[2] (Test-AtualizacaoEmCurso -Pedido $c[0] -Estado $c[1]) ('pedido ' + $c[0] + ', estado "' + $c[1] + '"')
+    }
+}
+
+T 'Wait-JobsCoordenador: portao em curso termina, soltar acontece, conferencia pulada com log, devolve 0' {
+    $coord = $null
+    try {
+        $coord = New-CoordPool -N 1 -Escala 0.5
+        $p = Step-Admissao -Estado $coord.Estado
+        $coord.Estado = $p.Estado
+        Invoke-AcoesCoordenador -Coord $coord -Acoes $p.Acoes
+        Assert-Igual 1 $coord.Jobs.Count 'job de portao em curso'
+        $script:chamadas = @()
+        $script:logsS4 = New-Object 'System.Collections.Generic.List[object]'
+        $sobra = Wait-JobsCoordenador -Coord $coord -LimiteSeg 60 -Log { param($Ev) $script:logsS4.Add($Ev) }
+        Assert-Igual 0 $sobra 'jobs que sobraram'
+        Assert-Igual 0 $coord.Jobs.Count 'nenhum job'
+        Assert-Igual 'soltar AA:00:00:00:00:01 192.168.1.108' ($script:chamadas -join '|') 'soltar no fim do portao'
+        Assert-Igual 0 $script:presos.Count 'nada preso'
+        $c = Get-Camera $coord.Estado 1
+        Assert-Igual 'conferindo|rede' ($c.Fase + '|' + $c.Etapa) 'portao feito, conferencia nao despachada'
+        $pulados = @($script:logsS4 | Where-Object { [string]$_.Mac -eq 'AA:00:00:00:00:01' -and [string]$_.Texto -like '*pulad*' })
+        Assert-Igual 1 $pulados.Count 'log do despacho pulado'
+        $ent = Find-CameraRegistro -Registro (Read-Registro $coord.Trabalho.CaminhoRegistro) -Mac 'AA:00:00:00:00:01'
+        Assert-Igual 'rede' ([string]$ent.Etapa) 'registro na etapa rede'
+        Assert-Verdade ([string]$ent.Status -ne 'Instalada') ('registro nao instalada: ' + $ent.Status)
+    } finally { Remove-CoordPool $coord }
+}
+
+T 'Wait-JobsCoordenador: teto menor que o job devolve 1; sem job devolve 0 na hora' {
+    $coord = $null
+    try {
+        $coord = New-CoordPool -N 1 -Escala 5
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Assert-Igual 0 (Wait-JobsCoordenador -Coord $coord -LimiteSeg 30) 'sem job'
+        Assert-Verdade ($sw.Elapsed.TotalSeconds -lt 1) ('sem job volta na hora: ' + $sw.Elapsed.TotalSeconds + ' s')
+        $p = Step-Admissao -Estado $coord.Estado
+        $coord.Estado = $p.Estado
+        Invoke-AcoesCoordenador -Coord $coord -Acoes $p.Acoes
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Assert-Igual 1 (Wait-JobsCoordenador -Coord $coord -LimiteSeg 1) 'job maior que o teto'
+        Assert-Verdade ($sw.Elapsed.TotalSeconds -lt 3) ('respeita o teto: ' + $sw.Elapsed.TotalSeconds + ' s')
+        Assert-Igual 1 $coord.Jobs.Count 'o job continua no coordenador'
     } finally { Remove-CoordPool $coord }
 }
 

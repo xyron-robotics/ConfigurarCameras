@@ -179,6 +179,42 @@ T 'Servidor: tentar da retomada manual passa pela guarda retomar' {
     Assert-Verdade ($g -ge 0 -and $g -lt $c) 'guarda retomar antes de Invoke-ConfigurarManual'
 }
 
+# S4 da frente simulacao: encerrar e atualizar nao cortam camera em curso.
+T 'Servidor: encerrar espera os jobs antes de fechar o pool; atualizar confere EmCurso antes do Parar' {
+    $txt = [IO.File]::ReadAllText((Join-Path $raiz 'web\Servidor-Painel.ps1'), [Text.Encoding]::UTF8)
+    # (b) fim do worker: Wait-JobsCoordenador antes do Close-PoolCameras.
+    $iLaco = $txt.IndexOf('while (-not $E.Parar)')
+    $iFimWorker = $txt.IndexOf('$rs = [runspacefactory]::CreateRunspace()')
+    Assert-Verdade ($iLaco -gt 0 -and $iFimWorker -gt $iLaco) 'laco e fim do worker achados'
+    $iClose = $txt.LastIndexOf('Close-PoolCameras -Pool $W.Coord.Pool', $iFimWorker)
+    $iWait = $txt.LastIndexOf('Wait-JobsCoordenador -Coord $W.Coord', $iClose)
+    $iFimLaco = $txt.LastIndexOf('Start-Sleep -Milliseconds 50', $iFimWorker)
+    Assert-Verdade ($iFimLaco -gt $iLaco -and $iWait -gt $iFimLaco -and $iClose -gt $iWait) 'Wait-JobsCoordenador depois do laco e antes do Close-PoolCameras'
+    Assert-Verdade ($txt -match 'Wait-JobsCoordenador -Coord \$W\.Coord -LimiteSeg \(\[double\]\$E\.EsperaJobsSeg\)') 'teto EsperaJobsSeg'
+    Assert-Verdade ($txt -match '(?m)^\s*EsperaJobsSeg = 180\s*$') 'teto de 180 s'
+    Assert-Verdade ($txt -match '\$handleWorker\.AsyncWaitHandle\.WaitOne\(\(\[int\]\$E\.EsperaJobsSeg \+ \d+\) \* 1000\)') 'thread principal espera o teto mais a margem'
+    Assert-Falso ($txt.Contains('$handleWorker.AsyncWaitHandle.WaitOne(30000)')) 'sem os 30 s fixos'
+    Assert-Verdade ($txt -match 'Receive-EventosCoordenador -Coord \$coord -Log \$logJob\s*\r?\n\s*Update-EmCurso\s*\r?\n[^\r\n]*\r?\n[^\r\n]*\r?\n\s*if \(\$E\.Parar\) \{ continue \}') 'com Parar, sem tique nem admissao'
+    # (a) EmCurso logo depois da drenagem e do despacho.
+    Assert-Verdade ($txt -match 'function Update-EmCurso \{\s*if \(\$null -ne \$W\.Coord\) \{ \$E\.EmCurso = Get-EmCursoCoordenador') 'Update-EmCurso'
+    Assert-Verdade ($txt -match 'Invoke-AcoesCoordenador -Coord \$coord -Acoes \$acoes\s*\r?\n\s*Update-EmCurso') 'EmCurso depois do despacho'
+    # (c) atualizador: EmCurso antes do Parar; worker recusa e nao admite.
+    $iAtu = $txt.IndexOf('$scriptAtualizador = {')
+    $iParar = $txt.IndexOf('$E.Parar = $true', $iAtu)
+    $iEm = $txt.IndexOf('$E.EmCurso', $iAtu)
+    Assert-Verdade ($iAtu -gt 0 -and $iEm -gt $iAtu -and $iEm -lt $iParar) 'atualizador confere EmCurso antes do Parar'
+    Assert-Verdade ($txt -match "\`$TextoAguardeAtualizacao = 'Aguarde a atualiza.{2}o terminar\.'") 'texto da recusa'
+    Assert-Verdade ($txt -match 'Test-AtualizacaoEmCurso -Pedido') 'worker usa Test-AtualizacaoEmCurso'
+    Assert-Verdade ($txt -match 'if \(-not \(Test-AtualizandoAgora\)\) \{\s*foreach \(\$a in @\(Invoke-AdmissaoCoordenador') 'admissao pulada durante a atualizacao'
+    foreach ($cmd in @("'fila' {", "'conectada' {")) {
+        $i = $txt.IndexOf($cmd)
+        Assert-Verdade ($i -gt 0 -and $txt.Substring($i, 120) -match 'if \(Test-RecusaAtualizando\) \{ return \}') ('worker recusa ' + $cmd)
+    }
+    $i = $txt.IndexOf("'vigia' {")
+    Assert-Verdade ($txt.Substring($i, $txt.IndexOf('Vigia ligado:', $i) - $i) -match 'if \(Test-RecusaAtualizando\) \{ return \}') 'worker recusa ligar o vigia'
+    Assert-Verdade ($txt -match "if \(\`$acao -eq 'tentar' -and \(Test-RecusaAtualizando\)\) \{ return \}") 'worker recusa tentar de novo'
+}
+
 # ------------------------------------------------------ login RPC2
 
 Write-Host ""

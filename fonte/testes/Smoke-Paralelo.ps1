@@ -42,7 +42,11 @@
         pelo portao e termina 'feita'; nenhum aviso citando MAC;
       - ja-inicializada-3: { "3": "ja-inicializada" }; fila de N-1
         posicoes, as outras 'feita', a 3 nunca em portao nem conferindo e o
-        aviso da D8 ("Camera ja inicializada: nao tocada.") uma vez so no log.
+        aviso da D8 ("Camera ja inicializada: nao tocada.") uma vez so no log;
+      - encerrar (S4): sem falha simulada, na escala 1; com uma camera
+        conferindo, POST /api/encerrar sem retentativa da 409 com o texto da
+        recusa e o painel continua; com as N 'feita', o POST /api/encerrar
+        da 200 e o processo sai em menos de 10 s (-SaidaMaxSeg).
 
     Fora do CI e do instalador: e um teste de bancada do desenvolvedor.
 
@@ -53,7 +57,8 @@ param(
     [int]$TimeoutSeg = 120,
     [int]$LatenciaMaxMs = 500,
     [ValidateRange(2, 16)][int]$Cameras = 3,
-    [ValidateSet('basico', 'falha-rede-2', 'mac-trocado-2', 'ja-inicializada-3')][string]$Cenario = 'basico'
+    [ValidateSet('basico', 'falha-rede-2', 'mac-trocado-2', 'ja-inicializada-3', 'encerrar')][string]$Cenario = 'basico',
+    [int]$SaidaMaxSeg = 10
 )
 
 if ($Cenario -eq 'ja-inicializada-3' -and $Cameras -lt 3) { throw 'O cenario ja-inicializada-3 precisa de -Cameras 3 ou mais.' }
@@ -64,6 +69,7 @@ $falharEm = switch ($Cenario) {
     'falha-rede-2'      { @{ '2' = 'rede' } }
     'mac-trocado-2'     { @{ '2' = 'mac-trocado' } }
     'ja-inicializada-3' { @{ '3' = 'ja-inicializada' } }
+    'encerrar'          { '' }
 }
 $esperadas = $Cameras
 if ($Cenario -eq 'ja-inicializada-3') { $esperadas = $Cameras - 1 }
@@ -100,7 +106,7 @@ $servidor = Join-Path $fonte 'web\Servidor-Painel.ps1'
 $saida = Join-Path $pasta 'servidor-saida.txt'
 $erros = Join-Path $pasta 'servidor-erros.txt'
 $argumentos = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $servidor + '"'),
-                '-Simular', '-SimularCameras', $Cameras, '-SemElevar', '-SemNavegador', '-SemAtualizacao',
+                '-Simular', '-SimularCameras', $Cameras, '-SimularEscala', 1, '-SemElevar', '-SemNavegador', '-SemAtualizacao',
                 '-PastaDados', ('"' + $pasta + '"'), '-Porta', $porta)
 $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentos -PassThru -NoNewWindow `
                       -RedirectStandardOutput $saida -RedirectStandardError $erros
@@ -159,7 +165,7 @@ function Get-MacSoHex { param([string]$Mac) return (($Mac -replace '[^0-9A-Fa-f]
 
 $relogio = [Diagnostics.Stopwatch]::StartNew()
 $ok = $false
-$feitas = 0; $maxConferindo = 0; $maxLatencia = 0; $consultas = 0; $saiu = $false
+$feitas = 0; $maxConferindo = 0; $maxLatencia = 0; $consultas = 0; $saiu = $false; $relogioSaida = $null; $segSaida = -1
 $recusaFila = $null; $recusaFilaOk = $false
 $recusaEncerrar = $null; $recusaEncerrarOk = $false; $codigoEncerrar = 0
 $macEditada = ''; $codigoCamera = 0
@@ -250,7 +256,7 @@ try {
             Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/fila com ' + $e.paralelo.emCurso + ' em curso -> ' + $recusaFila.Codigo + ' ' + $recusaFila.Corpo)
         }
         # Encerrar o painel com camera conferindo: 409 com o texto da recusa.
-        if ($basico -and $null -eq $recusaEncerrar -and $conferindo.Count -ge 1) {
+        if (($basico -or $Cenario -eq 'encerrar') -and $null -eq $recusaEncerrar -and $conferindo.Count -ge 1) {
             $recusaEncerrar = Send-PostUmaVez '/api/encerrar' @{}
             $erroEncerrar = ''
             try { $erroEncerrar = [string]($recusaEncerrar.Corpo | ConvertFrom-Json).erro } catch { }
@@ -293,9 +299,11 @@ try {
         if (-not $proc.HasExited) {
             $codigoEncerrar = Send-Post '/api/encerrar' @{}
             Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/encerrar -> ' + $codigoEncerrar)
+            if ($codigoEncerrar -eq 200) { $relogioSaida = [Diagnostics.Stopwatch]::StartNew() }
         }
     } catch { Write-Host ('  encerrar falhou: ' + $_.Exception.Message) -ForegroundColor Yellow }
     $saiu = $proc.WaitForExit(40000)
+    if ($saiu -and $null -ne $relogioSaida) { $segSaida = $relogioSaida.Elapsed.TotalSeconds }
     if (-not $saiu) {
         Write-Host '  o painel nao saiu em 40 s: processo finalizado a forca.' -ForegroundColor Yellow
         try { $proc.Kill() } catch { }
@@ -345,6 +353,15 @@ switch ($Cenario) {
                 '; trava de MAC no log ' + $trocados.Count + 'x' + $(if ($trocadoOk) { ' (so a ' + $macCenario + ') ok' } else { ' FALHOU' }) +
                 '; portoes da ' + $macCenario + ' ' + $portoes + ' (fases ' + ($fasesCenario -join ' > ') + ')' + $(if ($voltouOk) { ' ok' } else { ' FALHOU' }) +
                 '; avisos citando MAC ' + $avisosMac.Count + $(if ($avisosMac.Count) { ' (' + ($avisosMac -join ' | ') + ')' } else { '' }) + $comumTxt)
+}
+'encerrar' {
+    $saidaOk = ($segSaida -ge 0 -and $segSaida -lt $SaidaMaxSeg)
+    $encerrarOk = ($recusaEncerrarOk -and $codigoEncerrar -eq 200 -and $saidaOk)
+    $ok = ($feitas -eq $Cameras -and $emDecisao.Count -eq 0 -and $encerrarOk -and $comumOk)
+    Write-Host ('Resumo [' + $Cenario + ']: feitas ' + $feitas + '/' + $Cameras + '; em decisao ' + $emDecisao.Count +
+                '; encerrar na conferencia ' + $(if ($null -ne $recusaEncerrar) { [string]$recusaEncerrar.Codigo } else { 'nao tentado' }) + $(if ($recusaEncerrarOk) { ' ok' } else { ' FALHOU' }) +
+                '; encerrar no fim ' + $codigoEncerrar + ', processo saiu em ' + $segSaida.ToString('0.0', [Globalization.CultureInfo]::InvariantCulture) + ' s' +
+                $(if ($saidaOk) { ' ok' } else { ' FALHOU (limite ' + $SaidaMaxSeg + ' s)' }) + $comumTxt)
 }
 'ja-inicializada-3' {
     $d8 = @($script:logs | Where-Object { $_ -like '*Aviso do vigia:*inicializada: n*' })

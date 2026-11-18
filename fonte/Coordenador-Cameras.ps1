@@ -188,9 +188,12 @@ function Add-FalhaCoordenador {
       - avisar: Set-AvisoCoordenador;
       - publicar: Sujo.
     Tipo desconhecido para aqui.
+    -SemDespacho (painel encerrando, S4): o 'despachar' é pulado, com uma
+    linha no -Log (param($Evento): Mac, Texto, Cor, Quando) por câmera; a
+    câmera fica no registro como estava ("Em andamento"). O resto vale igual.
 #>
 function Invoke-AcoesCoordenador {
-    param([Parameter(Mandatory = $true)]$Coord, $Acoes = @())
+    param([Parameter(Mandatory = $true)]$Coord, $Acoes = @(), [switch]$SemDespacho, [scriptblock]$Log = $null)
 
     $fila = New-Object 'System.Collections.Generic.List[object]'
     foreach ($a in @($Acoes)) { if ($null -ne $a) { $fila.Add($a) } }
@@ -230,6 +233,13 @@ function Invoke-AcoesCoordenador {
             }
         }
         elseif ($tipo -eq 'despachar') {
+            if ($SemDespacho) {
+                if ($null -ne $Log) {
+                    $txt = 'Despacho pulado: o painel está encerrando. A câmera fica "Em andamento" no registro; retome pelo painel depois.'
+                    try { & $Log @{ Mac = [string]$a.Mac; Texto = $txt; Cor = 'Yellow'; Quando = [datetime]::Now } } catch { }
+                }
+                continue
+            }
             $sb = Get-DepCoordenador -Coord $Coord -Nome 'Despachar'
             if ($naoPresos.ContainsKey($chave)) { continue }
             $camera = Get-CameraCoordenador -Coord $Coord -Mac $a.Mac
@@ -998,7 +1008,8 @@ function Get-FalharEmTrabalho {
     'conferencia'); Erro = 'erro interno no job: ...' }.
 #>
 function Complete-JobCoordenador {
-    param([Parameter(Mandatory = $true)]$Coord, [Parameter(Mandatory = $true)]$Job, $Resultado = $null, [string]$Erro = '')
+    param([Parameter(Mandatory = $true)]$Coord, [Parameter(Mandatory = $true)]$Job, $Resultado = $null, [string]$Erro = '',
+          [switch]$SemDespacho, [scriptblock]$Log = $null)
 
     $Coord.Jobs.Remove($Job.Chave)
     $Coord.Progresso.Remove($Job.Chave)
@@ -1027,7 +1038,7 @@ function Complete-JobCoordenador {
     $Coord.Sujo = $true
     $camera = Get-CameraCoordenador -Coord $Coord -Mac $Job.Mac
     if ($null -ne $camera -and [string]$camera.Fase -eq 'feita') { $null = Sync-PortaCanalRegistro -Coord $Coord -Mac $Job.Mac }
-    Invoke-AcoesCoordenador -Coord $Coord -Acoes $passo.Acoes
+    Invoke-AcoesCoordenador -Coord $Coord -Acoes $passo.Acoes -SemDespacho:$SemDespacho -Log $Log
 }
 
 <#
@@ -1042,10 +1053,11 @@ function Complete-JobCoordenador {
     de drenar: o job enfileira o 'fim' antes de concluir, então um handle já
     concluído tem o 'fim' (se houver) na fila. -Observar recebe cada evento
     cru, antes de tratar (testes e diagnóstico). Evento de job que já saiu
-    só vale como log.
+    só vale como log. -SemDespacho vai para as ações do fim do job (o
+    'despachar' da conferência é pulado, com log; S4).
 #>
 function Receive-EventosCoordenador {
-    param([Parameter(Mandatory = $true)]$Coord, [scriptblock]$Log = $null, [scriptblock]$Observar = $null)
+    param([Parameter(Mandatory = $true)]$Coord, [scriptblock]$Log = $null, [scriptblock]$Observar = $null, [switch]$SemDespacho)
 
     $concluidos = @()
     foreach ($k in @($Coord.Jobs.Keys)) {
@@ -1076,15 +1088,46 @@ function Receive-EventosCoordenador {
         }
         elseif ($tipo -eq 'fim') {
             if ($null -eq $job) { continue }
-            Complete-JobCoordenador -Coord $Coord -Job $job -Resultado $ev.Resultado -Erro ([string]$ev.Erro)
+            Complete-JobCoordenador -Coord $Coord -Job $job -Resultado $ev.Resultado -Erro ([string]$ev.Erro) -SemDespacho:$SemDespacho -Log $Log
         }
     }
 
     foreach ($j in $concluidos) {
         if ($Coord.Jobs.ContainsKey($j.Chave) -and [string]$Coord.Jobs[$j.Chave].Id -eq [string]$j.Id) {
-            Complete-JobCoordenador -Coord $Coord -Job $j
+            Complete-JobCoordenador -Coord $Coord -Job $j -SemDespacho:$SemDespacho -Log $Log
         }
     }
+}
+
+<#
+    Wait-JobsCoordenador: o painel está encerrando (S4 b). Drena os eventos e
+    executa as ações do fim de cada job sem despachar nada (o 'despachar' da
+    conferência é pulado, com log; 'soltar' e 'avisar' valem), até não haver
+    job ou estourar -LimiteSeg. Devolve quantos jobs sobraram (0 = todos
+    terminaram). Quem chama fecha o pool depois.
+#>
+function Wait-JobsCoordenador {
+    param([Parameter(Mandatory = $true)]$Coord, [double]$LimiteSeg = 180, [scriptblock]$Log = $null)
+
+    $relogio = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        Receive-EventosCoordenador -Coord $Coord -Log $Log -SemDespacho
+        if ($Coord.Jobs.Count -eq 0) { return 0 }
+        if ($relogio.Elapsed.TotalSeconds -ge $LimiteSeg) { return [int]$Coord.Jobs.Count }
+        Start-Sleep -Milliseconds 50
+    }
+}
+
+<#
+    A atualização do painel está em curso (S4 c): pedida pelo operador e
+    ainda não pega pelo atualizador, ou no estado 'baixando', 'verificando'
+    ou 'instalando'. Função pura: -Estado é o estado publicado em
+    E.Atualizacao.
+#>
+function Test-AtualizacaoEmCurso {
+    param([bool]$Pedido = $false, [string]$Estado = '')
+    if ($Pedido) { return $true }
+    return ($Estado -in @('baixando', 'verificando', 'instalando'))
 }
 
 # ---------------------------------------------------------- estado publicado
