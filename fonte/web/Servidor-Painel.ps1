@@ -55,7 +55,11 @@ param(
     [string]$UrlAtualizacao = 'https://api.github.com/repos/xyron-robotics/ConfigurarCameras/releases/latest',
     # Simulacao: nada e enviado para camera nem para a placa; registro
     # separado. Nao tem tela (desde a 1.2.0): so por aqui ou POST /api/simular.
-    [switch]$Simular
+    [switch]$Simular,
+    # Simulacao (S3): quantas cameras de fabrica o DHIP simulado devolve (1 a
+    # 16) e a escala dos atrasos por etapa do motor (0 = sem espera).
+    [ValidateRange(1, 16)][int]$SimularCameras = 3,
+    [ValidateScript({ $_ -ge 0 })][double]$SimularEscala = 1
 )
 
 $ErrorActionPreference = 'Stop'
@@ -138,6 +142,8 @@ if (-not $ehAdmin -and -not $SemElevar) {
     if ($Oculto) { $argus += '-Oculto' }
     if ($OciosoSeg -ne 180) { $argus += @('-OciosoSeg', $OciosoSeg) }
     if ($Simular) { $argus += '-Simular' }
+    if ($SimularCameras -ne 3) { $argus += @('-SimularCameras', $SimularCameras) }
+    if ($SimularEscala -ne 1) { $argus += @('-SimularEscala', $SimularEscala.ToString([Globalization.CultureInfo]::InvariantCulture)) }
     if ($SemAtualizacao) { $argus += '-SemAtualizacao' }
     try {
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argus -Verb RunAs | Out-Null
@@ -205,6 +211,8 @@ $E = [hashtable]::Synchronized(@{
     LogSeq  = 0
     Ocupado = $false
     Simular = [bool]$Simular
+    SimularCameras = [int]$SimularCameras
+    SimularEscala  = [double]$SimularEscala
     Parar   = $false
     # Cameras em portao ou conferindo (Publicar): as guardas do listener leem daqui.
     EmCurso = 0
@@ -249,6 +257,7 @@ $scriptWorker = {
 
     $W = @{
         Senha = ''; Simular = [bool]$E.Simular; FalharEm = ''
+        SimularCameras = [int]$E.SimularCameras; SimularEscala = [double]$E.SimularEscala
         # SenhaGeracao sobe a cada senha informada. Uma falha por senha recusada
         # guarda a geracao: "Tentar de novo" so volta com senha mais nova
         # (repetir senha recusada gasta tentativa do lockout da camera).
@@ -557,6 +566,7 @@ $scriptWorker = {
         $t.CaminhoRegistro = Get-CaminhoRegistroAtual
         $t.Simular = [bool]$W.Simular
         $t.FalharEm = $(if ($W.Simular) { [string]$W.FalharEm } else { '' })
+        $t.EsperaSimuladaMs = Get-EsperaSimuladaMs -Escala ([double]$W.SimularEscala)
         if ($null -ne $W.Fila) { $t.Local = [string]$W.Fila.Local; $t.Rack = [string]$W.Fila.Rack; $t.Andar = [string]$W.Fila.Andar }
         $W.Coord.Geracao = [int]$W.SenhaGeracao
     }
@@ -584,7 +594,8 @@ $scriptWorker = {
     # o Invoke-TiqueParalelo: { Achados (formato do orquestrador: Mac, Serial,
     # Modelo, Ip, HttpPort, Init, Marca); DhipRespondeu; PingFabrica; MacArp;
     # MacTrocando }.
-    # Em simulacao: as 3 cameras de fabrica ficticias (U1), no IP de fabrica.
+    # Em simulacao: as N cameras de fabrica ficticias (-SimularCameras, S3),
+    # no IP de fabrica, com MAC AA:00:00:00:00:<n em hex> e serial SIM-<n>.
     # No real: so o broadcast DHIP na placa escolhida (D9), sem varredura (o
     # tique nao pode prender o worker por minutos) e sem o atalho HTTP no IP
     # de fabrica (com duas cameras nesse IP, o Init do HTTP pode ser da
@@ -596,8 +607,8 @@ $scriptWorker = {
         $ipf = [string]$Sessao.IpFabrica
         $l = @{ Achados = @(); DhipRespondeu = $true; PingFabrica = $false; MacArp = ''; MacTrocando = $false }
         if ($W.Simular) {
-            $l.Achados = @(1..3 | ForEach-Object {
-                @{ Mac = ('AA:00:00:00:00:0' + $_); Serial = ('SIM-' + $_); Modelo = 'SIM-IPC'; Ip = $ipf
+            $l.Achados = @(1..([int]$W.SimularCameras) | ForEach-Object {
+                @{ Mac = ('AA:00:00:00:00:{0:X2}' -f $_); Serial = ('SIM-' + $_); Modelo = 'SIM-IPC'; Ip = $ipf
                    HttpPort = 80; Init = 1; Marca = 'Intelbras' } })
             return $l
         }
@@ -1222,7 +1233,10 @@ $scriptWorker = {
     Publicar
     Write-Log ("Painel pronto. Dados em " + (Split-Path -Parent $Arquivos.Registro) +
                $(if ($Arquivos.Alternativa) { ' (pasta alternativa: sem permissao de escrita em ProgramData)' } else { '' })) 'Green'
-    if ($W.Simular) { Write-Log "SIMULACAO ligada por parametro (-Simular): nada vai para camera nem para a placa; registro separado." 'Yellow' }
+    if ($W.Simular) {
+        Write-Log "SIMULACAO ligada por parametro (-Simular): nada vai para camera nem para a placa; registro separado." 'Yellow'
+        Write-Log ("  " + $W.SimularCameras + " camera(s) de fabrica simulada(s); escala dos atrasos " + $W.SimularEscala.ToString([Globalization.CultureInfo]::InvariantCulture) + ".") 'Yellow'
+    }
     $resumo = Get-ResumoSessao
     if (-not $resumo.existe) { Write-Log "Sem sessao gravada: a pagina abre no passo a passo." 'Gray' }
     elseif (-not $resumo.completa) { Write-Log ("Sessao incompleta (etapa " + $resumo.etapa + "): a pagina abre no passo a passo.") 'Gray' }

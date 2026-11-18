@@ -42,8 +42,9 @@
       Pool            New-PoolCameras (o servidor cria ao montar a fila)
       Trabalho        o que todo job recebe: Senha (só memória, nunca vai
                       para o estado publicado), Padroes, CaminhoRegistro,
-                      Simular, FalharEm, EsperaSimuladaSeg { Portao;
-                      Conferencia } (só em -Simular) e Local/Rack/Andar
+                      Simular, FalharEm, EsperaSimuladaMs (tabela etapa ->
+                      ms, já multiplicada pela escala; só em -Simular, S3)
+                      e Local/Rack/Andar
       Progresso       último progresso por MAC { Etapa; Atual; Total;
                       Detalhe }, enquanto o job corre
       Dhip            'ok' ou 'sem-resposta' (o vigia sem DHIP põe
@@ -62,6 +63,20 @@
       { Mac; Job; Tipo='fim';       Resultado (ou $null); Erro; Quando }
     Job = Id do job (o evento de um job que já saiu é ignorado).
 #>
+
+<#
+    Espera simulada por etapa (S3), em ms, multiplicada pela escala (0 = sem
+    espera). O motor dorme o tempo da etapa depois do progresso dela.
+#>
+function Get-EsperaSimuladaMs {
+    param([double]$Escala = 1)
+    if ($Escala -lt 0) { throw ('Escala da simulação negativa: ' + $Escala) }
+    $t = @{}
+    foreach ($p in @(@('inicializada', 400), @('encoder', 400), @('rede', 400), @('conferida', 3000))) {
+        $t[$p[0]] = [int][math]::Round([double]$p[1] * $Escala)
+    }
+    return $t
+}
 
 <#
     Coordenador novo. Deps: hashtable com os scriptblocks de cima; valor que
@@ -96,7 +111,7 @@ function New-Coordenador {
         Pool            = $null
         Trabalho        = @{
             Senha = ''; Padroes = $null; CaminhoRegistro = ''; Simular = $false; FalharEm = ''
-            EsperaSimuladaSeg = @{ Portao = 1; Conferencia = 4 }
+            EsperaSimuladaMs = (Get-EsperaSimuladaMs)
             Local = ''; Rack = ''; Andar = ''
         }
         Progresso       = @{}
@@ -647,7 +662,8 @@ function New-ContextoJob {
         NaoDeFabrica, sem chamar o motor (R8). Sem resposta -> falha na
         inicialização, sem chamar o motor (o motor trataria uma câmera
         inicializada como retomada);
-      - em -Simular, espera EsperaSimuladaSeg antes do motor (U1);
+      - em -Simular, passa ao motor a tabela EsperaSimuladaMs (S3): o motor
+        dorme o tempo de cada etapa depois do progresso dela;
       - a conferência (AteEtapa vazio) vai ao motor com -SoConferencia: parte
         do destino e não consulta a origem, onde outra câmera pode responder
         (S1); o portão vai sem;
@@ -657,7 +673,7 @@ function New-ContextoJob {
 $script:ScriptJobCamera = {
     param($CaminhoMotor, $Eventos, [string]$JobId, [string]$Mac, $Contexto, $Padroes, [string]$Senha,
           [string]$CaminhoRegistro, [bool]$Simular, [string]$FalharEm, [string]$AteEtapa, [bool]$ConferirInit,
-          [double]$EsperaSimuladaSeg)
+          $EsperaSimuladaMs)
 
     $ErrorActionPreference = 'Stop'
     $resultado = $null
@@ -698,11 +714,12 @@ $script:ScriptJobCamera = {
             }
         }
 
-        if ($Simular -and $EsperaSimuladaSeg -gt 0) { Start-Sleep -Milliseconds ([int]($EsperaSimuladaSeg * 1000)) }
         $falharEmJob = ''
-        if ($Simular) { $falharEmJob = $FalharEm }
+        $esperaJob = $null
+        if ($Simular) { $falharEmJob = $FalharEm; $esperaJob = $EsperaSimuladaMs }
         $r = Invoke-ConfiguracaoCamera -Contexto $Contexto -Padroes $Padroes -Senha $Senha -CaminhoRegistro $CaminhoRegistro `
-                                       -Simular:$Simular -FalharEm $falharEmJob -AteEtapa $AteEtapa -SoConferencia:($AteEtapa -eq '')
+                                       -Simular:$Simular -FalharEm $falharEmJob -AteEtapa $AteEtapa -SoConferencia:($AteEtapa -eq '') `
+                                       -EsperaSimuladaMs $esperaJob
         $resultado = @{
             Ok = [bool]$r.Ok; Etapa = [string]$r.Etapa; Falhou = [string]$r.Falhou; Erro = [string]$r.Erro; Recusa = [bool]$r.Recusa
             LoginRecusado = [bool]$r.LoginRecusado; Bloqueada = [bool]$r.Bloqueada; MacTrocado = [bool]$r.MacTrocado
@@ -736,7 +753,7 @@ function Start-JobCamera {
         [switch]$Simular,
         [string]$FalharEm = '',
         [int]$Geracao = 0,
-        [double]$EsperaSimuladaSeg = 0
+        $EsperaSimuladaMs = $null
     )
 
     $id = [guid]::NewGuid().ToString('N')
@@ -747,7 +764,7 @@ function Start-JobCamera {
     $null = $ps.AddParameter('Mac', [string]$Camera.Mac).AddParameter('Contexto', $Contexto).AddParameter('Padroes', $Padroes)
     $null = $ps.AddParameter('Senha', $Senha).AddParameter('CaminhoRegistro', $CaminhoRegistro).AddParameter('Simular', [bool]$Simular)
     $null = $ps.AddParameter('FalharEm', $FalharEm).AddParameter('AteEtapa', [string]$Acao.AteEtapa)
-    $null = $ps.AddParameter('ConferirInit', [bool]$Camera.ConferirInit).AddParameter('EsperaSimuladaSeg', $EsperaSimuladaSeg)
+    $null = $ps.AddParameter('ConferirInit', [bool]$Camera.ConferirInit).AddParameter('EsperaSimuladaMs', $EsperaSimuladaMs)
     try { $handle = $ps.BeginInvoke() }
     catch { $ps.Dispose(); throw }
 
@@ -759,7 +776,7 @@ function Start-JobCamera {
 
 <#
     O 'despachar' ligado ao pool: monta o contexto (fila e porta/canal do
-    coordenador), escolhe a espera simulada do portão ou da conferência, a
+    coordenador), copia a tabela da espera simulada por etapa, escolhe a
     falha simulada (Use-FalharEmCoordenador) e começa o job, guardado em
     Jobs. Sem pool, ou com job em curso para o
     MAC, estoura: o Invoke-AcoesCoordenador transforma em decisão da câmera.
@@ -776,15 +793,17 @@ function Start-DespachoCoordenador {
     if ($Coord.PortaCanal.ContainsKey($chave)) { $pc = $Coord.PortaCanal[$chave] }
     $ctx = New-ContextoJob -Camera $Camera -Acao $Acao -Fila $t -PortaCanal $pc
 
-    $espera = 0
-    if ($null -ne $t.EsperaSimuladaSeg) {
-        if ([string]$Acao.AteEtapa -eq 'rede') { $espera = [double]$t.EsperaSimuladaSeg.Portao } else { $espera = [double]$t.EsperaSimuladaSeg.Conferencia }
+    # Cópia por job: o job não enxerga a troca de escala no meio dele.
+    $espera = $null
+    if ($t.EsperaSimuladaMs -is [System.Collections.IDictionary]) {
+        $espera = @{}
+        foreach ($k in @($t.EsperaSimuladaMs.Keys)) { $espera[[string]$k] = [int]$t.EsperaSimuladaMs[$k] }
     }
 
     $falharEm = Use-FalharEmCoordenador -Coord $Coord -AteEtapa ([string]$Acao.AteEtapa)
     $job = Start-JobCamera -Pool $Coord.Pool -Eventos $Coord.Eventos -Camera $Camera -Acao $Acao -Contexto $ctx `
                            -Senha ([string]$t.Senha) -Padroes $t.Padroes -CaminhoRegistro ([string]$t.CaminhoRegistro) `
-                           -Simular:([bool]$t.Simular) -FalharEm $falharEm -Geracao $Geracao -EsperaSimuladaSeg $espera
+                           -Simular:([bool]$t.Simular) -FalharEm $falharEm -Geracao $Geracao -EsperaSimuladaMs $espera
     $Coord.Jobs[$chave] = $job
     $Coord.Progresso[$chave] = @{ Etapa = ''; Atual = 0; Total = 0; Detalhe = '' }
     $Coord.Sujo = $true

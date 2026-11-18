@@ -18,7 +18,7 @@
         partida e ao encerrar o painel (com o pool fechado), Deps falsas e
         tabela falsa;
       - pool e jobs: RunspacePool real com o motor em -Simular e o registro
-        numa pasta temporaria (3 cameras ate 'feita', no maximo 1 MAC preso,
+        numa pasta temporaria (5 cameras ate 'feita', no maximo 1 MAC preso,
         conferencias sobrepostas, senha fora dos eventos, job que estoura);
       - estado publicado (contrato da F6): formato com 2 cameras pelo JSON
         e a tabela de derivacao dos campos legados;
@@ -105,7 +105,7 @@ function New-PosicoesTeste {
 # Achado DHIP de fabrica no IP de fabrica.
 function New-AchadoTeste {
     param([int]$N)
-    return @{ Mac = ('AA:00:00:00:00:0' + $N); Serial = ('SIM-' + $N); Modelo = 'IPC-EXEMPLO'; Ip = '192.168.1.108'
+    return @{ Mac = ('AA:00:00:00:00:{0:X2}' -f $N); Serial = ('SIM-' + $N); Modelo = 'IPC-EXEMPLO'; Ip = '192.168.1.108'
               HttpPort = 80; Init = 1; Marca = 'Intelbras' }
 }
 
@@ -659,9 +659,10 @@ function New-PadroesTeste {
 }
 
 # Coordenador com pool real (1 runspace por posicao), registro temporario,
-# deps de placa falsas (contam os presos) e o despacho ligado ao pool.
+# deps de placa falsas (contam os presos) e o despacho ligado ao pool. A
+# espera simulada e a tabela por etapa do servidor numa escala curta (S3).
 function New-CoordPool {
-    param([int]$N = 3, [double]$EsperaPortao = 0.2, [double]$EsperaConferencia = 2.5)
+    param([int]$N = 3, [double]$Escala = 0.5)
     $deps = New-DepsFalsas
     $deps.Despachar = (New-DepsPool).Despachar
     $coord = New-Coordenador -Posicoes (New-PosicoesTeste $N) -Deps $deps
@@ -672,7 +673,7 @@ function New-CoordPool {
     $coord.Trabalho.Padroes = New-PadroesTeste
     $coord.Trabalho.CaminhoRegistro = Join-Path $script:pastaPool 'registro-simulacao.json'
     $coord.Trabalho.Simular = $true
-    $coord.Trabalho.EsperaSimuladaSeg = @{ Portao = $EsperaPortao; Conferencia = $EsperaConferencia }
+    $coord.Trabalho.EsperaSimuladaMs = Get-EsperaSimuladaMs -Escala $Escala
     $coord.Trabalho.Local = 'Obra exemplo'; $coord.Trabalho.Rack = 'R1'; $coord.Trabalho.Andar = '1'
     $achados = @()
     for ($i = 1; $i -le $N; $i++) { $achados += New-AchadoTeste $i }
@@ -731,6 +732,19 @@ T 'New-ContextoJob: camera do estado, destino da acao, Local/Rack/Andar da fila,
     Assert-Igual '||||' ($ctx2.Local + '|' + $ctx2.Rack + '|' + $ctx2.Andar + '|' + $ctx2.Porta + '|' + $ctx2.Canal) 'sem fila nem cartao: vazios'
 }
 
+T 'Get-EsperaSimuladaMs: tabela por etapa vezes a escala; 0 sem espera; negativa estoura' {
+    $f = { param($t) (@('inicializada', 'encoder', 'rede', 'conferida') | ForEach-Object { $_ + '=' + $t[$_] }) -join ',' }
+    Assert-Igual 'inicializada=400,encoder=400,rede=400,conferida=3000' (& $f (Get-EsperaSimuladaMs)) 'padrao (escala 1)'
+    Assert-Igual 'inicializada=100,encoder=100,rede=100,conferida=750' (& $f (Get-EsperaSimuladaMs -Escala 0.25)) 'escala 0,25'
+    Assert-Igual 'inicializada=0,encoder=0,rede=0,conferida=0' (& $f (Get-EsperaSimuladaMs -Escala 0)) 'escala 0'
+    $estourou = $false
+    try { $null = Get-EsperaSimuladaMs -Escala -1 } catch { $estourou = $true }
+    Assert-Verdade $estourou 'escala negativa estoura'
+    $coord = New-CoordComEspera -N 1
+    Assert-Igual 'inicializada=400,encoder=400,rede=400,conferida=3000' (& $f $coord.Trabalho.EsperaSimuladaMs) 'Trabalho do coordenador novo'
+    Assert-Falso $coord.Trabalho.ContainsKey('EsperaSimuladaSeg') 'a espera unica antes do motor saiu'
+}
+
 T 'despachar sem pool: decisao da camera, sem job' {
     $coord = New-CoordComEspera -N 1
     $coord.Deps.Despachar = (New-DepsPool).Despachar
@@ -743,7 +757,8 @@ T 'despachar sem pool: decisao da camera, sem job' {
     Assert-Igual 0 $coord.Jobs.Count 'sem job'
 }
 
-# Cenario principal: roda uma vez, os testes abaixo conferem pedacos dele.
+# Cenario principal: 5 cameras na escala curta (S3); roda uma vez, os testes
+# abaixo conferem pedacos dele.
 $script:coordTres = $null
 $script:fimTres = $false
 $script:erroTres = ''
@@ -751,7 +766,7 @@ $script:regTres = $null
 $script:eventosTres = @()
 $script:maxPresosTres = -1
 try {
-    $script:coordTres = New-CoordPool -N 3
+    $script:coordTres = New-CoordPool -N 5
     $script:fimTres = Invoke-LacoTeste -Coord $script:coordTres
     $script:eventosTres = $script:eventos.ToArray()
     $script:maxPresosTres = $script:maxPresos
@@ -762,19 +777,19 @@ try {
     Remove-CoordPool $script:coordTres
 }
 
-T 'pool: 3 cameras de fabrica terminam feita' {
+T 'pool: 5 cameras de fabrica terminam feita' {
     Assert-Igual '' $script:erroTres 'cenario sem excecao'
     Assert-Verdade $script:fimTres 'laco terminou no tempo'
-    Assert-Igual 'feita,feita,feita' ((@($script:coordTres.Estado.Cameras) | ForEach-Object { $_.Fase }) -join ',') 'fases'
-    Assert-Igual 'feita,feita,feita' ((@($script:coordTres.Estado.Posicoes) | ForEach-Object { $_.Estado }) -join ',') 'posicoes'
+    Assert-Igual 'feita,feita,feita,feita,feita' ((@($script:coordTres.Estado.Cameras) | ForEach-Object { $_.Fase }) -join ',') 'fases'
+    Assert-Igual 'feita,feita,feita,feita,feita' ((@($script:coordTres.Estado.Posicoes) | ForEach-Object { $_.Estado }) -join ',') 'posicoes'
     Assert-Igual 0 $script:coordTres.Jobs.Count 'nenhum job sobrando'
 }
 
-T 'pool: registro com 3 Instalada, MACs e destinos distintos' {
+T 'pool: registro com 5 Instalada, MACs e destinos distintos' {
     $cams = @($script:regTres.Cameras)
-    Assert-Igual 3 $cams.Count 'entradas'
-    Assert-Igual 'Instalada,Instalada,Instalada' (($cams | ForEach-Object { $_.Status }) -join ',') 'status'
-    Assert-Igual 'AA0000000001=192.0.2.11,AA0000000002=192.0.2.12,AA0000000003=192.0.2.13' `
+    Assert-Igual 5 $cams.Count 'entradas'
+    Assert-Igual 'Instalada,Instalada,Instalada,Instalada,Instalada' (($cams | ForEach-Object { $_.Status }) -join ',') 'status'
+    Assert-Igual 'AA0000000001=192.0.2.11,AA0000000002=192.0.2.12,AA0000000003=192.0.2.13,AA0000000004=192.0.2.14,AA0000000005=192.0.2.15' `
         ((@($cams | Sort-Object Mac) | ForEach-Object { $_.Mac + '=' + $_.Ip }) -join ',') 'MAC e destino'
     Assert-Igual 'Obra exemplo|R1|1' ($cams[0].Local + '|' + $cams[0].Rack + '|' + $cams[0].Andar) 'Local/Rack/Andar da fila'
 }
@@ -786,7 +801,7 @@ T 'pool: nunca mais de 1 MAC preso ao mesmo tempo' {
 
 T 'pool: as conferencias se sobrepoem (janelas de tempo pelos eventos)' {
     $janelas = @()
-    foreach ($n in 1..3) {
+    foreach ($n in 1..5) {
         $mac = 'AA:00:00:00:00:0' + $n
         $ini = @($script:eventosTres | Where-Object { $_.Mac -eq $mac -and $_.Tipo -eq 'log' -and $_.Texto -like '*confer*ncia ---*' }) | Select-Object -First 1
         $fim = @($script:eventosTres | Where-Object { $_.Mac -eq $mac -and $_.Tipo -eq 'log' -and $_.Texto -like 'RESULTADO: instalada*' }) | Select-Object -Last 1
@@ -794,8 +809,8 @@ T 'pool: as conferencias se sobrepoem (janelas de tempo pelos eventos)' {
         $janelas += @{ Mac = $mac; Ini = $ini.Quando; Fim = $fim.Quando }
     }
     $sobrepostas = 0
-    for ($i = 0; $i -lt 3; $i++) {
-        for ($j = $i + 1; $j -lt 3; $j++) {
+    for ($i = 0; $i -lt 5; $i++) {
+        for ($j = $i + 1; $j -lt 5; $j++) {
             if ($janelas[$i].Ini -lt $janelas[$j].Fim -and $janelas[$j].Ini -lt $janelas[$i].Fim) { $sobrepostas++ }
         }
     }
@@ -807,11 +822,11 @@ T 'pool: as conferencias se sobrepoem (janelas de tempo pelos eventos)' {
 T 'pool: o log da conferencia traz a linha do modo, o do portao nao' {
     $logs = @($script:eventosTres | Where-Object { $_.Tipo -eq 'log' })
     $porJob = @($logs | Group-Object { $_.Job })
-    Assert-Igual 6 $porJob.Count 'jobs com log (portao + conferencia de 3)'
+    Assert-Igual 10 $porJob.Count 'jobs com log (portao + conferencia de 5)'
     $conf = 0; $portao = 0
     foreach ($g in $porJob) {
         $textos = @($g.Group | ForEach-Object { [string]$_.Texto })
-        $modo = @($textos | Where-Object { $_ -match 'confer.ncia a partir do destino 192\.0\.2\.1[1-3]; a origem n.o . consultada' }).Count
+        $modo = @($textos | Where-Object { $_ -match 'confer.ncia a partir do destino 192\.0\.2\.1[1-5]; a origem n.o . consultada' }).Count
         if (@($textos | Where-Object { $_ -match '^--- C.mera .*: confer.ncia ---$' }).Count -gt 0) {
             $conf++
             Assert-Igual 1 $modo ('linha do modo na conferencia do job ' + $g.Name)
@@ -820,14 +835,14 @@ T 'pool: o log da conferencia traz a linha do modo, o do portao nao' {
             Assert-Igual 0 $modo ('linha do modo no portao do job ' + $g.Name)
         }
     }
-    Assert-Igual '3|3' ([string]$conf + '|' + $portao) 'conferencias|portoes'
+    Assert-Igual '5|5' ([string]$conf + '|' + $portao) 'conferencias|portoes'
 }
 
 T 'pool: eventos de log, progresso e fim por MAC, e a senha em nenhum deles' {
     $tipos = (@($script:eventosTres | ForEach-Object { $_.Tipo }) | Sort-Object -Unique) -join ','
     Assert-Igual 'fim,log,progresso' $tipos 'tipos de evento'
-    Assert-Igual 6 @($script:eventosTres | Where-Object { $_.Tipo -eq 'fim' }).Count 'um fim por job (portao + conferencia de 3)'
-    Assert-Verdade (@($script:eventosTres | Where-Object { $_.Tipo -eq 'progresso' -and $_.Etapa -eq 'rede' }).Count -ge 3) 'progresso da etapa rede'
+    Assert-Igual 10 @($script:eventosTres | Where-Object { $_.Tipo -eq 'fim' }).Count 'um fim por job (portao + conferencia de 5)'
+    Assert-Verdade (@($script:eventosTres | Where-Object { $_.Tipo -eq 'progresso' -and $_.Etapa -eq 'rede' }).Count -ge 5) 'progresso da etapa rede'
     $vazou = @($script:eventosTres | Where-Object { (ConvertTo-Json -InputObject $_ -Depth 8 -Compress) -like ('*' + $script:senhaTeste + '*') })
     Assert-Igual 0 $vazou.Count 'eventos com a senha'
     Assert-Igual 0 @($script:logsJob | Where-Object { [string]$_.Texto -like ('*' + $script:senhaTeste + '*') }).Count 'logs com a senha'
@@ -837,7 +852,7 @@ T 'pool: eventos de log, progresso e fim por MAC, e a senha em nenhum deles' {
 T 'pool: job que estoura vira decisao daquela camera, e as outras terminam' {
     $coord = $null
     try {
-        $coord = New-CoordPool -N 3 -EsperaConferencia 0.5
+        $coord = New-CoordPool -N 3 -Escala 0.2
         # A conferencia da 2 recebe Padroes nulo: o motor estoura no job.
         $coord.Deps.Despachar = {
             param($Acao, $Camera, $Geracao, $Coord)

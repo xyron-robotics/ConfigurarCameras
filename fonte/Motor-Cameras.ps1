@@ -3937,6 +3937,11 @@ function New-ResultadoConfiguracao {
     contexto com Etapa 'rede' e Status diferente de 'Instalada'; nao consulta
     a origem (Get-EstadoCamera), porque com N cameras no switch quem responde
     no IP de fabrica e outra camera. Nao combina com -AteEtapa.
+
+    -EsperaSimuladaMs (so em -Simular, S3): tabela etapa -> ms. Depois do
+    Write-Progresso de cada etapa, dorme o tempo dela, para o progresso andar
+    etapa por etapa no estado publicado. Vazia ou ausente = sem espera; fora
+    de -Simular e ignorada.
 #>
 function Invoke-ConfiguracaoCamera {
     param(
@@ -3948,7 +3953,8 @@ function Invoke-ConfiguracaoCamera {
         [string]$FalharEm = '',
         [int]$EsperaBootSeg = 120,
         [string]$AteEtapa = '',
-        [switch]$SoConferencia
+        [switch]$SoConferencia,
+        $EsperaSimuladaMs = $null
     )
 
     $etapas = Get-EtapasConfiguracao
@@ -4064,6 +4070,14 @@ function Invoke-ConfiguracaoCamera {
         param([string]$Etapa)
         return ($Simular -and $FalharEm -eq $Etapa)
     }
+    # Espera simulada da etapa (S3): so no ramo -Simular.
+    $esperarSimulada = {
+        param([string]$Etapa)
+        if (-not $Simular -or $EsperaSimuladaMs -isnot [System.Collections.IDictionary]) { return }
+        if (-not $EsperaSimuladaMs.Contains($Etapa)) { return }
+        $ms = [int]$EsperaSimuladaMs[$Etapa]
+        if ($ms -gt 0) { Start-Sleep -Milliseconds $ms }
+    }
     # -AteEtapa: chegou quando a etapa feita e a pedida ou uma depois dela.
     # O registro ja esta 'Em andamento' (gravado pelo $salvar da etapa).
     $chegou = {
@@ -4084,6 +4098,7 @@ function Invoke-ConfiguracaoCamera {
         # --- 1. inicializacao ----------------------------------------------
         if ((Get-ProximaEtapa $feita) -eq 'inicializada') {
             Write-Progresso 'inicializada'
+            & $esperarSimulada 'inicializada'
             if (& $simularFalha 'inicializada') { & $falhar 'inicializada' 'falha simulada'; return $res }
             if (-not (Initialize-Cam -Ip $ipCam -Senha $Senha -Email $Padroes.EmailRecuperacao -Simular:$Simular)) {
                 & $falhar 'inicializada' ('inicializacao falhou em ' + $ipCam + ' (detalhes no log)')
@@ -4155,6 +4170,7 @@ function Invoke-ConfiguracaoCamera {
         # --- 2. encoder ------------------------------------------------------
         if ((Get-ProximaEtapa $feita) -eq 'encoder') {
             Write-Progresso 'encoder'
+            & $esperarSimulada 'encoder'
             Write-Log "--- ajuste de encoder ---" 'Cyan'
             if (& $simularFalha 'encoder') { & $falhar 'encoder' 'falha simulada: camera recusou o valor' $true; return $res }
             $p = $Padroes.Encoder
@@ -4188,6 +4204,7 @@ function Invoke-ConfiguracaoCamera {
         # --- 3. rede ---------------------------------------------------------
         if ((Get-ProximaEtapa $feita) -eq 'rede') {
             Write-Progresso 'rede'
+            & $esperarSimulada 'rede'
             Write-Log "--- rede ---" 'Cyan'
             if (& $simularFalha 'rede') { & $falhar 'rede' 'falha simulada: sem resposta'; return $res }
             $ent.Aplicado = Get-AplicadoDaSessao $Padroes
@@ -4221,6 +4238,7 @@ function Invoke-ConfiguracaoCamera {
         # --- 4. conferencia no IP definitivo ---------------------------------
         if ((Get-ProximaEtapa $feita) -eq 'conferida') {
             Write-Progresso 'conferida'
+            & $esperarSimulada 'conferida'
             Write-Log ("--- conferencia em " + $destino + " ---") 'Cyan'
             if (& $simularFalha 'conferida') { & $falhar 'conferida' ('falha simulada: ' + $destino + ' nao respondeu'); return $res }
             if (-not $Simular) {

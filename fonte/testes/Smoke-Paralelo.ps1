@@ -3,21 +3,24 @@
 
     Sobe o painel com -Simular -SemElevar -SemNavegador numa pasta de dados
     temporaria e porta livre, grava uma sessao ficticia completa, liga a
-    falha simulada na 'conferida' (uma vez so), monta uma fila de 3 posicoes
-    e liga o vigia (o DHIP simulado traz 3 cameras de fabrica). Consulta
-    GET /api/estado a cada 100 ms, medindo a latencia, e imprime as fases de
-    cada camera ao longo do tempo. No meio:
+    falha simulada na 'conferida' (uma vez so), monta uma fila de N posicoes
+    (-Cameras, padrao 3, repassado ao painel como -SimularCameras: o DHIP
+    simulado traz N cameras de fabrica) e liga o vigia. Consulta
+    GET /api/estado a cada 100 ms, medindo a latencia, e imprime a fase e a
+    etapa de cada camera ao longo do tempo. No meio:
       - com 2 cameras em curso, um POST /api/fila sem retentativa: 409 com o
         texto da recusa do orquestrador;
       - com uma camera conferindo, um POST /api/encerrar sem retentativa: 409
         com o texto da recusa (encerrar o painel) e o painel continua;
       - com uma camera em decisao e outra conferindo, POST /api/camera muda a
         porta e o canal da que esta conferindo (7 e 8);
-      - com a que falhou em decisao e as outras 2 feitas, POST /api/decisao
+      - com a que falhou em decisao e as outras N-1 feitas, POST /api/decisao
         {mac, acao:'tentar'}: ela volta direto a conferencia (sem portao).
     No fim le GET /api/registro, encerra o painel e confere:
-      - 3 cameras 'feita';
+      - N cameras 'feita';
       - pelo menos 2 'conferindo' ao mesmo tempo;
+      - as etapas inicializada, encoder e rede visiveis no portao (a espera
+        simulada e por etapa, no motor);
       - so 1 camera em decisao (a falha simulada nao repete nas outras);
       - a que tentou de novo nao passou pelo portao e terminou 'feita';
       - o POST /api/fila em curso deu 409 com o texto da recusa;
@@ -30,11 +33,12 @@
     Fora do CI e do instalador: e um teste de bancada do desenvolvedor.
 
     Uso (PowerShell 5.1, na raiz do repo):
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\testes\Smoke-Paralelo.ps1
+      powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\testes\Smoke-Paralelo.ps1 [-Cameras 5]
 #>
 param(
     [int]$TimeoutSeg = 120,
-    [int]$LatenciaMaxMs = 500
+    [int]$LatenciaMaxMs = 500,
+    [ValidateRange(2, 16)][int]$Cameras = 3
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,7 +70,7 @@ $servidor = Join-Path $fonte 'web\Servidor-Painel.ps1'
 $saida = Join-Path $pasta 'servidor-saida.txt'
 $erros = Join-Path $pasta 'servidor-erros.txt'
 $argumentos = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $servidor + '"'),
-                '-Simular', '-SemElevar', '-SemNavegador', '-SemAtualizacao',
+                '-Simular', '-SimularCameras', $Cameras, '-SemElevar', '-SemNavegador', '-SemAtualizacao',
                 '-PastaDados', ('"' + $pasta + '"'), '-Porta', $porta)
 $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentos -PassThru -NoNewWindow `
                       -RedirectStandardOutput $saida -RedirectStandardError $erros
@@ -128,6 +132,7 @@ $recusaEncerrar = $null; $recusaEncerrarOk = $false; $codigoEncerrar = 0
 $macEditada = ''; $codigoCamera = 0
 $macDecisao = ''; $emDecisao = @{}; $codigoDecisao = 0
 $fasesDepoisTentar = @(); $registroOk = $false; $registroTxt = ''
+$etapasPortao = @{}
 try {
     # Espera o painel responder.
     $pronto = $false
@@ -142,7 +147,7 @@ try {
     Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/senha -> ' + $c)
     $c = Send-Post '/api/simular' @{ ligado = $true; falharEm = 'conferida' }
     Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/simular (falharEm conferida) -> ' + $c)
-    $c = Send-Post '/api/fila' @{ inicio = '192.0.2.10'; fim = '192.0.2.12'; local = 'Obra exemplo'; rack = 'R1'; andar = '1' }
+    $c = Send-Post '/api/fila' @{ inicio = '192.0.2.10'; fim = ('192.0.2.' + (9 + $Cameras)); local = 'Obra exemplo'; rack = 'R1'; andar = '1' }
     Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/fila -> ' + $c)
     $temFila = $false
     for ($i = 0; $i -lt 50; $i++) {
@@ -157,6 +162,7 @@ try {
 
     # Consulta a cada 100 ms e imprime as mudancas de fase por camera.
     $fases = @{}
+    $etapasVistas = @{}
     $ultimoAviso = ''
     $limite = $relogio.Elapsed.TotalSeconds + $TimeoutSeg
     while ($relogio.Elapsed.TotalSeconds -lt $limite) {
@@ -172,13 +178,21 @@ try {
             $fase = [string]$cam.fase
             if ($fase -eq 'conferindo') { $conferindo += $mac }
             if ($fase -eq 'decisao') { $decisao += $mac; $emDecisao[$mac] = $true }
+            $etapa = [string]$cam.etapa
+            if ($fase -eq 'portao' -and $etapa) { $etapasPortao[$etapa] = $true }
             if ($fases[$mac] -ne $fase) {
                 $txt = $mac + '  ' + $(if ($fases.ContainsKey($mac)) { $fases[$mac] } else { '-' }) + ' -> ' + $fase
+                if ($etapa) { $txt += ' [' + $etapa + ']' }
                 if ($cam.destino) { $txt += '  (destino ' + $cam.destino + ')' }
                 if ($fase -eq 'decisao' -and $null -ne $cam.falha) { $txt += '  falha: ' + $cam.falha.etapa + ': ' + $cam.falha.erro }
                 Write-Linha $relogio.Elapsed.TotalSeconds $txt
                 $fases[$mac] = $fase
+                $etapasVistas[$mac] = $etapa
                 if ($macDecisao -and $mac -eq $macDecisao) { $fasesDepoisTentar += $fase }
+            } elseif ($etapasVistas[$mac] -ne $etapa) {
+                # Mesma fase, etapa nova: o progresso andando etapa por etapa.
+                Write-Linha $relogio.Elapsed.TotalSeconds ($mac + '  ' + $fase + ' [' + $etapa + ']')
+                $etapasVistas[$mac] = $etapa
             }
         }
         if ($conferindo.Count -gt $maxConferindo) { $maxConferindo = $conferindo.Count }
@@ -208,12 +222,12 @@ try {
             Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/camera ' + $macEditada + ' porta 7 canal 8 -> ' + $codigoCamera)
         }
         # A que falhou em decisao e as outras feitas: tentar de novo por MAC.
-        if (-not $macDecisao -and $decisao.Count -eq 1 -and $feitas -eq 2) {
+        if (-not $macDecisao -and $decisao.Count -eq 1 -and $feitas -eq ($Cameras - 1)) {
             $macDecisao = $decisao[0]
             $codigoDecisao = Send-Post '/api/decisao' @{ mac = $macDecisao; acao = 'tentar' }
             Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/decisao ' + $macDecisao + ' tentar -> ' + $codigoDecisao)
         }
-        if ($feitas -ge 3) { break }
+        if ($feitas -ge $Cameras) { break }
         $resto = 100 - $r.Ms
         if ($resto -gt 0) { Start-Sleep -Milliseconds $resto }
     }
@@ -251,11 +265,13 @@ $tentouOk = ($macDecisao -and $codigoDecisao -eq 202 -and $fasesDepoisTentar -no
              $fasesDepoisTentar -contains 'conferindo' -and @($fasesDepoisTentar)[-1] -eq 'feita')
 $editouOk = ($macEditada -and $codigoCamera -eq 202 -and $macEditada -ne $macDecisao -and $registroOk)
 $encerrarOk = ($recusaEncerrarOk -and $codigoEncerrar -eq 200)
-$ok = ($feitas -eq 3 -and $maxConferindo -ge 2 -and $emDecisao.Count -eq 1 -and $tentouOk -and $recusaFilaOk -and $editouOk -and $encerrarOk -and
+$etapasPortaoOk = ($etapasPortao.ContainsKey('inicializada') -and $etapasPortao.ContainsKey('encoder') -and $etapasPortao.ContainsKey('rede'))
+$ok = ($feitas -eq $Cameras -and $maxConferindo -ge 2 -and $etapasPortaoOk -and $emDecisao.Count -eq 1 -and $tentouOk -and $recusaFilaOk -and $editouOk -and $encerrarOk -and
        $maxLatencia -lt $LatenciaMaxMs -and $saiu -and $script:errosInternos.Count -eq 0)
 Write-Host ''
 foreach ($m in $script:errosInternos) { Write-Host ('  log: ' + $m) -ForegroundColor Red }
-Write-Host ('Resumo: feitas ' + $feitas + '/3; conferindo ao mesmo tempo (max) ' + $maxConferindo +
+Write-Host ('Resumo: feitas ' + $feitas + '/' + $Cameras + '; conferindo ao mesmo tempo (max) ' + $maxConferindo +
+            '; etapas no portao ' + ((@($etapasPortao.Keys) | Sort-Object) -join '/') + $(if ($etapasPortaoOk) { ' ok' } else { ' FALHOU' }) +
             '; em decisao ' + $emDecisao.Count + '; tentar de novo ' + $(if ($tentouOk) { 'ok' } else { 'FALHOU' }) +
             ' (fases ' + ($fasesDepoisTentar -join ' > ') + ')' +
             '; fila em curso ' + $(if ($recusaFilaOk) { '409 ok' } else { 'FALHOU' }) +

@@ -116,6 +116,13 @@ T 'Servidor: rotas da sessao e -Simular presentes; padroes e resetar fora' {
     $nomes = @($a.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
     Assert-Verdade ($nomes -contains 'Simular') 'param -Simular'
     Assert-Verdade ($nomes -contains 'SemElevar') 'param -SemElevar'
+    # S3: N cameras simuladas (1..16) e escala dos atrasos (>= 0).
+    $sc = @($a.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'SimularCameras' })
+    Assert-Igual 1 $sc.Count 'param -SimularCameras'
+    Assert-Verdade ($sc[0].Extent.Text -match 'ValidateRange\(1,\s*16\)' -and $sc[0].Extent.Text -match '= 3$') ('-SimularCameras 1..16, padrao 3: ' + $sc[0].Extent.Text)
+    $se = @($a.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'SimularEscala' })
+    Assert-Igual 1 $se.Count 'param -SimularEscala'
+    Assert-Verdade ($se[0].Extent.Text -match '-ge 0' -and $se[0].Extent.Text -match '= 1$') ('-SimularEscala >= 0, padrao 1: ' + $se[0].Extent.Text)
 }
 
 # Comandos por MAC (Task 7 da frente servidor): decisao e porta/canal levam o
@@ -1470,6 +1477,42 @@ T 'AteEtapa encoder para antes da rede; AteEtapa desconhecida estoura' {
         Assert-Falso (($script:Linhas -join "`n") -match '--- rede ---') 'nao tocou a rede'
         Assert-Estoura { Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular -AteEtapa 'xyz' } 'etapa desconhecida'
     } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+# S3: a espera simulada e por etapa, dentro do motor, depois do progresso
+# dela (o estado publicado anda etapa por etapa). A primeira chamada usa o
+# Start-Sleep de verdade; as outras, um falso local que anota na mesma lista.
+T 'Simulacao: -EsperaSimuladaMs dorme depois do progresso de cada etapa; sem a tabela, nao espera' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $pub = New-Object 'System.Collections.Generic.List[string]'
+    Set-MotorProgresso -Sink { param($Etapa, $Detalhe, $Atual, $Total) if ($Etapa) { $pub.Add($Etapa) } }
+    try {
+        $ctx = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.56'; Mac = 'AA:00:00:00:00:06' }
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $r = Invoke-ConfiguracaoCamera -Contexto $ctx -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular -EsperaSimuladaMs @{ encoder = 300 }
+        $sw.Stop()
+        Assert-Verdade $r.Ok ('resultado: ' + $r.Erro)
+        Assert-Verdade ($sw.ElapsedMilliseconds -ge 300) ('tempo da chamada: ' + $sw.ElapsedMilliseconds + ' ms')
+        Assert-Igual 'inicializada,encoder,rede,conferida' ($pub -join ',') 'progresso na ordem das etapas'
+
+        function Start-Sleep { param($Seconds, $Milliseconds) $pub.Add('dorme ' + $Seconds + $Milliseconds) }
+        $pub.Clear()
+        $ctx2 = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.57'; Mac = 'AA:00:00:00:00:07' }
+        $r2 = Invoke-ConfiguracaoCamera -Contexto $ctx2 -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular
+        Assert-Verdade $r2.Ok ('sem tabela: ' + $r2.Erro)
+        Assert-Igual 'inicializada,encoder,rede,conferida' ($pub -join ',') 'sem a tabela, nenhuma espera'
+
+        $pub.Clear()
+        $ctx3 = [pscustomobject]@{ IpOrigem = '192.168.1.108'; Destino = '10.70.20.58'; Mac = 'AA:00:00:00:00:08' }
+        $r3 = Invoke-ConfiguracaoCamera -Contexto $ctx3 -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -Simular `
+                                        -EsperaSimuladaMs @{ inicializada = 1; encoder = 2; rede = 0; conferida = 4 }
+        Assert-Verdade $r3.Ok ('tabela completa: ' + $r3.Erro)
+        Assert-Igual 'inicializada,dorme 1,encoder,dorme 2,rede,conferida,dorme 4' ($pub -join ',') 'cada espera logo depois do progresso da etapa; 0 nao dorme'
+    } finally {
+        Set-MotorProgresso -Sink $null
+        Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 T 'Destino fora da rede do gateway e recusado antes de tocar na camera' {
