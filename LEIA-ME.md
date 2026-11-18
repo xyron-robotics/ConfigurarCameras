@@ -1,10 +1,10 @@
 # Configurar Câmeras Intelbras — painel de campo
 
-Painel web local que coloca câmeras IP Intelbras (base Dahua) em serviço, uma
-por vez, pelo cabo: cria o `admin`, grava a recuperação de senha **apenas por
-e-mail**, ajusta o encoder dos dois streams, grava IP/máscara/gateway/DNS,
-confere lendo de volta e registra cada câmera. Tudo roda neste PC; nada vai
-para a internet.
+Painel web local que leva câmeras IP Intelbras (base Dahua) de fábrica a
+instaladas, várias ao mesmo tempo, ligadas no mesmo switch: cria o `admin`,
+grava a recuperação de senha **apenas por e-mail**, ajusta o encoder dos dois
+streams, grava IP/máscara/gateway/DNS, confere lendo de volta e registra cada
+câmera. Tudo roda neste PC; nada vai para a internet.
 
 Validado em câmera real: **VIP-1230-D-G3** (firmware 2.800). A VIP-5460-Z-IA foi
 validada só na versão antiga em CGI (veja Pendências).
@@ -16,8 +16,10 @@ validada só na versão antiga em CGI (veja Pendências).
 | Requisito | Situação |
 |---|---|
 | Windows 10 (1803 ou mais novo) ou Windows 11 | traz `curl.exe` e PowerShell 5.1, que é tudo o que o painel usa |
-| Administrador local | pedido uma vez, ao abrir: preparar a placa de rede exige |
-| Placa Ethernet com cabo | Wi-Fi não serve; USB-Ethernet serve |
+| Administrador local | pedido uma vez, ao abrir: preparar a placa de rede e prender a câmera no IP de fábrica exigem. Sem ele, o painel fica no modo de reserva: uma câmera por vez |
+| Placa de rede ligada ao switch das câmeras | Ethernet ou Wi-Fi; a Ethernet com cabo vem sugerida em primeiro. USB-Ethernet serve |
+| Switch com PoE para as câmeras | ou um injetor PoE por câmera, na saída **P+D** |
+| Porta UDP 37810 liberada no firewall do PC | é por ela que o broadcast (DHIP) distingue as câmeras de fábrica, todas no mesmo IP. Sem resposta do broadcast, o painel fica no modo de reserva: uma câmera por vez |
 | Microsoft Edge | opcional; sem ele o painel abre no navegador padrão |
 
 O painel roda `powershell.exe -ExecutionPolicy Bypass`. Se a empresa trava isso por
@@ -93,31 +95,68 @@ Monte a fila no passo 6 ou em **Opções > Fila** (primeiro e último IP,
 **Montar fila**). Gateway, endereços fora da rede e IPs com câmera instalada
 no registro ficam de fora (câmera que falhou não ocupa a posição; se ela
 ainda responde no IP, o ping na hora de usar a posição pula); uma faixa sem
-posição livre é recusada. Para cada posição: ligue **uma**
-câmera no cabo e clique em **Câmera conectada**. O painel acha a câmera de
-fábrica, pela placa escolhida, pelo broadcast DHIP (em qualquer faixa de IP;
-se ela estiver fora das faixas da placa, a placa recebe um IP temporário na
-rede dela e, se a faixa for de outra placa do PC, uma rota de host), pelo IP
-de fábrica `192.168.1.108` e, se nada vier, pela varredura por ping. Depois
-faz, nesta ordem: inicialização → encoder → rede → conferência no IP novo
-(espera do boot até 120 s, com contagem na tela). Câmera com porta HTTP
-diferente de 80 (anunciada no broadcast) é atendida nela.
+posição livre é recusada.
 
-- **Retomar câmera já inicializada**: para uma câmera que já recebeu a senha
-  desta sessão (por exemplo, depois de uma falha com o painel fechado). Informe o
-  IP em que ela responde agora.
-- **Vigia**: desligado por padrão. Com a fila montada, informe porta e canal da
-  primeira câmera e ligue. O painel observa o IP de fábrica e configura sozinho
-  cada câmera de fábrica que aparece; porta e canal somam 1 a cada câmera. A
-  caixa **Aceitar câmera de fábrica em qualquer faixa (broadcast)** faz o vigia
-  observar também pelo broadcast: use só com a bancada isolada da rede do
-  escritório, senão qualquer câmera de fábrica da rede entra na fila. Uma
-  câmera **já inicializada** no IP de fábrica só gera aviso. O vigia desliga
-  sozinho quando a fila acaba e depois de 5 tentativas seguidas sem configurar.
-- **Falha**: a fila para e mostra a etapa, o motivo e o que a câmera já recebeu,
-  com **Tentar de novo**, **Pular esta posição** e **Encerrar**. Se a câmera
-  recusou a senha, **Tentar de novo** fica travado até uma senha nova: repetir a
-  senha errada bloqueia o `admin` da câmera por minutos.
+1. **Ligue o vigia** (desligado por padrão). Ligado, ele mostra: "Observando
+   <IP> por broadcast. Ligue quantas câmeras quiser no switch: cada uma entra
+   na próxima posição livre. Digite porta e canal no cartão de cada câmera,
+   pelo serial da etiqueta." O vigia procura pelo broadcast DHIP na placa
+   escolhida. A caixa **Aceitar câmera de fábrica em qualquer faixa
+   (broadcast)** faz ele aceitar também câmera de fábrica fora do IP de
+   fábrica (a placa recebe um IP temporário na rede dela e, se a faixa for de
+   outra placa do PC, uma rota de host): use só com a bancada isolada da rede
+   do escritório, senão qualquer câmera de fábrica da rede entra na fila.
+2. **Ligue as câmeras no switch**, quantas quiser. Cada uma recebe a próxima
+   posição livre quando entra no portão do IP de fábrica, na ordem em que
+   aparece no broadcast, que não é a ordem do cabo. Uma câmera recém-ligada
+   pode levar cerca de um minuto para responder ao broadcast.
+3. **Cada câmera tem um cartão** na bancada, com posição, modelo, serial,
+   MAC, destino e o estado: "Na espera", "No portão", "Conferindo",
+   "Falhou", "Instalada", "Pulada" ou "Já inicializada: não tocada". Digite
+   "Porta" e "Canal" no cartão da câmera certa, conferindo o serial da
+   etiqueta; o cartão mostra "Salvo" quando o painel recebe. Os dois campos
+   ficam editáveis até a fila fechar, inclusive depois de "Instalada" (o
+   registro é atualizado); câmera pulada ou já inicializada não tem porta nem
+   canal.
+4. **Portão e conferência.** Uma câmera por vez passa pelo portão do IP de
+   fábrica: o painel a prende pelo MAC (um vizinho estático na placa
+   escolhida, que sai quando ela sai) e faz, nesta ordem, inicialização →
+   encoder → rede. Ao gravar a rede, a câmera reinicia no IP novo e o portão
+   passa à próxima. A conferência no IP novo (espera do boot até 120 s, com
+   contagem no cartão) roda em paralelo, para quantas câmeras houver, e nunca
+   consulta o IP de fábrica. Câmera com porta HTTP diferente de 80 (anunciada
+   no broadcast) é atendida nela.
+5. **Falha** numa câmera abre a decisão só no cartão dela, com a etapa e o
+   motivo, e os botões "Tentar de novo" e "Pular esta posição"; as outras
+   seguem, e o vigia continua. "Tentar de novo" continua da etapa que falhou
+   (quem falhou na conferência volta direto a ela, sem passar pelo portão).
+   Pular deixa a câmera como está, registrada como falha, e a posição fica
+   pulada. Se a câmera recusou a senha, "Tentar de novo" fica travado até uma
+   senha nova: repetir a senha errada bloqueia o `admin` da câmera por
+   minutos.
+6. **"Encerrar a fila"**, botão da fila, para de admitir câmeras: as que
+   estão no portão ou conferindo terminam, e as que estão em decisão ainda
+   podem tentar de novo. As posições pendentes ficam sem câmera.
+
+Uma câmera **já inicializada** que aparece no broadcast fica no cartão como
+"Já inicializada: não tocada": o painel não faz login nela. O vigia desliga
+sozinho quando a fila acaba ou é encerrada, e depois de 5 rodadas seguidas
+vendo câmera sem poder configurar (sem posição livre, por exemplo).
+
+**Modo de reserva: uma câmera por vez.** Sem resposta do broadcast (em geral,
+a porta UDP 37810 fechada no firewall do PC), o painel não distingue as
+câmeras de fábrica, todas no mesmo IP: passa a configurar uma por vez, pelo IP
+de fábrica, e o vigia mostra "Sem broadcast: uma câmera por vez.". Sem
+Administrador, o painel não põe o vizinho estático e também fica numa câmera
+por vez desde a montagem da fila. Nos dois casos o painel avisa; ligue uma
+câmera de fábrica por vez no switch até resolver.
+
+**Sem o vigia:** **Câmera conectada** procura câmeras de fábrica uma vez, na
+hora; as que aparecem seguem como com o vigia. **Retomar câmera já
+inicializada** serve para uma câmera que já recebeu a senha desta sessão (por
+exemplo, depois de uma falha com o painel fechado): informe o IP em que ela
+responde agora. A retomada é uma câmera por vez e só começa com nenhuma
+câmera no portão ou conferindo.
 
 Uma câmera **instalada** nunca é reconfigurada. Para refazer, volte a câmera
 de fábrica pela tela dela (Configuração > Sistema > Padrão de fábrica) ou pelo
@@ -156,7 +195,10 @@ placa. Serve para diagnóstico e para os testes.
 
 **Encerrar o painel** (Opções) fecha o servidor e devolve a placa de rede ao
 estado de antes (DHCP, endereços, rotas de host e rota que o painel pôs saem);
-a fila em memória se perde, o registro e a sessão ficam. Fechar só a janela do
+a fila em memória se perde, o registro e a sessão ficam. Com câmera no portão
+ou conferindo, o painel recusa encerrar e pede para esperar as câmeras
+terminarem; se ele fechar mesmo assim com câmera em curso, espera cada uma
+terminar (até 3 minutos) antes de devolver a placa. Fechar só a janela do
 navegador não encerra: o painel continua
 e, depois de 3 minutos sem a página e sem nada em curso (câmera sendo
 configurada, decisão pendente, vigia ligado), encerra sozinho e devolve a placa.
@@ -165,7 +207,7 @@ a placa fica preparada e o próximo painel avisa e devolve ao encerrar.
 
 ## Versões e atualização
 
-A versão do painel aparece em Opções ("Painel v1.2.0") e vem de
+A versão do painel aparece em Opções e vem de
 `VERSAO.txt`. Cada versão é publicada em
 <https://github.com/xyron-robotics/ConfigurarCameras/releases>: o instalador e o
 `.sha256` dele são gerados pelo GitHub Actions a partir da tag `vX.Y.Z` (que
@@ -177,8 +219,10 @@ consulta o GitHub. Havendo versão mais nova, aparece a faixa "Versão X
 disponível" com o botão **Atualizar** e o link "o que mudou". Atualizar baixa o
 instalador, confere o SHA-256 publicado e o tamanho, fecha o painel (a placa
 volta ao DHCP), instala em silêncio e reabre o painel na versão nova (a sessão e o registro ficam). Só com o
-painel parado: sem câmera em configuração, sem decisão pendente, vigia
-desligado, e aberto como Administrador. Sem internet (ou só com proxy) a
+painel parado: sem câmera no portão ou conferindo, vigia desligado, e aberto
+como Administrador. Com câmera em curso, o painel recusa e pede para esperar
+as câmeras terminarem; durante o download nenhuma câmera nova começa, e se
+uma tiver começado mesmo assim, nada é instalado até ela terminar. Sem internet (ou só com proxy) a
 consulta falha em silêncio e tenta no dia seguinte; o aviso da última consulta
 fica guardado. O instalador silencioso grava `instalador.log` na pasta de dados.
 Se o SHA-256 não conferir, nada é instalado e a faixa diz o motivo.
@@ -205,6 +249,9 @@ Se o SHA-256 não conferir, nada é instalado e a faixa diz o motivo.
 | Câmera na bancada não aparece, mas responde pelo Wi-Fi | a placa escolhida é a errada, ou a câmera está numa faixa que o Wi-Fi também tem: confira a placa em Opções. Se o IP dela cai na faixa de outra placa, o painel põe um IP temporário e uma rota de host na placa escolhida ao configurar |
 | Câmera não responde ao ping | cabo, injetor PoE sem energia ou porta errada do injetor (saída **P+D**) |
 | Procurar diz "0 respostas" ao broadcast | um firewall no PC está barrando UDP de entrada (porta 37810). O painel ainda acha pelo IP de fábrica e pela varredura; libere o `powershell.exe` no firewall para o broadcast voltar |
+| Aviso de que o broadcast não responde, e o vigia em "Sem broadcast: uma câmera por vez." | o firewall do PC barra a porta UDP 37810, ou a placa perdeu o IP da faixa de fábrica (clique em **Preparar placa**). Enquanto isso o painel fica no modo de reserva: ligue uma câmera de fábrica por vez no switch. Libere o `powershell.exe` no firewall para UDP 37810; com o broadcast de volta, as câmeras voltam a andar em paralelo sozinhas |
+| Aviso de que duas câmeras respondem em 192.168.1.108 | há mais de uma câmera de fábrica no switch e o broadcast não responde, então o painel não sabe qual está atendendo. Deixe ligada só a câmera de fábrica que vai ser configurada agora (as já instaladas podem ficar) e libere a porta UDP 37810, como na linha acima |
+| Aviso de que o painel está sem Administrador e vai uma câmera por vez | o pedido do Windows foi recusado: sem Administrador o painel não põe o vizinho estático nem prepara a placa, e fica no modo de reserva. Encerre o painel e abra pelo atalho aceitando o pedido |
 | "fora das faixas do PC" na lista | a câmera está noutra rede; ao configurar, a placa recebe um IP temporário nessa rede (sai no Restaurar DHCP / ao encerrar) |
 | `senha recusada pela camera` | a câmera já tem outra senha. Não insista: troque a senha em Opções ou volte a câmera de fábrica pela tela dela |
 | `camera recusou o encoder no passo N` | a câmera não aceitou o que o passo grava (passo 1: resolução, fps ou codec; passo 2: bitrate ou GOP). O log mostra o encoder lido antes. Volte a um valor marcado "(testado)" em **Opções > Câmera** e **Tentar de novo** |
@@ -233,11 +280,17 @@ O `log.txt` na pasta de dados guarda tudo com data e hora. É o primeiro lugar a
   VIP-1230-D-G3 **recusa** `1280 × 720` no secundário (02/10/2026): a lista
   mostra "(recusado na VIP-1230-D-G3)". `352 × 240` e `640 × 480` seguem a
   nomenclatura Dahua sem teste.
-- **Vigia** e a **contagem do boot real** ainda não foram usados em campo.
+- **Modo paralelo** sem rodada em câmera real: o broadcast DHIP, o ARP, o
+  vizinho estático, a conferência em paralelo e o modo sem Administrador só
+  têm prova em simulação e na bancada de 17/11/2026, feita sem o painel. Falta
+  uma rodada com 2 a 3 câmeras de fábrica reais do começo ao fim.
+- **Vigia** e a **contagem do boot real** ainda não foram usados em campo pelo
+  painel (o vigia mudou para o modo paralelo).
 - **Descoberta DHIP**: validada com 33 aparelhos já inicializados (01/10/2026),
-  inclusive dois com porta HTTP 8081. Uma **câmera de fábrica** respondendo ao
-  broadcast (`Init` com bit 1) e o **IP temporário** na placa ainda não foram
-  vistos ao vivo; o painel confirma por HTTP antes de agir.
+  inclusive dois com porta HTTP 8081. Em 17/11/2026, na bancada, o broadcast
+  listou 3 câmeras de fábrica no mesmo IP, com MACs distintos e `Init` de
+  fábrica. O **IP temporário** na placa, posto pelo painel, ainda não foi
+  visto ao vivo.
 - **Assinatura de código**: o instalador não é assinado; baixado pelo
   navegador, o SmartScreen pode avisar (pelo painel não, o `curl.exe` não grava
   a marca da web). Assinar exige um certificado.
@@ -254,13 +307,18 @@ CONTEXT.md                  glossário do domínio
 docs/adr/                   decisões de arquitetura
 fonte/VERSAO.txt            versão do painel (única fonte: painel, instalador e tag)
 fonte/Motor-Cameras.ps1     tudo o que fala com a câmera e com a placa de rede
+fonte/Orquestrador-Cameras.ps1   fases de cada câmera, portão e admissão na fila (funções puras)
+fonte/Coordenador-Cameras.ps1    executa o que o orquestrador decide: vigia paralelo, vizinho estático, jobs por câmera
 fonte/web/Servidor-Painel.ps1 + web/www/   o painel (HttpListener + página)
 fonte/INICIAR-PAINEL.vbs    abre o painel sem console (atalho do instalador)
 fonte/INICIAR-PAINEL-COM-CONSOLE.bat   o mesmo, com console (diagnóstico)
-fonte/Testes-Motor.ps1      95 provas do motor (sessão, placa escolhida, rede, fila, registro), sem câmera nem rede
-fonte/Testes-Descoberta.ps1 49 provas das funções puras de descoberta (inclui DHIP)
+fonte/Testes-Motor.ps1      testes do motor (sessão, placa escolhida, rede, fila, registro), sem câmera nem rede
+fonte/Testes-Descoberta.ps1 testes das funções puras de descoberta (inclui DHIP)
+fonte/Testes-Orquestrador.ps1   testes das fases, do portão e da admissão
+fonte/Testes-Coordenador.ps1    testes do coordenador, com rede e jobs falsos
 fonte/API-INTELBRAS.md      protocolo da câmera, o que foi visto ao vivo
-fonte/testes/               tabelas lidas da VIP-1230-D-G3 (MAC, série e IPs trocados por exemplos)
+fonte/testes/               tabelas lidas da VIP-1230-D-G3 e respostas DHIP (MAC, série e IPs trocados por exemplos)
+fonte/testes/Smoke-Paralelo.ps1   smoke do painel em simulação, fora do CI e do instalador
 instalador/                 ConfigurarCameras.iss + Gerar-Instalador.ps1 (Inno Setup 6); icone.ico (Gerar-Icone.ps1)
 .github/workflows/release.yml   tag v* -> testes, instalador e release no GitHub
 ```
@@ -268,8 +326,30 @@ instalador/                 ConfigurarCameras.iss + Gerar-Instalador.ps1 (Inno S
 Publicar uma versão: ajuste `fonte\VERSAO.txt`, commit, `git tag vX.Y.Z` e
 `git push origin vX.Y.Z`; o Actions gera o instalador e o release.
 
-Rodar os testes: `powershell -ExecutionPolicy Bypass -File fonte\Testes-Motor.ps1`
-e o mesmo para `Testes-Descoberta.ps1`. Gerar o instalador:
+Rodar os testes (PowerShell 5.1, na raiz do repo; a contagem sai na tela):
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Motor.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Descoberta.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Orquestrador.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Coordenador.ps1
+git diff --check
+```
+
+**Simulação para desenvolver:** `Servidor-Painel.ps1 -Simular` aceita
+`-SimularCameras` (câmeras de fábrica fictícias no broadcast, de 1 a 16;
+padrão 3, a câmera n com MAC `AA:00:00:00:00:<n em hex>` e serial `SIM-n`) e
+`-SimularEscala` (multiplica as esperas simuladas; padrão 1, 0 = sem espera).
+Com o painel no ar, `POST /api/simular {ligado, falharEm}` liga a simulação e
+arma uma falha: `falharEm` em texto (uma etapa: `inicializada`, `encoder`,
+`rede` ou `conferida`; falha uma vez, na primeira câmera que chegar nela) ou
+em mapa por câmera, `{ "<n>": "<etapa>|mac-trocado|ja-inicializada" }`. O
+`fonte\testes\Smoke-Paralelo.ps1` sobe o painel em simulação numa pasta
+temporária e roda um cenário de ponta a ponta pela API (`-Cenario basico`,
+`falha-rede-2`, `mac-trocado-2`, `ja-inicializada-3` ou `encerrar`; `-Cameras`
+de 2 a 16). Fica fora do CI e do instalador.
+
+Gerar o instalador:
 `instalador\Gerar-Instalador.ps1` (roda os testes, confere que nenhum
 `*.local.ps1` entra e chama o ISCC; saída em `instalador\saida\`, fora do git).
 `fonte\senha.local.ps1` é opcional, fora do git e nunca distribuído.
