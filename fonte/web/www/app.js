@@ -149,22 +149,29 @@ function mostrarAviso(texto, origem, opcoes) {
   if (o.neutro) timerAviso = setTimeout(() => { a.hidden = true; }, 4000);
 }
 
-async function comando(caminho, corpo) {
+// Devolve true se o servidor aceitou. -opcoes.semTrava: quem chama trava os
+// proprios botoes (decisao de um cartao nao trava os outros cartoes).
+async function comando(caminho, corpo, opcoes) {
   const origem = ORIGEM_DA_ROTA[caminho];
   // Trava otimista: o estado "ocupado" so chega no proximo polling.
-  if (!ROTA_SEMPRE.includes(caminho)) aplicarOcupado(true);
+  if (!ROTA_SEMPRE.includes(caminho) && !(opcoes && opcoes.semTrava)) aplicarOcupado(true);
+  let ok = false;
   try {
     await api('POST', caminho, corpo || {});
     mostrarAviso('');
+    ok = true;
   } catch (e) {
     if (e.status === 409) mostrarAviso(e.message, origem, { neutro: true });
     else mostrarAviso(e.message, origem);
   }
   setTimeout(buscarEstado, 150);
+  return ok;
 }
 
 // Botoes de trabalho ficam desligados enquanto o worker trabalha. Encerrar o
-// painel e o vigia (desligar vale no meio de uma camera) ficam sempre ativos.
+// painel, encerrar a fila e o vigia (desligar vale no meio de uma camera)
+// ficam sempre ativos. Os botoes de decisao dos cartoes tambem ficam fora: o
+// servidor aceita decisao com o worker ocupado, e cada cartao trava os seus.
 function aplicarOcupado(ocupado) {
   const simular = !!(estado && estado.simular);
   const sel = '#view-ferramentas .btn, #btn-preparar, #btn-restaurar, #btn-refazer, #form-conectada .btn, ' +
@@ -555,7 +562,10 @@ function desenharFila(e) {
   ult.hidden = !e.ultimo || e.fase === 'decisao' || e.fase === 'escolher';
   ult.textContent = e.ultimo || '';
   const cams = temFila ? listaCameras(e) : [];
-  if (!temFila) { desenharCartoes([], [], []); desenharVigia(e, false); return; }
+  // Encerrar a fila: botao da fila enquanto ela esta aberta (admitindo).
+  $('btn-encerrar-fila').hidden = !temFila || ['concluida', 'encerrada'].includes(e.fase) ||
+    !!(e.paralelo && e.paralelo.admitindo === false);
+  if (!temFila) { desenharCartoes([], [], [], e); desenharVigia(e, false); return; }
 
   const itens = fila.itens;
   const pendentes = itens.filter((i) => i.Estado === 'pendente');
@@ -587,7 +597,7 @@ function desenharFila(e) {
       i.Motivo ? h('span', { class: 'motivo', text: i.Motivo }) : null);
   }));
 
-  desenharCartoes(cams, itens, usaveis);
+  desenharCartoes(cams, itens, usaveis, e);
 
   const blocos = { pronta: false, trabalho: false, escolha: false, decisao: false, fim: false };
   const posAtual = e.atual >= 0 ? itens[e.atual] : null;
@@ -645,8 +655,9 @@ function desenharFila(e) {
     $('bancada-apoio').textContent = vigiando
       ? 'O vigia configura sozinho. Câmera conectada fica para retomar uma câmera já inicializada, pelo bloco abaixo.'
       : 'Ligue uma câmera só no cabo e confirme. A câmera de fábrica é encontrada sozinha pela placa escolhida.';
-    // Uma acao principal por vez: com o vigia ligado, o destaque e dele.
-    $('btn-conectada').className = vigiando ? 'btn' : 'btn acento';
+    // Uma acao principal por vez (C5): com o vigia ligado o destaque e dele;
+    // com cartao em decisao, do "Tentar de novo" do primeiro.
+    $('btn-conectada').className = vigiando || temFase(['decisao']) ? 'btn' : 'btn acento';
   }
   for (const [k, v] of Object.entries(blocos)) $('bancada-' + k).hidden = !v;
   desenharVigia(e, !blocos.fim, {
@@ -682,7 +693,11 @@ function poeOculto(el, oculto) {
 }
 
 function novoCartao(mac) {
-  const k = { mac, fase: null, publicado: { porta: '', canal: '' }, enviado: null };
+  // travaAte: botoes de decisao travados ate esse instante (ms) ou ate a fase
+  // mudar. querFoco/focou: o foco vai ao "Tentar de novo" so na primeira
+  // entrada em decisao deste cartao.
+  const k = { mac, fase: null, publicado: { porta: '', canal: '' }, enviado: null,
+              travaAte: 0, querFoco: false, focou: false, senhaVelha: false };
   k.titulo = h('span');
   k.destino = h('span', { class: 'mono cartao-destino' });
   k.quem = h('span', { class: 'so-leitor' });
@@ -697,6 +712,14 @@ function novoCartao(mac) {
   k.barra = h('progress', { max: 1, value: 0, hidden: true });
   k.trabalho = h('p', { class: 'apoio cartao-trabalho' });
   k.curso = h('div', { class: 'cartao-curso' }, k.etapa, k.barra, k.trabalho);
+  // Decisao do cartao: etapa e erro da falha, "Tentar de novo" e "Pular".
+  k.falhaTitulo = h('p', { class: 'cartao-falha falha-titulo' });
+  k.falhaErro = h('p', { class: 'decisao-erro' });
+  k.falhaApoio = h('p', { class: 'apoio cartao-falha-apoio' });
+  k.tentar = h('button', { type: 'button', class: 'btn', onclick: () => decidirCartao(k, 'tentar') }, 'Tentar de novo');
+  k.pular = h('button', { type: 'button', class: 'btn', onclick: () => decidirCartao(k, 'pular') }, 'Pular esta posição');
+  k.decisao = h('div', { class: 'cartao-decisao', hidden: true },
+    k.falhaTitulo, k.falhaErro, k.falhaApoio, h('div', { class: 'acoes' }, k.tentar, k.pular));
   k.aviso = h('p', { class: 'cartao-aviso' });
   k.porta = h('input', { name: 'porta', autocomplete: 'off', spellcheck: 'false' });
   k.canal = h('input', { name: 'canal', autocomplete: 'off', spellcheck: 'false' });
@@ -708,7 +731,7 @@ function novoCartao(mac) {
       h('h3', { class: 'cartao-titulo' }, k.titulo, k.destino),
       h('p', { class: 'cartao-estado', 'aria-live': 'polite' }, k.quem, k.selo)),
     h('p', { class: 'cartao-id' }, k.parteModelo, k.parteSerial, k.parteMac),
-    k.curso, k.aviso, k.campos);
+    k.curso, k.decisao, k.aviso, k.campos);
   for (const campo of [k.porta, k.canal]) {
     campo.addEventListener('input', () => { campo.dataset.sujo = '1'; poeTexto(k.salvo, ''); });
     campo.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); salvarCartao(k); } });
@@ -729,6 +752,35 @@ function salvarCartao(k) {
   comando('/api/camera', { mac: k.mac, porta, canal });
 }
 
+// Tempo maximo da trava dos botoes de um cartao depois de um clique: o
+// servidor pode aceitar e nao mudar nada (o motivo chega pelo aviso).
+const TRAVA_DECISAO_MS = 5000;
+
+function botoesDecisao(k) {
+  const travado = k.travaAte > Date.now();
+  // Senha recusada: "Tentar de novo" fica travado ate uma senha mais nova
+  // (o servidor tambem recusa; repetir gastaria o lockout da camera).
+  k.tentar.disabled = travado || k.senhaVelha;
+  k.pular.disabled = travado;
+}
+
+// Decisao sobre a camera do cartao (POST /api/decisao {mac, acao}). Trava so
+// os botoes deste cartao: os outros cartoes seguem livres.
+async function decidirCartao(k, acao) {
+  if (acao === 'pular') {
+    const titulo = k.titulo.textContent;
+    const quem = titulo.startsWith('Câmera') ? 'a ' + titulo.replace('Câmera', 'câmera') : 'esta câmera';
+    const id = k.serial.textContent ? ' (serial ' + k.serial.textContent + ')'
+      : (k.macTxt.textContent ? ' (MAC ' + k.macTxt.textContent + ')' : '');
+    if (!confirm('Pular ' + quem + id + '? Ela fica como está agora, registrada como Falhou e fora das instaladas. ' +
+                 'As outras seguem.')) return;
+  }
+  k.travaAte = Date.now() + TRAVA_DECISAO_MS;
+  botoesDecisao(k);
+  const ok = await comando('/api/decisao', { mac: k.mac, acao }, { semTrava: true });
+  if (!ok) { k.travaAte = 0; botoesDecisao(k); }
+}
+
 // Valor publicado entra no campo so sem foco e sem texto pendente; o texto
 // pendente deixa de ser pendente quando o publicado o alcanca.
 function sincronizarCampo(campo, valor) {
@@ -737,7 +789,7 @@ function sincronizarCampo(campo, valor) {
   if (campo.value !== valor) campo.value = valor;
 }
 
-function atualizarCartao(k, c, itens, usaveis) {
+function atualizarCartao(k, c, itens, usaveis, senhaGeracao) {
   const fase = String(c.fase || '');
   const item = c.indice >= 0 ? itens[c.indice] : null;
   const n = item ? usaveis.indexOf(item) : -1;
@@ -748,6 +800,9 @@ function atualizarCartao(k, c, itens, usaveis) {
   poeOculto(k.destino, !c.destino);
   if (k.fase !== fase) {
     k.fase = fase;
+    // Fase nova: o comando do cartao andou; a trava sai.
+    k.travaAte = 0;
+    k.querFoco = fase === 'decisao' && !k.focou;
     k.el.dataset.fase = fase;
     k.el.classList.toggle('compacto', ['feita', 'pulada', 'ignorada'].includes(fase));
     poeTexto(k.quem, titulo + ': ');
@@ -777,6 +832,18 @@ function atualizarCartao(k, c, itens, usaveis) {
     poeTexto(k.trabalho, c.trabalho || '');
     poeOculto(k.trabalho, !c.trabalho);
   }
+  const f = fase === 'decisao' ? c.falha : null;
+  poeOculto(k.decisao, !f);
+  if (f) {
+    poeTexto(k.falhaTitulo, 'Falhou na etapa ' + (NOME_ETAPA[f.etapa] || f.etapa || 'desconhecida'));
+    poeTexto(k.falhaErro, f.erro || '');
+    poeOculto(k.falhaErro, !f.erro);
+    poeTexto(k.falhaApoio, textoDaFalha(f, item));
+    k.senhaVelha = !!f.loginRecusado && f.geracao === senhaGeracao;
+    botoesDecisao(k);
+  } else {
+    k.querFoco = false;
+  }
   poeTexto(k.aviso, c.aviso || '');
   poeOculto(k.aviso, !c.aviso);
 
@@ -792,8 +859,9 @@ function atualizarCartao(k, c, itens, usaveis) {
 }
 
 // Ordem (C6): pela posicao; sem posicao no fim, na ordem de cameras[].
-function desenharCartoes(cams, itens, usaveis) {
+function desenharCartoes(cams, itens, usaveis, e) {
   const caixa = $('cartoes');
+  const senhaGeracao = e ? e.senhaGeracao : undefined;
   const chave = (c) => (c.posicao > 0 ? c.posicao : Infinity);
   const ordem = cams.map((c, i) => ({ c, i }))
     .sort((a, b) => (chave(a.c) - chave(b.c)) || (a.i - b.i))
@@ -806,7 +874,7 @@ function desenharCartoes(cams, itens, usaveis) {
     vistos.add(mac);
     let k = cartoes.get(mac);
     if (!k) { k = novoCartao(mac); cartoes.set(mac, k); }
-    atualizarCartao(k, c, itens, usaveis);
+    atualizarCartao(k, c, itens, usaveis, senhaGeracao);
     nos.push(k.el);
   }
   for (const [mac, k] of cartoes) {
@@ -820,6 +888,26 @@ function desenharCartoes(cams, itens, usaveis) {
     else caixa.append(...nos);
   }
   poeOculto(caixa, !nos.length);
+  focarDecisao(nos.map((el) => cartoes.get(el.dataset.mac)).filter(Boolean));
+}
+
+// Um acento por vista (C5): so o "Tentar de novo" do primeiro cartao em
+// decisao. O foco vai a ele na primeira entrada em decisao do cartao, com o
+// botao ativo e na tela; quem esta digitando num campo nao perde o foco (a
+// linha de estado do cartao ja anuncia a falha).
+function focarDecisao(ks) {
+  const emDecisao = ks.filter((k) => !k.decisao.hidden);
+  for (const k of ks) {
+    const cls = k === emDecisao[0] ? 'btn acento' : 'btn';
+    if (k.tentar.className !== cls) k.tentar.className = cls;
+  }
+  const ativo = document.activeElement;
+  const digitando = !!ativo && ativo.matches && ativo.matches('input, select, textarea');
+  const alvo = emDecisao.find((k) => k.querFoco && !k.tentar.disabled && naTela(k.tentar));
+  if (!alvo) return;
+  if (!digitando) { alvo.tentar.focus(); alvo.focou = true; }
+  // Uma entrada em decisao, um foco (no maximo): as outras do mesmo ciclo nao roubam.
+  for (const k of emDecisao) if (k.querFoco && !k.tentar.disabled && naTela(k.tentar)) { k.querFoco = false; k.focou = true; }
 }
 
 // O que a camera ja recebeu e o que "Tentar de novo" faz, por etapa. Espelha
@@ -1611,21 +1699,24 @@ function ligar() {
     const ligado = !(estado && estado.vigia && estado.vigia.ligado);
     comando('/api/vigia', { ligado, porta: f.porta.value, canal: f.canal.value, broadcast: f.broadcast.checked });
   });
+  // Bloco legado (retomada manual pelo IP, C7): decisao sem MAC, como antes.
   for (const b of document.querySelectorAll('[data-decisao]')) {
     b.addEventListener('click', () => {
       const acao = b.dataset.decisao;
-      const itens = (estado && estado.fila && estado.fila.itens) || [];
       if (acao === 'pular' && !confirm('Pular esta posição? A câmera fica como está agora, registrada como Falhou e fora das ' +
                                        'instaladas. A fila segue para a próxima posição.')) return;
-      if (acao === 'encerrar') {
-        const pend = itens.filter((i) => i.Estado === 'pendente').length;
-        const resto = pend === 0 ? 'Não há outras posições pendentes.'
-          : (pend === 1 ? 'A posição pendente fica sem câmera.' : 'As ' + pend + ' posições pendentes ficam sem câmera.');
-        if (!confirm('Encerrar a fila? A câmera atual fica registrada como Falhou. ' + resto)) return;
-      }
       comando('/api/decisao', { acao });
     });
   }
+  // Encerrar a fila (botao da fila): sem MAC; quem esta em curso termina.
+  $('btn-encerrar-fila').addEventListener('click', () => {
+    const itens = (estado && estado.fila && estado.fila.itens) || [];
+    const pend = itens.filter((i) => i.Estado === 'pendente').length;
+    const resto = pend === 0 ? ' Não há posições pendentes.'
+      : (pend === 1 ? ' Há 1 posição pendente.' : ' Há ' + pend + ' posições pendentes.');
+    if (!confirm('Encerrar a fila? As câmeras em curso terminam antes; as pendentes ficam sem câmera.' + resto)) return;
+    comando('/api/decisao', { acao: 'encerrar' });
+  });
   $('btn-escolha-cancelar').addEventListener('click', () => comando('/api/escolher/cancelar'));
   $('btn-registro-atualizar').addEventListener('click', carregarRegistro);
 

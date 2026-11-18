@@ -328,6 +328,7 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 /* Ambar = agora: sem fila nada esta em curso, a barra lateral fica em --linha. */
 .painel-sem-fila { background: var(--sup); border: 1px solid var(--linha); border-left: 6px solid var(--linha); border-radius: var(--r-md); padding: var(--s-4) var(--s-5); }
 .fita-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.fita-cabeca-fim { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; }
 
 /* A fita: cada posicao e uma etiqueta com o IP. A atual fica acesa. */
 .fita {
@@ -414,6 +415,11 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 .cartao-etapa { font-size: 14px; font-weight: 600; }
 .cartao progress { max-width: none; margin-top: 0; }
 .cartao-trabalho { font-size: 14px; overflow-wrap: anywhere; }
+/* Decisao no cartao: etapa, erro e as duas acoes. */
+.cartao-decisao { display: flex; flex-direction: column; gap: var(--s-2); }
+.cartao-decisao > p { margin: 0; }
+.cartao-falha { font-size: 15px; font-weight: 600; }
+.cartao-falha-apoio { font-size: 14px; }
 .cartao-aviso {
   margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); font-size: 14px;
   background: var(--acento-fraco); color: var(--acento-fraco-texto); overflow-wrap: anywhere;
