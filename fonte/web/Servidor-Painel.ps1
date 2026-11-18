@@ -84,6 +84,9 @@ $motor = Join-Path (Split-Path -Parent $raizWeb) 'Motor-Cameras.ps1'
 $www   = Join-Path $raizWeb 'www'
 
 . $motor
+# Coordenador: o finally solta os vizinhos estaticos do rastro antes de
+# devolver a placa (Clear-VizinhosRastro).
+. (Join-Path (Split-Path -Parent $motor) 'Coordenador-Cameras.ps1')
 # Orquestrador (puro, nao executa nada ao carregar): o listener usa o texto
 # da recusa das guardas globais (Get-TextoRecusaComando).
 . (Join-Path (Split-Path -Parent $motor) 'Orquestrador-Cameras.ps1')
@@ -1195,9 +1198,23 @@ $scriptWorker = {
             }
             'rede-atualizar' { }
             'internet-testar' { Update-Internet }
+            # Atualizar: o listener ja conferiu versao, Administrador e vigia;
+            # aqui a guarda global de novo (corrida com a admissao) e so entao
+            # o pedido vai para o atualizador.
+            'atualizar' {
+                if (Test-ComandoRecusado 'atualizar') { return }
+                $E.AtualizarPedido = $true
+                Write-Log ("Operador: atualizar o painel para a versao " + [string]$Cmd.versao + ".") 'Cyan'
+            }
         }
     }
 
+    # Partida: vizinho estatico que sobrou no rastro (painel fechado no X com
+    # camera presa) sai antes de tudo. Em simulacao a placa nao e tocada.
+    if ($W.Admin -and -not $W.Simular) {
+        try { $null = Clear-VizinhosRastro -CaminhoRastro $Arquivos.SessaoPlaca }
+        catch { Write-Log ("ERRO ao soltar os vizinhos estaticos do rastro na partida: " + $_.Exception.Message) 'Red' }
+    }
     Update-Rede
     Publicar
     Write-Log ("Painel pronto. Dados em " + (Split-Path -Parent $Arquivos.Registro) +
@@ -1711,12 +1728,14 @@ function Invoke-Rota {
             elseif ($null -ne $s -and [string]$s.fase -in @('configurando', 'decisao', 'escolher')) { $motivo = 'Termine a câmera atual (ou encerre a fila) antes de atualizar.' }
             elseif ($null -ne $s -and $null -ne $s.vigia -and [bool]$s.vigia.ligado) { $motivo = 'Desligue o vigia antes de atualizar.' }
             if ($motivo) { Send-Json $Ctx @{ erro = $motivo } 409; return }
-            $E.AtualizarPedido = $true
-            Write-Log ("Operador: atualizar o painel para a versao " + $a.versao + ".") 'Cyan'
-            Send-Json $Ctx @{ ok = $true } 202
+            # O worker confere a guarda de novo (Step-Comando) e faz o pedido.
+            Add-Comando $Ctx @{ tipo = 'atualizar'; versao = [string]$a.versao }
         }
+        # Encerrar o painel (nao a fila: essa e POST /api/decisao {acao:'encerrar'}).
+        # Com camera em portao ou conferindo, 409 com o texto da recusa.
         # restaurando: a pagina avisa que a placa esta voltando ao DHCP (o finally faz).
         'POST /api/encerrar'   {
+            if (Test-RecusaGuardada $Ctx 'encerrar-painel') { return }
             $restaurando = ($ehAdmin -and -not $E.Simular -and (Test-Path -LiteralPath $arquivos.SessaoPlaca))
             Send-Json $Ctx @{ ok = $true; restaurando = [bool]$restaurando }
             $E.Parar = $true
@@ -1739,7 +1758,10 @@ $E.UltimoPoll = (Get-Date)
 $proximaChecagem = (Get-Date).AddSeconds(5)
 function Test-PainelOciosoAgora {
     try {
+        # Camera em portao ou conferindo, ou esperando decisao: nao e ocioso.
+        if ([int]$E.EmCurso -gt 0) { return $false }
         $s = $E.Estado | ConvertFrom-Json
+        if (@(@($s.cameras) | Where-Object { $null -ne $_ -and [string]$_.fase -eq 'decisao' }).Count -gt 0) { return $false }
         $vigia = $false; if ($null -ne $s.vigia) { $vigia = [bool]$s.vigia.ligado }
         $atualizando = [bool]$E.AtualizarPedido
         try { $a = $E.Atualizacao | ConvertFrom-Json; if ([string]$a.estado -in @('baixando', 'verificando', 'instalando')) { $atualizando = $true } } catch { }
@@ -1793,6 +1815,9 @@ try {
     # Roda aqui, no thread principal, com o worker ja parado: vale para
     # Encerrar, Ctrl+C e auto-encerrar. Nunca impede o fechamento.
     if ($ehAdmin -and -not $E.Simular -and (Test-Path -LiteralPath $arquivos.SessaoPlaca)) {
+        # Vizinhos estaticos do rastro primeiro (o pool ja fechou com o worker).
+        try { $null = Clear-VizinhosRastro -CaminhoRastro $arquivos.SessaoPlaca }
+        catch { Write-Log ("ERRO ao soltar os vizinhos estaticos no encerramento: " + $_.Exception.Message) 'Red' }
         try {
             Write-Host "  Devolvendo a placa de rede ao DHCP..." -ForegroundColor Cyan
             $p = $null; try { $p = Read-Sessao -Caminho $arquivos.Sessao } catch { }

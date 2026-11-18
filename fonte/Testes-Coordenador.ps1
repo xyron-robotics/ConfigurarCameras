@@ -14,6 +14,9 @@
         no mesmo IP;
       - New-DepsPlaca com as funcoes pequenas do motor trocadas por falsas
         (tabela de vizinhos, IP da placa) e o rastro numa pasta temporaria;
+      - Clear-VizinhosRastro: vizinhos que sobraram no rastro saem na
+        partida e ao encerrar o painel (com o pool fechado), Deps falsas e
+        tabela falsa;
       - pool e jobs: RunspacePool real com o motor em -Simular e o registro
         numa pasta temporaria (3 cameras ate 'feita', no maximo 1 MAC preso,
         conferencias sobrepostas, senha fora dos eventos, job que estoura);
@@ -526,6 +529,118 @@ T 'New-DepsPlaca ligado ao coordenador: admissao prende pela tabela falsa e fim 
         Assert-Igual 0 @($script:arp).Count 'solta pela tabela'
         Assert-Igual 0 @((Read-JsonArquivo $script:rastro).Vizinhos).Count 'rastro sem vizinho'
     } finally { Remove-PlacaFalsa }
+}
+
+# ------------------------------------------------- vizinhos do rastro (partida e painel)
+
+Write-Host ""
+Write-Host "Clear-VizinhosRastro" -ForegroundColor Cyan
+
+# Rastro com vizinhos que sobraram (painel fechado no X com camera presa).
+function Add-VizinhosNoRastro {
+    param([string[]]$Ips)
+    $s = Read-JsonArquivo $script:rastro
+    $v = @()
+    $n = 0
+    foreach ($ip in $Ips) { $n++; $v += @{ Ip = $ip; Mac = ('AA:00:00:00:00:0' + $n) } }
+    $s.Vizinhos = $v
+    Save-JsonAtomico -Caminho $script:rastro -Objeto $s
+}
+
+T 'Clear-VizinhosRastro com Deps falsas: solta cada vizinho do rastro e junta as falhas' {
+    Use-PlacaFalsa
+    try {
+        Add-VizinhosNoRastro @('192.168.1.108', '192.0.2.11')
+        $script:soltos = @()
+        $deps = @{ Soltar = {
+            param($Mac, $Ip)
+            $script:soltos += ($Mac + ' ' + $Ip)
+            if ($Ip -eq '192.0.2.11') { return [pscustomobject]@{ Ok = $false; Erro = 'tabela travada' } }
+            return [pscustomobject]@{ Ok = $true; Erro = '' }
+        } }
+        $r = Clear-VizinhosRastro -CaminhoRastro $script:rastro -Deps $deps
+        Assert-Igual 'AA:00:00:00:00:01 192.168.1.108|AA:00:00:00:00:02 192.0.2.11' ($script:soltos -join '|') 'soltar para cada vizinho, em ordem'
+        Assert-Igual '192.168.1.108' (@($r.Soltos) -join ',') 'soltos'
+        Assert-Igual 1 @($r.Falhas).Count 'uma falha'
+        Assert-Verdade ((@($r.Falhas)[0]) -like '*192.0.2.11*tabela travada*') ('falha: ' + @($r.Falhas)[0])
+    } finally { Remove-PlacaFalsa }
+}
+
+T 'Clear-VizinhosRastro sem rastro ou sem vizinhos: nada a soltar' {
+    $script:soltos = @()
+    $deps = @{ Soltar = { param($Mac, $Ip) $script:soltos += $Ip; return [pscustomobject]@{ Ok = $true; Erro = '' } } }
+    $r = Clear-VizinhosRastro -CaminhoRastro (Join-Path ([IO.Path]::GetTempPath()) ('sem-rastro-' + [guid]::NewGuid().ToString('N') + '.json')) -Deps $deps
+    Assert-Igual 0 (@($r.Soltos).Count + @($r.Falhas).Count) 'sem rastro'
+    Use-PlacaFalsa
+    try {
+        $r = Clear-VizinhosRastro -CaminhoRastro $script:rastro -Deps $deps
+        Assert-Igual 0 (@($r.Soltos).Count + @($r.Falhas).Count) 'rastro sem vizinhos'
+        Assert-Igual 0 $script:soltos.Count 'soltar nunca chamado'
+    } finally { Remove-PlacaFalsa }
+}
+
+T 'Partida: vizinhos que sobraram no rastro saem da tabela e do rastro (placa do rastro)' {
+    . $script:falsasPlaca
+    Use-PlacaFalsa
+    try {
+        Add-VizinhosNoRastro @('192.168.1.108', '192.0.2.11')
+        # Um ainda na tabela; o outro ja sumiu (reboot): os dois saem do rastro.
+        $script:arp = @([pscustomobject]@{ IfIndex = 8; IPAddress = '192.168.1.108'; LinkLayerAddress = 'AA-00-00-00-00-01'; State = 'Permanent' })
+        $r = Clear-VizinhosRastro -CaminhoRastro $script:rastro
+        Assert-Igual '192.168.1.108,192.0.2.11' (@($r.Soltos) -join ',') 'soltos'
+        Assert-Igual 0 @($r.Falhas).Count 'sem falha'
+        Assert-Igual 0 @($script:arp).Count 'tabela vazia'
+        Assert-Verdade ($script:chamadasViz -contains 'remove 8 192.168.1.108') 'removido na placa do rastro (IfIndex 8)'
+        $s = Read-JsonArquivo $script:rastro
+        Assert-Igual 0 @($s.Vizinhos).Count 'rastro sem vizinhos'
+        Assert-Igual '192.168.1.220' ((@($s.Adicionados) | ForEach-Object { $_.Ip }) -join ',') 'o resto do rastro fica'
+    } finally { Remove-PlacaFalsa }
+}
+
+T 'Partida: rastro com vizinhos e sem placa vira falha, sem tocar a tabela' {
+    . $script:falsasPlaca
+    function Get-VizinhoPlaca { throw 'tabela tocada sem placa' }
+    Use-PlacaFalsa
+    try {
+        Add-VizinhosNoRastro @('192.168.1.108')
+        $s = Read-JsonArquivo $script:rastro
+        $s.IfIndex = 0
+        Save-JsonAtomico -Caminho $script:rastro -Objeto $s
+        $r = Clear-VizinhosRastro -CaminhoRastro $script:rastro
+        Assert-Igual 0 @($r.Soltos).Count 'nada solto'
+        Assert-Igual 1 @($r.Falhas).Count 'uma falha'
+        Assert-Igual 1 @((Read-JsonArquivo $script:rastro).Vizinhos).Count 'vizinho fica no rastro para o Reset'
+    } finally { Remove-PlacaFalsa }
+}
+
+T 'Encerrar o painel: pool fechado e o vizinho preso sai da tabela e do rastro' {
+    . $script:falsasPlaca
+    Use-PlacaFalsa
+    $pool = $null
+    try {
+        $deps = New-DepsFalsas
+        $placa = New-DepsPlaca -IfIndex 8 -CaminhoRastro $script:rastro
+        $deps.Prender = $placa.Prender
+        $deps.Soltar = $placa.Soltar
+        $coord = New-Coordenador -Posicoes (New-PosicoesTeste 2) -Deps $deps
+        $pool = New-PoolCameras -Max 2
+        $coord.Pool = $pool
+        $coord.Estado = (Step-Descoberta -Estado $coord.Estado -Achados @((New-AchadoTeste 1))).Estado
+        $p = Step-Admissao -Estado $coord.Estado
+        $coord.Estado = $p.Estado
+        Invoke-AcoesCoordenador -Coord $coord -Acoes $p.Acoes
+        Assert-Igual 1 @($script:arp).Count 'camera presa antes do encerrar'
+
+        Close-PoolCameras -Pool $coord.Pool
+        $r = Clear-VizinhosRastro -CaminhoRastro $script:rastro
+        Assert-Igual 'Closed' ([string]$pool.Pool.RunspacePoolStateInfo.State) 'pool fechado'
+        Assert-Igual '192.168.1.108' (@($r.Soltos) -join ',') 'solto'
+        Assert-Igual 0 @($script:arp).Count 'tabela vazia'
+        Assert-Igual 0 @((Read-JsonArquivo $script:rastro).Vizinhos).Count 'rastro sem vizinho'
+    } finally {
+        Close-PoolCameras -Pool $pool
+        Remove-PlacaFalsa
+    }
 }
 
 # ------------------------------------------------------------------- pool e jobs

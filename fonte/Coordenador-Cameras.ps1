@@ -538,6 +538,49 @@ function Invoke-SoltarPlaca {
     return [pscustomobject]@{ Ok = $true; Erro = '' }
 }
 
+<#
+    Solta os vizinhos estáticos que o rastro da placa ainda guarda. Na
+    partida: sobra de um painel fechado no X com câmera presa. Ao encerrar o
+    painel: antes do Reset-RedeLocalCameras, com o pool já fechado. Deps.Soltar
+    (param $Mac, $Ip) é o mesmo do coordenador; sem Deps, New-DepsPlaca com a
+    placa do rastro (IfIndex), que tira da tabela e do rastro. Rastro ausente
+    ou sem Vizinhos: nada. Rastro com vizinhos e sem placa: falha, e eles ficam
+    para o Reset. { Soltos = IPs; Falhas = textos }.
+#>
+function Clear-VizinhosRastro {
+    param([Parameter(Mandatory = $true)][string]$CaminhoRastro, $Deps = $null)
+
+    $res = @{ Soltos = @(); Falhas = @() }
+    $rastro = Read-JsonArquivo $CaminhoRastro
+    $vizinhos = @(@(Get-PropriedadeOuVazio $rastro 'Vizinhos') | Where-Object { $null -ne $_ -and -not [string]::IsNullOrWhiteSpace([string]$_.Ip) })
+    if ($vizinhos.Count -eq 0) { return $res }
+
+    if ($null -eq $Deps) {
+        $ifIndex = [int](Get-PropriedadeOuVazio $rastro 'IfIndex' 0)
+        if ($ifIndex -le 0) {
+            $res.Falhas = @('O rastro da placa tem ' + $vizinhos.Count + ' vizinho(s) estático(s) e não diz a placa; ficam para a devolução da placa.')
+            Write-Log ('  ' + $res.Falhas[0]) 'Yellow'
+            return $res
+        }
+        $Deps = New-DepsPlaca -IfIndex $ifIndex -CaminhoRastro $CaminhoRastro
+    }
+    $soltar = $Deps['Soltar']
+    if ($soltar -isnot [scriptblock]) { throw 'Dependência Soltar ausente para soltar os vizinhos do rastro.' }
+
+    Write-Log ('Soltando ' + $vizinhos.Count + ' vizinho(s) estático(s) do rastro da placa.') 'Cyan'
+    foreach ($v in $vizinhos) {
+        $ip = [string]$v.Ip
+        try { $r = ConvertTo-RespostaDep (& $soltar ([string]$v.Mac) $ip) }
+        catch { $r = @{ Ok = $false; Erro = $_.Exception.Message } }
+        if ($r.Ok) { $res.Soltos += $ip }
+        else {
+            $res.Falhas += ($ip + ': ' + $r.Erro)
+            Write-Log ('  Não deu para soltar o vizinho estático ' + $ip + ': ' + $r.Erro) 'Yellow'
+        }
+    }
+    return $res
+}
+
 # ------------------------------------------------------------- pool e jobs
 
 # Motor ao lado deste arquivo: cada runspace do pool faz dot-source dele.

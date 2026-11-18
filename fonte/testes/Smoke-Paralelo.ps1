@@ -9,6 +9,8 @@
     cada camera ao longo do tempo. No meio:
       - com 2 cameras em curso, um POST /api/fila sem retentativa: 409 com o
         texto da recusa do orquestrador;
+      - com uma camera conferindo, um POST /api/encerrar sem retentativa: 409
+        com o texto da recusa (encerrar o painel) e o painel continua;
       - com uma camera em decisao e outra conferindo, POST /api/camera muda a
         porta e o canal da que esta conferindo (7 e 8);
       - com a que falhou em decisao e as outras 2 feitas, POST /api/decisao
@@ -19,6 +21,8 @@
       - so 1 camera em decisao (a falha simulada nao repete nas outras);
       - a que tentou de novo nao passou pelo portao e terminou 'feita';
       - o POST /api/fila em curso deu 409 com o texto da recusa;
+      - o POST /api/encerrar na conferencia deu 409 com o texto da recusa, e
+        o do fim deu 200;
       - o registro tem porta 7 e canal 8 na camera editada;
       - latencia maxima do GET /api/estado abaixo de 500 ms;
       - nenhum erro interno no log e o processo do painel saiu.
@@ -120,6 +124,7 @@ $relogio = [Diagnostics.Stopwatch]::StartNew()
 $ok = $false
 $feitas = 0; $maxConferindo = 0; $maxLatencia = 0; $consultas = 0; $saiu = $false
 $recusaFila = $null; $recusaFilaOk = $false
+$recusaEncerrar = $null; $recusaEncerrarOk = $false; $codigoEncerrar = 0
 $macEditada = ''; $codigoCamera = 0
 $macDecisao = ''; $emDecisao = @{}; $codigoDecisao = 0
 $fasesDepoisTentar = @(); $registroOk = $false; $registroTxt = ''
@@ -188,6 +193,14 @@ try {
             $recusaFilaOk = ($recusaFila.Codigo -eq 409 -and $erroFila -like '*configura*' -and $erroFila -like '*montar uma nova fila.*')
             Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/fila com ' + $e.paralelo.emCurso + ' em curso -> ' + $recusaFila.Codigo + ' ' + $recusaFila.Corpo)
         }
+        # Encerrar o painel com camera conferindo: 409 com o texto da recusa.
+        if ($null -eq $recusaEncerrar -and $conferindo.Count -ge 1) {
+            $recusaEncerrar = Send-PostUmaVez '/api/encerrar' @{}
+            $erroEncerrar = ''
+            try { $erroEncerrar = [string]($recusaEncerrar.Corpo | ConvertFrom-Json).erro } catch { }
+            $recusaEncerrarOk = ($recusaEncerrar.Codigo -eq 409 -and $erroEncerrar -like '*configura*' -and $erroEncerrar -like '*encerrar o painel.*')
+            Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/encerrar com camera conferindo -> ' + $recusaEncerrar.Codigo + ' ' + $recusaEncerrar.Corpo)
+        }
         # Uma em decisao e outra conferindo: porta e canal novos para a que confere.
         if (-not $macEditada -and $decisao.Count -ge 1 -and $conferindo.Count -ge 1) {
             $macEditada = $conferindo[0]
@@ -222,8 +235,8 @@ try {
     # Encerra o painel e espera o processo sair.
     try {
         if (-not $proc.HasExited) {
-            $c = Send-Post '/api/encerrar' @{}
-            Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/encerrar -> ' + $c)
+            $codigoEncerrar = Send-Post '/api/encerrar' @{}
+            Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/encerrar -> ' + $codigoEncerrar)
         }
     } catch { Write-Host ('  encerrar falhou: ' + $_.Exception.Message) -ForegroundColor Yellow }
     $saiu = $proc.WaitForExit(40000)
@@ -237,7 +250,8 @@ try {
 $tentouOk = ($macDecisao -and $codigoDecisao -eq 202 -and $fasesDepoisTentar -notcontains 'portao' -and
              $fasesDepoisTentar -contains 'conferindo' -and @($fasesDepoisTentar)[-1] -eq 'feita')
 $editouOk = ($macEditada -and $codigoCamera -eq 202 -and $macEditada -ne $macDecisao -and $registroOk)
-$ok = ($feitas -eq 3 -and $maxConferindo -ge 2 -and $emDecisao.Count -eq 1 -and $tentouOk -and $recusaFilaOk -and $editouOk -and
+$encerrarOk = ($recusaEncerrarOk -and $codigoEncerrar -eq 200)
+$ok = ($feitas -eq 3 -and $maxConferindo -ge 2 -and $emDecisao.Count -eq 1 -and $tentouOk -and $recusaFilaOk -and $editouOk -and $encerrarOk -and
        $maxLatencia -lt $LatenciaMaxMs -and $saiu -and $script:errosInternos.Count -eq 0)
 Write-Host ''
 foreach ($m in $script:errosInternos) { Write-Host ('  log: ' + $m) -ForegroundColor Red }
@@ -245,6 +259,7 @@ Write-Host ('Resumo: feitas ' + $feitas + '/3; conferindo ao mesmo tempo (max) '
             '; em decisao ' + $emDecisao.Count + '; tentar de novo ' + $(if ($tentouOk) { 'ok' } else { 'FALHOU' }) +
             ' (fases ' + ($fasesDepoisTentar -join ' > ') + ')' +
             '; fila em curso ' + $(if ($recusaFilaOk) { '409 ok' } else { 'FALHOU' }) +
+            '; encerrar ' + $(if ($encerrarOk) { '409 na conferencia, 200 no fim' } else { 'FALHOU (fim ' + $codigoEncerrar + ')' }) +
             '; porta/canal ' + $(if ($editouOk) { 'ok' } else { 'FALHOU' }) + ' (' + $registroTxt + ')' +
             '; latencia max ' + $maxLatencia + ' ms em ' + $consultas + ' consultas; erros internos no log ' + $script:errosInternos.Count +
             '; processo encerrado: ' + $saiu)
