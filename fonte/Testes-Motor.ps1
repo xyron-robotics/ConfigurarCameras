@@ -118,6 +118,41 @@ T 'Servidor: rotas da sessao e -Simular presentes; padroes e resetar fora' {
     Assert-Verdade ($nomes -contains 'SemElevar') 'param -SemElevar'
 }
 
+# Comandos por MAC (Task 7 da frente servidor): decisao e porta/canal levam o
+# MAC; com camera em curso o listener recusa (409) os comandos guardados com
+# o texto do orquestrador, e o worker confere de novo (Step-Comando).
+T 'Servidor: rotas por MAC e guardas globais no listener e no worker' {
+    $txt = [IO.File]::ReadAllText((Join-Path $raiz 'web\Servidor-Painel.ps1'), [Text.Encoding]::UTF8)
+    Assert-Verdade ($txt -match "'POST /api/decisao'\s*\{[^\r\n]*tipo = 'decisao'; mac = ") 'decisao leva o MAC'
+    Assert-Verdade ($txt -match "'POST /api/camera'\s*\{[^\r\n]*tipo = 'camera'; mac = [^\r\n]*porta = [^\r\n]*canal = ") 'rota de porta/canal por MAC'
+    Assert-Verdade ($txt -match "(?m)^\s*'camera' \{[\s\S]{0,400}?Set-PortaCanalCoordenador") 'worker grava porta/canal no coordenador'
+    Assert-Verdade ($txt -match "Orquestrador-Cameras\.ps1'\)\r?\n\`$VersaoPainel") 'orquestrador carregado no listener (texto da recusa)'
+    $guardas = [ordered]@{
+        "'POST /api/fila'" = 'nova-fila'; "'POST /api/simular'" = 'simular'; "'PUT /api/sessao'" = 'salvar-sessao'
+        "'POST /api/sessao/concluir'" = 'salvar-sessao'; "'POST /api/sessao/refazer'" = 'refazer-sessao'; "'POST /api/senha'" = 'trocar-senha'
+        "'POST /api/rede/preparar'" = 'preparar-placa'; "'POST /api/rede/restaurar'" = 'restaurar-placa'
+        "'POST /api/sondar'" = 'ferramenta'; "'POST /api/verificar'" = 'ferramenta'; "'POST /api/descobrir'" = 'ferramenta'
+        "'POST /api/atualizar'" = 'atualizar'
+    }
+    foreach ($rota in $guardas.Keys) {
+        $re = [regex]::Escape($rota) + "\s*\{\s*if \(Test-RecusaGuardada \`$Ctx '" + $guardas[$rota] + "'\) \{ return \}"
+        Assert-Verdade ($txt -match $re) ('listener guarda ' + $rota + ' como ' + $guardas[$rota])
+    }
+    Assert-Verdade ($txt -match "'POST /api/fila/conectada'[^\r\n]*if \(\(\[string\]\`$b\.ip\)\.Trim\(\) -and \(Test-RecusaGuardada \`$Ctx 'retomar'\)\) \{ return \}") 'conectada com IP guardada como retomar'
+    Assert-Verdade ($txt -match 'function Test-RecusaGuardada[\s\S]{0,400}\$E\.EmCurso[\s\S]{0,400}Get-TextoRecusaComando[\s\S]{0,200}409') 'guarda do listener: EmCurso, texto do orquestrador, 409'
+    $worker = [ordered]@{
+        "'senha'" = 'trocar-senha'; "'sessao-salvar'" = 'salvar-sessao'; "'sessao-concluir'" = 'salvar-sessao'; "'sessao-refazer'" = 'refazer-sessao'
+        "'simular'" = 'simular'; "'sondar'" = 'ferramenta'; "'verificar'" = 'ferramenta'; "'descobrir'" = 'ferramenta'
+        "'rede-preparar'" = 'preparar-placa'; "'rede-restaurar'" = 'restaurar-placa'
+    }
+    foreach ($cmd in $worker.Keys) {
+        $re = '(?m)^\s*' + [regex]::Escape($cmd) + " \{\s*(#[^\r\n]*\s*)*if \(Test-ComandoRecusado '" + $worker[$cmd] + "'\) \{ return \}"
+        Assert-Verdade ($txt -match $re) ('worker confere ' + $cmd + ' como ' + $worker[$cmd])
+    }
+    Assert-Verdade ($txt -match "Test-ComandoRecusado 'nova-fila'") 'worker confere a fila nova'
+    Assert-Verdade ($txt -match "Test-ComandoRecusado 'retomar'") 'worker confere a retomada pelo IP'
+}
+
 T 'Servidor: GET /api/sessao publica o catalogo; vigia ja ligado nao loga de novo' {
     $txt = [IO.File]::ReadAllText((Join-Path $raiz 'web\Servidor-Painel.ps1'), [Text.Encoding]::UTF8)
     Assert-Verdade ($txt -match 'catalogo = \(Get-CatalogoEncoder\)') 'catalogo no GET /api/sessao'

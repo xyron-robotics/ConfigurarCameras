@@ -2,15 +2,26 @@
     Smoke do laco paralelo do servidor, em simulacao (sem rede nem camera).
 
     Sobe o painel com -Simular -SemElevar -SemNavegador numa pasta de dados
-    temporaria e porta livre, grava uma sessao ficticia completa, monta uma
-    fila de 3 posicoes e liga o vigia (o DHIP simulado traz 3 cameras de
-    fabrica). Consulta GET /api/estado a cada 100 ms, medindo a latencia, e
-    imprime as fases de cada camera ao longo do tempo. No fim encerra o
-    painel e confere:
+    temporaria e porta livre, grava uma sessao ficticia completa, liga a
+    falha simulada na 'conferida' (uma vez so), monta uma fila de 3 posicoes
+    e liga o vigia (o DHIP simulado traz 3 cameras de fabrica). Consulta
+    GET /api/estado a cada 100 ms, medindo a latencia, e imprime as fases de
+    cada camera ao longo do tempo. No meio:
+      - com 2 cameras em curso, um POST /api/fila sem retentativa: 409 com o
+        texto da recusa do orquestrador;
+      - com uma camera em decisao e outra conferindo, POST /api/camera muda a
+        porta e o canal da que esta conferindo (7 e 8);
+      - com a que falhou em decisao e as outras 2 feitas, POST /api/decisao
+        {mac, acao:'tentar'}: ela volta direto a conferencia (sem portao).
+    No fim le GET /api/registro, encerra o painel e confere:
       - 3 cameras 'feita';
       - pelo menos 2 'conferindo' ao mesmo tempo;
+      - so 1 camera em decisao (a falha simulada nao repete nas outras);
+      - a que tentou de novo nao passou pelo portao e terminou 'feita';
+      - o POST /api/fila em curso deu 409 com o texto da recusa;
+      - o registro tem porta 7 e canal 8 na camera editada;
       - latencia maxima do GET /api/estado abaixo de 500 ms;
-      - o processo do painel saiu.
+      - nenhum erro interno no log e o processo do painel saiu.
 
     Fora do CI e do instalador: e um teste de bancada do desenvolvedor.
 
@@ -18,7 +29,7 @@
       powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\testes\Smoke-Paralelo.ps1
 #>
 param(
-    [int]$TimeoutSeg = 90,
+    [int]$TimeoutSeg = 120,
     [int]$LatenciaMaxMs = 500
 )
 
@@ -75,17 +86,24 @@ function Get-Estado {
     return @{ Estado = $r.estado; Ms = [int]$sw.ElapsedMilliseconds }
 }
 
-function Send-Post {
+# Um POST, sem retentativa: { Codigo; Corpo (texto) }.
+function Send-PostUmaVez {
     param([string]$Rota, $Corpo)
     $json = ConvertTo-Json -InputObject $Corpo -Compress
+    $msg = New-Object System.Net.Http.HttpRequestMessage ([System.Net.Http.HttpMethod]::Post), ($base + $Rota)
+    $msg.Headers.Add('Origin', $base)
+    $msg.Content = New-Object System.Net.Http.StringContent ($json, [Text.Encoding]::UTF8, 'application/json')
+    $r = $http.SendAsync($msg).Result
+    $bytes = $r.Content.ReadAsByteArrayAsync().Result
+    return @{ Codigo = [int]$r.StatusCode; Corpo = [Text.Encoding]::UTF8.GetString($bytes) }
+}
+
+function Send-Post {
+    param([string]$Rota, $Corpo)
     for ($i = 0; $i -lt 50; $i++) {
-        $msg = New-Object System.Net.Http.HttpRequestMessage ([System.Net.Http.HttpMethod]::Post), ($base + $Rota)
-        $msg.Headers.Add('Origin', $base)
-        $msg.Content = New-Object System.Net.Http.StringContent ($json, [Text.Encoding]::UTF8, 'application/json')
-        $r = $http.SendAsync($msg).Result
-        $codigo = [int]$r.StatusCode
+        $r = Send-PostUmaVez $Rota $Corpo
         # 409 "Aguarde": o worker ainda esta no comando anterior.
-        if ($codigo -ne 409) { return $codigo }
+        if ($r.Codigo -ne 409) { return $r.Codigo }
         Start-Sleep -Milliseconds 200
     }
     return 409
@@ -96,9 +114,15 @@ function Write-Linha {
     Write-Host ('[' + $Seg.ToString('00.0', [Globalization.CultureInfo]::InvariantCulture) + 's] ' + $Texto)
 }
 
+function Get-MacSoHex { param([string]$Mac) return (($Mac -replace '[^0-9A-Fa-f]', '').ToUpperInvariant()) }
+
 $relogio = [Diagnostics.Stopwatch]::StartNew()
 $ok = $false
 $feitas = 0; $maxConferindo = 0; $maxLatencia = 0; $consultas = 0; $saiu = $false
+$recusaFila = $null; $recusaFilaOk = $false
+$macEditada = ''; $codigoCamera = 0
+$macDecisao = ''; $emDecisao = @{}; $codigoDecisao = 0
+$fasesDepoisTentar = @(); $registroOk = $false; $registroTxt = ''
 try {
     # Espera o painel responder.
     $pronto = $false
@@ -111,6 +135,8 @@ try {
 
     $c = Send-Post '/api/senha' @{ senha = 'smoke-ficticia' }
     Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/senha -> ' + $c)
+    $c = Send-Post '/api/simular' @{ ligado = $true; falharEm = 'conferida' }
+    Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/simular (falharEm conferida) -> ' + $c)
     $c = Send-Post '/api/fila' @{ inicio = '192.0.2.10'; fim = '192.0.2.12'; local = 'Obra exemplo'; rack = 'R1'; andar = '1' }
     Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/fila -> ' + $c)
     $temFila = $false
@@ -133,28 +159,63 @@ try {
         $consultas++
         if ($r.Ms -gt $maxLatencia) { $maxLatencia = $r.Ms }
         $e = $r.Estado
-        $conferindo = 0
+        $conferindo = @()
+        $decisao = @()
         foreach ($cam in @($e.cameras)) {
             if ($null -eq $cam) { continue }
             $mac = [string]$cam.mac
             $fase = [string]$cam.fase
-            if ($fase -eq 'conferindo') { $conferindo++ }
+            if ($fase -eq 'conferindo') { $conferindo += $mac }
+            if ($fase -eq 'decisao') { $decisao += $mac; $emDecisao[$mac] = $true }
             if ($fases[$mac] -ne $fase) {
                 $txt = $mac + '  ' + $(if ($fases.ContainsKey($mac)) { $fases[$mac] } else { '-' }) + ' -> ' + $fase
                 if ($cam.destino) { $txt += '  (destino ' + $cam.destino + ')' }
                 if ($fase -eq 'decisao' -and $null -ne $cam.falha) { $txt += '  falha: ' + $cam.falha.etapa + ': ' + $cam.falha.erro }
                 Write-Linha $relogio.Elapsed.TotalSeconds $txt
                 $fases[$mac] = $fase
+                if ($macDecisao -and $mac -eq $macDecisao) { $fasesDepoisTentar += $fase }
             }
         }
-        if ($conferindo -gt $maxConferindo) { $maxConferindo = $conferindo }
+        if ($conferindo.Count -gt $maxConferindo) { $maxConferindo = $conferindo.Count }
         if ($e.aviso -and $e.aviso -ne $ultimoAviso) { Write-Linha $relogio.Elapsed.TotalSeconds ('aviso: ' + $e.aviso); $ultimoAviso = $e.aviso }
         $feitas = @(@($e.cameras) | Where-Object { $null -ne $_ -and $_.fase -eq 'feita' }).Count
+
+        # Fila nova com camera em curso: o listener recusa com o texto do orquestrador.
+        if ($null -eq $recusaFila -and $null -ne $e.paralelo -and [int]$e.paralelo.emCurso -ge 2) {
+            $recusaFila = Send-PostUmaVez '/api/fila' @{ inicio = '192.0.2.20'; fim = '192.0.2.21'; local = 'Obra exemplo'; rack = 'R1'; andar = '1' }
+            $erroFila = ''
+            try { $erroFila = [string]($recusaFila.Corpo | ConvertFrom-Json).erro } catch { }
+            $recusaFilaOk = ($recusaFila.Codigo -eq 409 -and $erroFila -like '*configura*' -and $erroFila -like '*montar uma nova fila.*')
+            Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/fila com ' + $e.paralelo.emCurso + ' em curso -> ' + $recusaFila.Codigo + ' ' + $recusaFila.Corpo)
+        }
+        # Uma em decisao e outra conferindo: porta e canal novos para a que confere.
+        if (-not $macEditada -and $decisao.Count -ge 1 -and $conferindo.Count -ge 1) {
+            $macEditada = $conferindo[0]
+            $codigoCamera = Send-Post '/api/camera' @{ mac = $macEditada; porta = '7'; canal = '8' }
+            Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/camera ' + $macEditada + ' porta 7 canal 8 -> ' + $codigoCamera)
+        }
+        # A que falhou em decisao e as outras feitas: tentar de novo por MAC.
+        if (-not $macDecisao -and $decisao.Count -eq 1 -and $feitas -eq 2) {
+            $macDecisao = $decisao[0]
+            $codigoDecisao = Send-Post '/api/decisao' @{ mac = $macDecisao; acao = 'tentar' }
+            Write-Linha $relogio.Elapsed.TotalSeconds ('POST /api/decisao ' + $macDecisao + ' tentar -> ' + $codigoDecisao)
+        }
         if ($feitas -ge 3) { break }
         $resto = 100 - $r.Ms
         if ($resto -gt 0) { Start-Sleep -Milliseconds $resto }
     }
     Write-Linha $relogio.Elapsed.TotalSeconds ('fase da fila: ' + $e.fase + '; emCurso ' + $e.paralelo.emCurso)
+
+    # Registro: a camera editada durante a conferencia ficou com porta 7 e canal 8.
+    if ($macEditada) {
+        $reg = $http.GetStringAsync($base + '/api/registro').Result | ConvertFrom-Json
+        $ent = @(@($reg.cameras) | Where-Object { $null -ne $_ -and (Get-MacSoHex $_.Mac) -eq (Get-MacSoHex $macEditada) }) | Select-Object -First 1
+        if ($null -ne $ent) {
+            $registroTxt = 'porta ' + [string]$ent.Porta + ', canal ' + [string]$ent.Canal + ', status ' + [string]$ent.Status
+            $registroOk = ([string]$ent.Porta -eq '7' -and [string]$ent.Canal -eq '8')
+        } else { $registroTxt = 'camera fora do registro' }
+        Write-Linha $relogio.Elapsed.TotalSeconds ('registro de ' + $macEditada + ': ' + $registroTxt)
+    }
 } catch {
     Write-Host ('ERRO: ' + $_.Exception.Message) -ForegroundColor Red
 } finally {
@@ -173,10 +234,18 @@ try {
     $http.Dispose()
 }
 
-$ok = ($feitas -eq 3 -and $maxConferindo -ge 2 -and $maxLatencia -lt $LatenciaMaxMs -and $saiu -and $script:errosInternos.Count -eq 0)
+$tentouOk = ($macDecisao -and $codigoDecisao -eq 202 -and $fasesDepoisTentar -notcontains 'portao' -and
+             $fasesDepoisTentar -contains 'conferindo' -and @($fasesDepoisTentar)[-1] -eq 'feita')
+$editouOk = ($macEditada -and $codigoCamera -eq 202 -and $macEditada -ne $macDecisao -and $registroOk)
+$ok = ($feitas -eq 3 -and $maxConferindo -ge 2 -and $emDecisao.Count -eq 1 -and $tentouOk -and $recusaFilaOk -and $editouOk -and
+       $maxLatencia -lt $LatenciaMaxMs -and $saiu -and $script:errosInternos.Count -eq 0)
 Write-Host ''
 foreach ($m in $script:errosInternos) { Write-Host ('  log: ' + $m) -ForegroundColor Red }
 Write-Host ('Resumo: feitas ' + $feitas + '/3; conferindo ao mesmo tempo (max) ' + $maxConferindo +
+            '; em decisao ' + $emDecisao.Count + '; tentar de novo ' + $(if ($tentouOk) { 'ok' } else { 'FALHOU' }) +
+            ' (fases ' + ($fasesDepoisTentar -join ' > ') + ')' +
+            '; fila em curso ' + $(if ($recusaFilaOk) { '409 ok' } else { 'FALHOU' }) +
+            '; porta/canal ' + $(if ($editouOk) { 'ok' } else { 'FALHOU' }) + ' (' + $registroTxt + ')' +
             '; latencia max ' + $maxLatencia + ' ms em ' + $consultas + ' consultas; erros internos no log ' + $script:errosInternos.Count +
             '; processo encerrado: ' + $saiu)
 if ($ok) {

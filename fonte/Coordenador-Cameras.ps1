@@ -29,7 +29,12 @@
       Eventos         ConcurrentQueue de eventos (fim de job etc.)
       AvisoGlobal     último aviso sem câmera (ou de câmera fora do estado)
       AvisosCamera    último aviso por MAC (chave Get-ChaveMac)
-      PortaCanal      porta/canal escolhidos por câmera (chave Get-ChaveMac)
+      PortaCanal      porta/canal escolhidos por câmera (chave Get-ChaveMac),
+                      editáveis até a conferência terminar (Set-PortaCanal-
+                      Coordenador, POST /api/camera)
+      PortaCanalDespacho
+                      porta/canal que foram no último despacho por MAC (o
+                      'feita' corrige o registro se mudaram depois)
       Geracao         geração atual da senha da sessão
       GeracaoDespacho geração da senha usada no último despacho por MAC
       Presos          IP em que cada MAC foi preso (o 'soltar' usa o mesmo)
@@ -83,7 +88,8 @@ function New-Coordenador {
         AvisoGlobal     = ''
         AvisosCamera    = @{}
         PortaCanal      = @{}
-        Geracao         = 0
+        PortaCanalDespacho = @{}
+        Geracao        = 0
         GeracaoDespacho = @{}
         Presos          = @{}
         Sujo            = $true
@@ -159,7 +165,8 @@ function Add-FalhaCoordenador {
       - soltar: Deps.Soltar(Mac, Ip), com o IP em que a câmera foi presa (ou
         o de origem dela). Falha vira aviso da câmera;
       - despachar: Deps.Despachar(Acao, Camera do estado, Geracao atual,
-        Coord), e a geração fica em GeracaoDespacho. Câmera fora do estado é erro de
+        Coord); a geração fica em GeracaoDespacho e porta/canal do cartão
+        em PortaCanalDespacho. Câmera fora do estado é erro de
         programação. Exceção vira falha da câmera pelo Step-FimDoJob
         (portão, ou conferência), com a última etapa feita;
       - avisar: Set-AvisoCoordenador;
@@ -213,6 +220,7 @@ function Invoke-AcoesCoordenador {
             if ($null -eq $camera) { throw ('Despacho de câmera fora do estado: ' + [string]$a.Mac + '.') }
             $geracao = [int]$Coord.Geracao
             $Coord.GeracaoDespacho[$chave] = $geracao
+            $Coord.PortaCanalDespacho[$chave] = Get-PortaCanalCoordenador -Coord $Coord -Mac $a.Mac
             try { $null = & $sb -Acao $a -Camera $camera -Geracao $geracao -Coord $Coord }
             catch {
                 $falhou = 'conferencia'
@@ -705,8 +713,9 @@ function Start-JobCamera {
 
 <#
     O 'despachar' ligado ao pool: monta o contexto (fila e porta/canal do
-    coordenador), escolhe a espera simulada do portão ou da conferência e
-    começa o job, guardado em Jobs. Sem pool, ou com job em curso para o
+    coordenador), escolhe a espera simulada do portão ou da conferência, a
+    falha simulada (Use-FalharEmCoordenador) e começa o job, guardado em
+    Jobs. Sem pool, ou com job em curso para o
     MAC, estoura: o Invoke-AcoesCoordenador transforma em decisão da câmera.
 #>
 function Start-DespachoCoordenador {
@@ -726,9 +735,10 @@ function Start-DespachoCoordenador {
         if ([string]$Acao.AteEtapa -eq 'rede') { $espera = [double]$t.EsperaSimuladaSeg.Portao } else { $espera = [double]$t.EsperaSimuladaSeg.Conferencia }
     }
 
+    $falharEm = Use-FalharEmCoordenador -Coord $Coord -AteEtapa ([string]$Acao.AteEtapa)
     $job = Start-JobCamera -Pool $Coord.Pool -Eventos $Coord.Eventos -Camera $Camera -Acao $Acao -Contexto $ctx `
                            -Senha ([string]$t.Senha) -Padroes $t.Padroes -CaminhoRegistro ([string]$t.CaminhoRegistro) `
-                           -Simular:([bool]$t.Simular) -FalharEm ([string]$t.FalharEm) -Geracao $Geracao -EsperaSimuladaSeg $espera
+                           -Simular:([bool]$t.Simular) -FalharEm $falharEm -Geracao $Geracao -EsperaSimuladaSeg $espera
     $Coord.Jobs[$chave] = $job
     $Coord.Progresso[$chave] = @{ Etapa = ''; Atual = 0; Total = 0; Detalhe = '' }
     $Coord.Sujo = $true
@@ -744,10 +754,97 @@ function New-DepsPool {
     }
 }
 
+# ------------------------------------------------- porta/canal e falha simulada
+
+# Porta/canal do cartão de uma câmera, como { Porta; Canal } (vazios sem edição).
+function Get-PortaCanalCoordenador {
+    param([Parameter(Mandatory = $true)]$Coord, $Mac)
+    $chave = Get-ChaveMac $Mac
+    $pc = $null
+    if ($chave -ne '' -and $Coord.PortaCanal.ContainsKey($chave)) { $pc = $Coord.PortaCanal[$chave] }
+    return @{ Porta = [string](Get-PropriedadeOuVazio $pc 'Porta' ''); Canal = [string](Get-PropriedadeOuVazio $pc 'Canal' '') }
+}
+
+<#
+    Porta e canal do cartão (POST /api/camera). Editáveis até a conferência
+    terminar: câmera fora do estado, 'feita' ou 'pulada' é recusada e nada
+    muda. O valor vale para o próximo despacho; se a câmera já está na
+    conferência, o 'feita' corrige o registro (Sync-PortaCanalRegistro).
+    Devolve @{ Ok; Texto } (Texto = motivo da recusa).
+#>
+function Set-PortaCanalCoordenador {
+    param([Parameter(Mandatory = $true)]$Coord, $Mac, [string]$Porta = '', [string]$Canal = '')
+    $camera = Get-CameraCoordenador -Coord $Coord -Mac $Mac
+    if ($null -eq $camera) { return @{ Ok = $false; Texto = ('A câmera ' + [string]$Mac + ' não está na fila.') } }
+    $fase = [string]$camera.Fase
+    if ($fase -eq 'feita' -or $fase -eq 'pulada') {
+        return @{ Ok = $false; Texto = ('A câmera ' + [string]$camera.Mac + ' já saiu da fila: porta e canal não mudam mais por aqui.') }
+    }
+    $Coord.PortaCanal[(Get-ChaveMac $camera.Mac)] = @{ Porta = ([string]$Porta).Trim(); Canal = ([string]$Canal).Trim() }
+    $Coord.Sujo = $true
+    return @{ Ok = $true; Texto = '' }
+}
+
+<#
+    Câmera 'feita' com porta/canal diferentes dos do último despacho (editados
+    durante a conferência): grava os novos na entrada dela no registro
+    (Update-RegistroCamera, sob o Mutex). Sem edição, o registro não é
+    tocado. Falha (registro sem a câmera, disco) vira aviso da câmera.
+    Devolve $true se gravou.
+#>
+function Sync-PortaCanalRegistro {
+    param([Parameter(Mandatory = $true)]$Coord, $Mac)
+    $chave = Get-ChaveMac $Mac
+    if ($chave -eq '' -or -not $Coord.PortaCanal.ContainsKey($chave)) { return $false }
+    $agora = Get-PortaCanalCoordenador -Coord $Coord -Mac $Mac
+    $antes = @{ Porta = ''; Canal = '' }
+    if ($Coord.PortaCanalDespacho.ContainsKey($chave)) { $antes = $Coord.PortaCanalDespacho[$chave] }
+    if ([string]$antes.Porta -eq $agora.Porta -and [string]$antes.Canal -eq $agora.Canal) { return $false }
+
+    $caminho = [string]$Coord.Trabalho.CaminhoRegistro
+    try {
+        $ent = $null
+        if ($caminho -ne '') { $ent = Find-CameraRegistro -Registro (Read-Registro -Caminho $caminho) -Mac $Mac }
+        if ($null -eq $ent) { throw 'a câmera não está no registro' }
+        $ent.Porta = $agora.Porta
+        $ent.Canal = $agora.Canal
+        $null = Update-RegistroCamera -Caminho $caminho -Entrada $ent
+    } catch {
+        Set-AvisoCoordenador -Coord $Coord -Mac $Mac -Texto ('Não deu para gravar a porta e o canal novos no registro: ' + $_.Exception.Message)
+        return $false
+    }
+    $Coord.PortaCanalDespacho[$chave] = $agora
+    return $true
+}
+
+<#
+    Falha simulada (FalharEm do Trabalho) de um despacho: é de uma vez só. O
+    primeiro despacho que alcança a etapa leva a falha e a desarma; os
+    outros vão sem. O portão (AteEtapa 'rede') alcança as etapas até a
+    rede; a conferência, só a 'conferida'. Com as conferências sobrepostas,
+    desarmar depois da falha deixaria falhar todas as câmeras já
+    despachadas.
+#>
+function Use-FalharEmCoordenador {
+    param([Parameter(Mandatory = $true)]$Coord, [string]$AteEtapa = '')
+    $falharEm = [string]$Coord.Trabalho.FalharEm
+    if ($falharEm -eq '') { return '' }
+    $etapas = @(Get-EtapasConfiguracao)
+    $i = [array]::IndexOf($etapas, $falharEm)
+    $iRede = [array]::IndexOf($etapas, 'rede')
+    $alcanca = $false
+    if ($AteEtapa -eq 'rede') { $alcanca = ($i -ge 0 -and $i -le $iRede) }
+    else { $alcanca = ($i -gt $iRede) }
+    if (-not $alcanca) { return '' }
+    $Coord.Trabalho.FalharEm = ''
+    return $falharEm
+}
+
 <#
     Fecha um job: sai de Jobs e de Progresso, EndInvoke/Dispose, e o
     resultado entra no Step-FimDoJob com a geração do despacho; as ações
-    dele são executadas. Resultado $null (exceção no job, ou handle
+    dele são executadas. Câmera 'feita' com porta/canal editados depois do
+    despacho: Sync-PortaCanalRegistro. Resultado $null (exceção no job, ou handle
     concluído sem 'fim') vira { Ok=$false; Etapa = a última feita;
     Falhou = etapa do último progresso (sem progresso: 'portao' ou
     'conferencia'); Erro = 'erro interno no job: ...' }.
@@ -780,6 +877,8 @@ function Complete-JobCoordenador {
     $passo = Step-FimDoJob -Estado $Coord.Estado -Mac $Job.Mac -Resultado $Resultado -Geracao ([int]$Job.Geracao)
     $Coord.Estado = $passo.Estado
     $Coord.Sujo = $true
+    $camera = Get-CameraCoordenador -Coord $Coord -Mac $Job.Mac
+    if ($null -ne $camera -and [string]$camera.Fase -eq 'feita') { $null = Sync-PortaCanalRegistro -Coord $Coord -Mac $Job.Mac }
     Invoke-AcoesCoordenador -Coord $Coord -Acoes $passo.Acoes
 }
 

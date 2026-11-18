@@ -23,7 +23,11 @@
         ConferirInit) e volta do DHIP, aviso de MAC trocando no IP de
         fabrica, inicializada desconhecida sem prender/despachar, decisao
         que nao segura a seguinte, ping das posicoes so na hora de admitir
-        e SemSucesso parado com camera em curso.
+        e SemSucesso parado com camera em curso;
+      - porta/canal por camera: edicao durante a conferencia corrige o
+        registro no 'feita', sem edicao o registro nao e tocado, recusa
+        para camera fora da fila, 'feita' ou 'pulada', registro sem a
+        camera vira aviso; FalharEm de uma vez so (portao x conferencia).
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -1077,6 +1081,139 @@ T 'SemSucesso: camera em decisao nao conta; sem DHIP e sem MAC no ARP conta' {
     Assert-Igual 0 $coord.SemSucesso 'decisao nao conta'
     $null = Invoke-TiqueTeste $coord -Dhip $false -Ping $true -MacArp ''
     Assert-Igual 1 $coord.SemSucesso 'IP de fabrica responde sem DHIP e sem MAC'
+}
+
+# ------------------------------------------------------------------- porta/canal e FalharEm
+
+Write-Host ""
+Write-Host "Porta/canal por camera e FalharEm" -ForegroundColor Cyan
+
+# Coordenador com a camera 1 em 'conferindo' (Deps falsas) e o registro numa
+# pasta temporaria, com a entrada que o job do portao teria gravado
+# (Porta/Canal do despacho). -Porta/-Canal: o que o cartao tinha antes do
+# portao (vazio = nunca editado).
+function New-CoordConferindo {
+    param([string]$Porta = '', [string]$Canal = '')
+    $coord = New-CoordComEspera -N 1
+    $script:pastaPc = Join-Path ([IO.Path]::GetTempPath()) ('coord-pc-' + [guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $script:pastaPc -Force
+    $coord.Trabalho.CaminhoRegistro = Join-Path $script:pastaPc 'registro.json'
+    if ($Porta -ne '' -or $Canal -ne '') {
+        $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta $Porta -Canal $Canal
+        Assert-Verdade $r.Ok 'porta/canal antes do portao aceitos'
+    }
+    Invoke-PassoTeste $coord (Step-Admissao -Estado $coord.Estado)
+    Invoke-PassoTeste $coord (Step-FimDoJob -Estado $coord.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $true; Etapa = 'rede' })
+    Assert-Igual 'conferindo' (Get-Camera $coord.Estado 1).Fase 'camera 1 conferindo'
+    $ent = New-EntradaRegistro -Mac 'AA:00:00:00:00:01' -Ip '192.0.2.11'
+    $ent.Status = 'Instalada'; $ent.Etapa = 'conferida'; $ent.Local = 'Obra exemplo'; $ent.Porta = $Porta; $ent.Canal = $Canal
+    $null = Update-RegistroCamera -Caminho $coord.Trabalho.CaminhoRegistro -Entrada $ent
+    return $coord
+}
+
+# Fim da conferencia pelo Complete-JobCoordenador, com um job falso (sem
+# runspace: EndInvoke e Dispose falham em silencio, como num job ja fechado).
+function Complete-ConferenciaTeste {
+    param($Coord, $Resultado = @{ Ok = $true; Etapa = 'conferida' })
+    $job = @{ Id = 'job-teste'; Mac = 'AA:00:00:00:00:01'; Chave = 'AA0000000001'; PowerShell = $null; Handle = $null
+              Geracao = 0; AteEtapa = ''; Etapa = '' }
+    $Coord.Jobs['AA0000000001'] = $job
+    Complete-JobCoordenador -Coord $Coord -Job $job -Resultado $Resultado
+}
+
+T 'porta/canal editados na conferencia: o feita corrige o registro' {
+    $coord = New-CoordConferindo -Porta '1' -Canal '1'
+    try {
+        Assert-Igual '1|1' ($coord.PortaCanalDespacho['AA0000000001'].Porta + '|' + $coord.PortaCanalDespacho['AA0000000001'].Canal) 'porta/canal do despacho'
+        $coord.Sujo = $false
+        $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'aa-00-00-00-00-01' -Porta ' 5 ' -Canal '9'
+        Assert-Verdade $r.Ok 'edicao na conferencia aceita'
+        Assert-Verdade $coord.Sujo 'estado sujo depois da edicao'
+        Complete-ConferenciaTeste $coord
+        Assert-Igual 'feita' (Get-Camera $coord.Estado 1).Fase 'fase'
+        $ent = Find-CameraRegistro -Registro (Read-Registro $coord.Trabalho.CaminhoRegistro) -Mac 'AA:00:00:00:00:01'
+        Assert-Igual '5|9' ($ent.Porta + '|' + $ent.Canal) 'porta/canal corrigidos no registro'
+        Assert-Igual 'Instalada|Obra exemplo|192.0.2.11' ($ent.Status + '|' + $ent.Local + '|' + $ent.Ip) 'resto da entrada intacto'
+        $pub = ConvertTo-EstadoPublicadoParalelo -Coord $coord
+        Assert-Igual '5|9' ($pub.cameras[0].porta + '|' + $pub.cameras[0].canal) 'porta/canal publicados'
+    } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'porta/canal sem edicao depois do despacho: o registro nao muda' {
+    foreach ($pc in @(@('1', '1'), @('', ''))) {
+        $coord = New-CoordConferindo -Porta $pc[0] -Canal $pc[1]
+        try {
+            if ($pc[0] -ne '') {
+                # Mesmo valor de novo: nao conta como edicao.
+                $null = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '1' -Canal '1'
+            }
+            $antes = [IO.File]::ReadAllText($coord.Trabalho.CaminhoRegistro)
+            $quando = (Get-Item -LiteralPath $coord.Trabalho.CaminhoRegistro).LastWriteTimeUtc
+            Start-Sleep -Milliseconds 20
+            Complete-ConferenciaTeste $coord
+            Assert-Igual 'feita' (Get-Camera $coord.Estado 1).Fase ('fase (porta ' + $pc[0] + ')')
+            Assert-Igual $antes ([IO.File]::ReadAllText($coord.Trabalho.CaminhoRegistro)) ('registro igual (porta ' + $pc[0] + ')')
+            Assert-Igual $quando (Get-Item -LiteralPath $coord.Trabalho.CaminhoRegistro).LastWriteTimeUtc ('registro nao regravado (porta ' + $pc[0] + ')')
+        } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+T 'porta/canal editados e conferencia com falha: registro intacto ate o feita' {
+    $coord = New-CoordConferindo -Porta '1' -Canal '1'
+    try {
+        $null = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '5' -Canal '9'
+        Complete-ConferenciaTeste $coord @{ Ok = $false; Etapa = 'rede'; Falhou = 'conferida'; Erro = 'falha simulada' }
+        Assert-Igual 'decisao' (Get-Camera $coord.Estado 1).Fase 'fase'
+        $ent = Find-CameraRegistro -Registro (Read-Registro $coord.Trabalho.CaminhoRegistro) -Mac 'AA:00:00:00:00:01'
+        Assert-Igual '1|1' ($ent.Porta + '|' + $ent.Canal) 'sem correcao na falha'
+        $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '6' -Canal '9'
+        Assert-Verdade $r.Ok 'em decisao continua editavel'
+    } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'porta/canal: camera feita, pulada ou fora da fila e recusada, sem mudar nada' {
+    $coord = New-CoordConferindo -Porta '1' -Canal '1'
+    try {
+        Complete-ConferenciaTeste $coord
+        $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '7' -Canal '7'
+        Assert-Falso $r.Ok 'feita recusada'
+        Assert-Verdade ([string]$r.Texto -ne '') 'texto da recusa (feita)'
+        Assert-Igual '1' $coord.PortaCanal['AA0000000001'].Porta 'porta nao mudou'
+        $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:09' -Porta '7' -Canal '7'
+        Assert-Falso $r.Ok 'fora da fila recusada'
+        Assert-Falso $coord.PortaCanal.ContainsKey('AA0000000009') 'nada guardado para MAC fora da fila'
+    } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
+
+    $coord = New-CoordComEspera -N 1
+    $coord.Estado.Cameras[0].Fase = 'pulada'
+    $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '7' -Canal '7'
+    Assert-Falso $r.Ok 'pulada recusada'
+}
+
+T 'porta/canal: registro sem a camera vira aviso dela, sem estourar' {
+    $coord = New-CoordConferindo -Porta '1' -Canal '1'
+    try {
+        $null = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '5' -Canal '9'
+        Remove-Item -LiteralPath $coord.Trabalho.CaminhoRegistro -Force
+        Complete-ConferenciaTeste $coord
+        Assert-Igual 'feita' (Get-Camera $coord.Estado 1).Fase 'fase'
+        Assert-Verdade ([string]$coord.AvisosCamera['AA0000000001'] -like '*porta*') ('aviso: ' + $coord.AvisosCamera['AA0000000001'])
+    } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'FalharEm: so o primeiro despacho que alcanca a etapa leva a falha' {
+    $coord = New-Coordenador -Deps (New-DepsFalsas)
+    $coord.Trabalho.FalharEm = 'conferida'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede') 'portao nao alcanca conferida'
+    Assert-Igual 'conferida' $coord.Trabalho.FalharEm 'continua armada'
+    Assert-Igual 'conferida' (Use-FalharEmCoordenador -Coord $coord -AteEtapa '') 'a conferencia leva'
+    Assert-Igual '' $coord.Trabalho.FalharEm 'desarmada'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa '') 'a seguinte passa'
+
+    $coord.Trabalho.FalharEm = 'encoder'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa '') 'conferencia nao alcanca encoder'
+    Assert-Igual 'encoder' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede') 'o portao leva'
+    Assert-Igual '' $coord.Trabalho.FalharEm 'desarmada (portao)'
 }
 
 # ------------------------------------------------------------------- resultado

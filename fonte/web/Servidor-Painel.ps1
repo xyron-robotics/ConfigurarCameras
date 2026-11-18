@@ -84,7 +84,10 @@ $motor = Join-Path (Split-Path -Parent $raizWeb) 'Motor-Cameras.ps1'
 $www   = Join-Path $raizWeb 'www'
 
 . $motor
-$VersaoPainel = Get-VersaoPainel -Pasta (Split-Path -Parent $motor)
+# Orquestrador (puro, nao executa nada ao carregar): o listener usa o texto
+# da recusa das guardas globais (Get-TextoRecusaComando).
+. (Join-Path (Split-Path -Parent $motor) 'Orquestrador-Cameras.ps1')
+$VersaoPainel =Get-VersaoPainel -Pasta (Split-Path -Parent $motor)
 
 # Abre a pagina no Edge em modo app (InPrivate: nao oferece salvar a senha
 # nem guarda historico); sem Edge, no navegador padrao.
@@ -894,6 +897,7 @@ $scriptWorker = {
         param($Cmd)
         switch ([string]$Cmd.tipo) {
             'senha' {
+                if (Test-ComandoRecusado 'trocar-senha') { return }
                 $W.Senha = [string]$Cmd.senha
                 $W.SenhaGeracao = [int]$W.SenhaGeracao + 1
                 if ($W.Senha) { Write-Log "Senha da sessao definida (fica so na memoria)." 'Gray' }
@@ -905,12 +909,12 @@ $scriptWorker = {
             # (ou fila montada): devolve a placa com a sessao ANTIGA, grava a
             # nova, prepara de novo e remonta a fila se ela ainda cabe.
             'sessao-salvar' {
+                if (Test-ComandoRecusado 'salvar-sessao') { return }
                 $antes = Read-SessaoAtual
                 $nova = ConvertTo-Sessao $Cmd.sessao
                 $campos = @(Test-SessaoParaGravar -Sessao $nova -Enviados @($Cmd.enviados))
                 if ($campos.Count -gt 0) { $W.Aviso = 'Nada foi salvo: ' + (($campos | ForEach-Object { $_.msg }) -join ' '); return }
                 $aplicar = [bool]$Cmd.aplicarRede
-                if ($aplicar -and (Test-ComandoRecusado 'salvar-sessao')) { return }
                 if ($aplicar) {
                     Set-VigiaDesligado 'rede da sessao alterada'
                     if (-not $W.Simular -and $W.Admin -and (Test-Path -LiteralPath $Arquivos.SessaoPlaca)) {
@@ -948,6 +952,7 @@ $scriptWorker = {
             }
             # Fim do passo a passo: etapa 7, placa preparada e, se pedido, a fila da sessao montada.
             'sessao-concluir' {
+                if (Test-ComandoRecusado 'salvar-sessao') { return }
                 $s = Read-SessaoAtual
                 if ($null -eq $s) { $W.Aviso = $TextoSemSessao; return }
                 $s.Etapa = 7
@@ -1075,7 +1080,16 @@ $scriptWorker = {
                 }
                 Invoke-AcoesCoordenador -Coord $W.Coord -Acoes @($passo.Acoes)
             }
+            # Porta e canal do cartao de uma camera, editaveis ate a conferencia
+            # terminar (o 'feita' corrige o registro se mudaram depois do despacho).
+            'camera' {
+                if ($null -eq $W.Coord) { $W.Aviso = 'Monte uma fila antes de mudar a porta e o canal de uma câmera.'; return }
+                $r = Set-PortaCanalCoordenador -Coord $W.Coord -Mac ([string]$Cmd.mac) -Porta ([string]$Cmd.porta) -Canal ([string]$Cmd.canal)
+                if (-not $r.Ok) { $W.Aviso = [string]$r.Texto; return }
+                Write-Log ("Porta '" + ([string]$Cmd.porta).Trim() + "', canal '" + ([string]$Cmd.canal).Trim() + "' para a camera " + (Format-Mac ([string]$Cmd.mac)) + ".") 'Cyan'
+            }
             'sondar' {
+                if (Test-ComandoRecusado 'ferramenta') { return }
                 if ($W.Simular) { $W.Aviso = $TextoSoReal; return }
                 $ip = ([string]$Cmd.ip).Trim()
                 if (-not (Test-Ipv4Estrito $ip)) { $W.Aviso = Get-TextoIpInvalido $ip; return }
@@ -1103,6 +1117,7 @@ $scriptWorker = {
                 $W.Ferramenta = $res
             }
             'verificar' {
+                if (Test-ComandoRecusado 'ferramenta') { return }
                 $reg = Read-Registro (Get-CaminhoRegistroAtual)
                 $itens = @()
                 $instaladas = @($reg.Cameras | Where-Object { $_.Status -eq 'Instalada' })
@@ -1143,6 +1158,7 @@ $scriptWorker = {
                 Write-Log ("Verificacao: " + @($itens | Where-Object { $_.ok }).Count + " de " + $itens.Count + " cameras instaladas OK") 'Cyan'
             }
             'descobrir' {
+                if (Test-ComandoRecusado 'ferramenta') { return }
                 if ($W.Simular) { $W.Aviso = $TextoSoReal; return }
                 $p = Get-SessaoPronta
                 if ($null -eq $p) { return }
@@ -1159,6 +1175,7 @@ $scriptWorker = {
                                                                       ouiConhecido = [bool]$_.OuiConhecido; como = [string]$_.Como } }) }
             }
             'rede-preparar' {
+                if (Test-ComandoRecusado 'preparar-placa') { return }
                 if (-not $W.Simular -and -not $W.Admin) { $W.Aviso = $TextoSemAdmin; return }
                 $p = Get-SessaoPronta
                 if ($null -eq $p) { return }
@@ -1167,6 +1184,7 @@ $scriptWorker = {
                 if (-not $W.Simular -and -not $W.Rede.ok) { $W.Aviso = 'Não deu para preparar a placa de rede do PC. Veja o log.' }
             }
             'rede-restaurar' {
+                if (Test-ComandoRecusado 'restaurar-placa') { return }
                 if ($W.Simular) { Write-Log "  [simular] devolveria a placa ao DHCP" 'DarkGray' }
                 elseif (-not $W.Admin) { $W.Aviso = $TextoSemAdmin }
                 else {
@@ -1279,6 +1297,10 @@ $scriptWorker = {
                     $coord.AvisoGlobal = ''
                     $coord.Sujo = $true
                 }
+                # Falha simulada e de uma vez so: o despacho que a levou desarmou
+                # o Trabalho (Use-FalharEmCoordenador); o worker esquece tambem,
+                # senao o proximo Update-TrabalhoCoord a armaria de novo.
+                if ($W.Simular -and $W.FalharEm -and [string]$coord.Trabalho.FalharEm -eq '') { $W.FalharEm = '' }
             } catch {
                 Write-Log ("ERRO interno no coordenador: " + $_.Exception.Message) 'Red'
             }
@@ -1486,6 +1508,18 @@ function Add-Comando {
     Send-Json $Ctx $r 202
 }
 
+# Guarda global no listener: com camera em portao ou conferindo ($E.EmCurso,
+# do Publicar), o comando guardado e recusado com 409 e o texto do
+# orquestrador. O worker confere de novo (Step-Comando), pela corrida entre
+# este retrato e a fila de comandos. $true = recusado (a resposta ja saiu).
+function Test-RecusaGuardada {
+    param($Ctx, [string]$Comando)
+    $n = [int]$E.EmCurso
+    if ($n -lt 1) { return $false }
+    Send-Json $Ctx @{ erro = (Get-TextoRecusaComando -Comando $Comando -EmCurso $n) } 409
+    return $true
+}
+
 # Leitura da sessao com retentativa: o worker pode estar no meio do Replace.
 function Read-SessaoDoDisco {
     for ($i = 0; $i -lt 5; $i++) {
@@ -1558,7 +1592,7 @@ function Invoke-Rota {
             try { $v = Save-Tema -Caminho $arquivos.Tema -Valor ([string]$b.tema) } catch { Send-Json $Ctx @{ erro = $_.Exception.Message } 400; return }
             Send-Json $Ctx @{ ok = $true; tema = $v }
         }
-        'POST /api/senha' { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'senha'; senha = [string]$b.senha } -Sempre }
+        'POST /api/senha' { if (Test-RecusaGuardada $Ctx 'trocar-senha') { return }; $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'senha'; senha = [string]$b.senha } -Sempre }
         # Placas fisicas deste PC, para o passo 2 / secao Placa (Get-NetAdapter
         # leva ate 1 s: a pagina so chama ao entrar na secao ou em Atualizar lista).
         'GET /api/placas' {
@@ -1586,6 +1620,7 @@ function Invoke-Rota {
         # worker devolve a placa, grava, prepara de novo e remonta a fila se
         # ela cabe; com fila, exige confirmar (409 precisaConfirmar).
         'PUT /api/sessao' {
+            if (Test-RecusaGuardada $Ctx 'salvar-sessao') { return }
             $b = Read-Corpo $Ctx
             $atual = Read-SessaoDoDisco
             $nova = Merge-Sessao -Atual $atual -Entrada $b
@@ -1616,28 +1651,36 @@ function Invoke-Rota {
             Add-Comando $Ctx @{ tipo = 'sessao-salvar'; sessao = ($corpo | ConvertFrom-Json); aplicarRede = $aplicarRede; campos = $mudou; outros = $outros; enviados = $enviados } -Resposta @{ aplicarRede = $aplicarRede; etapa = [int]$nova.Etapa }
         }
         'POST /api/sessao/concluir' {
+            if (Test-RecusaGuardada $Ctx 'salvar-sessao') { return }
             $b = Read-Corpo $Ctx
             $s = Read-SessaoDoDisco
             if ($null -eq $s -or $null -eq $s.Placa -or @(Test-SessaoPorCampo $s).Count -gt 0) { Send-Json $Ctx @{ erro = 'A sessão ainda não está completa: escolha a placa de rede e corrija os campos marcados.' } 409; return }
             Add-Comando $Ctx @{ tipo = 'sessao-concluir'; montarFila = [bool]$b.montarFila }
         }
         'POST /api/sessao/refazer' {
+            if (Test-RecusaGuardada $Ctx 'refazer-sessao') { return }
             $est = Get-EstadoPublicado
             if ($null -ne $est -and [string]$est.fase -in @('configurando', 'decisao', 'escolher')) { Send-Json $Ctx @{ erro = 'Termine a câmera atual antes de refazer o passo a passo.' } 409; return }
             Add-Comando $Ctx @{ tipo = 'sessao-refazer' }
         }
         'POST /api/fila' {
+            if (Test-RecusaGuardada $Ctx 'nova-fila') { return }
             $b = Read-Corpo $Ctx
             Add-Comando $Ctx @{ tipo = 'fila'; inicio = $b.inicio; fim = $b.fim; local = $b.local; rack = $b.rack; andar = $b.andar }
         }
-        'POST /api/fila/conectada' { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'conectada'; porta = $b.porta; canal = $b.canal; ip = $b.ip } }
+        # Sem IP = procurar agora (passa); com IP = retomada serial, guardada.
+        'POST /api/fila/conectada' { $b = Read-Corpo $Ctx; if (([string]$b.ip).Trim() -and (Test-RecusaGuardada $Ctx 'retomar')) { return }; Add-Comando $Ctx @{ tipo = 'conectada'; porta = $b.porta; canal = $b.canal; ip = $b.ip } }
         # -Sempre: desligar o vigia no meio de uma configuracao tem que ser
         # aceito (vale ao terminar, antes do proximo tique).
         'POST /api/vigia' {
             $b = Read-Corpo $Ctx
             Add-Comando $Ctx @{ tipo = 'vigia'; ligado = [bool]$b.ligado; porta = [string]$b.porta; canal = [string]$b.canal; broadcast = [bool]$b.broadcast } -Sempre
         }
-        'POST /api/decisao'    { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'decisao'; acao = [string]$b.acao } }
+        # Decisao por MAC (sem MAC: 'encerrar' = encerrar a fila; as outras
+        # acoes valem para a retomada manual ou a primeira camera em decisao).
+        'POST /api/decisao'    { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'decisao'; mac = [string]$b.mac; acao = [string]$b.acao } }
+        # Porta e canal do cartao, editaveis ate a conferencia terminar.
+        'POST /api/camera'     { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'camera'; mac = [string]$b.mac; porta = [string]$b.porta; canal = [string]$b.canal } }
         'GET /api/registro'    { Send-Json $Ctx @{ cameras = @((Read-RegistroAtual).Cameras); simulado = [bool]$E.Simular } }
         'GET /api/relatorio.csv' {
             $txt = ConvertTo-RelatorioCsv (Read-RegistroAtual)
@@ -1647,16 +1690,17 @@ function Invoke-Rota {
             Send-Resposta $Ctx 200 'text/csv; charset=utf-8' ([byte[]]($bom + [Text.Encoding]::UTF8.GetBytes($txt))) @{
                 'Content-Disposition' = ('attachment; filename="' + $nome + '.csv"') }
         }
-        'POST /api/sondar'     { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'sondar'; ip = $b.ip } }
-        'POST /api/verificar'  { Add-Comando $Ctx @{ tipo = 'verificar' } }
-        'POST /api/descobrir'  { Add-Comando $Ctx @{ tipo = 'descobrir' } }
-        'POST /api/rede/preparar'  { Add-Comando $Ctx @{ tipo = 'rede-preparar' } }
-        'POST /api/rede/restaurar' { Add-Comando $Ctx @{ tipo = 'rede-restaurar' } }
-        'POST /api/simular'    { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'simular'; ligado = [bool]$b.ligado; falharEm = [string]$b.falharEm } }
+        'POST /api/sondar'     { if (Test-RecusaGuardada $Ctx 'ferramenta') { return }; $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'sondar'; ip = $b.ip } }
+        'POST /api/verificar'  { if (Test-RecusaGuardada $Ctx 'ferramenta') { return }; Add-Comando $Ctx @{ tipo = 'verificar' } }
+        'POST /api/descobrir'  { if (Test-RecusaGuardada $Ctx 'ferramenta') { return }; Add-Comando $Ctx @{ tipo = 'descobrir' } }
+        'POST /api/rede/preparar'  { if (Test-RecusaGuardada $Ctx 'preparar-placa') { return }; Add-Comando $Ctx @{ tipo = 'rede-preparar' } }
+        'POST /api/rede/restaurar' { if (Test-RecusaGuardada $Ctx 'restaurar-placa') { return }; Add-Comando $Ctx @{ tipo = 'rede-restaurar' } }
+        'POST /api/simular'    { if (Test-RecusaGuardada $Ctx 'simular') { return }; $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'simular'; ligado = [bool]$b.ligado; falharEm = [string]$b.falharEm } }
         'POST /api/internet/testar' { Add-Comando $Ctx @{ tipo = 'internet-testar' } }
         # Atualizar: so com o painel parado (nada em curso, vigia desligado),
         # com Administrador e com uma versao nova conhecida. 409 diz o motivo.
         'POST /api/atualizar' {
+            if (Test-RecusaGuardada $Ctx 'atualizar') { return }
             $motivo = ''
             $a = $null; try { $a = $E.Atualizacao | ConvertFrom-Json } catch { }
             $s = $null; try { $s = $E.Estado | ConvertFrom-Json } catch { }
