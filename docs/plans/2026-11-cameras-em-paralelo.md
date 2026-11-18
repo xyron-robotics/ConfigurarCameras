@@ -12,9 +12,30 @@ Pedido do usuário: "a próxima versão [...] consiga operar qualquer tipo de c�
 | `orquestrador` | `docs/plans/2026-11-17-frente-orquestrador-plan.md` | F3 | 0 |
 | `ui` | `docs/plans/2026-11-17-frente-ui-plan.md` | F2b, F3 e F4 do plano de UI | 0 |
 | `servidor` | `docs/plans/2026-11-18-frente-servidor-plan.md` | F4 e o mínimo da F5 (3 câmeras simuladas) | 2 |
-| F5 a F8 | a escrever (F5 depois da `servidor`) | resto da simulação, UI paralela, docs, bancada | 2 a 4 |
+| F5, F6, F7 | a escrever, um plano por frente | resto da simulação, UI paralela, docs | 2 e 3 |
+| release 1.3.0 | seção 9 deste mapa | versão, tag, atualização pelo painel | 4 |
+| F8 | fora do caminho da release (seção 0) | bancada com câmeras reais | depois |
 
 Se um plano de frente divergir deste mapa, vale o plano de frente. Os números de linha valem para `main` em 0d0581a e vão andar: localize pelo nome da função, não pela linha.
+
+## 0. Retomada (18/11, depois da frente `servidor`)
+
+Frentes `motor`, `orquestrador`, `ui` e `servidor` fechadas e integradas no `main` local (sem push). O próximo agente começa aqui.
+
+**Decisão do usuário (18/11):** as câmeras não estão mais disponíveis. A release 1.3.0 sai **sem a bancada real (F8)**, apoiada na medição P0 (seção 6.1) e na prova em simulação. O que tem de funcionar de verdade é a disponibilização: tag, `release.yml` verde, instalador publicado e "Atualizar" pelo painel nesta máquina chegando na 1.3.0. A F8 vira pendência para quando houver câmeras. O push continua precisando da confirmação do usuário no momento da release.
+
+**Ordem:** F5, F6 e F7 (paralelas: arquivos distintos, ver "Arquivos" de cada uma) → release (seção 9). Cada frente com plano próprio em `docs/plans/`, `/clear` depois do plano aprovado e execução pelo `/regime:maestro`.
+
+**Herança da frente `servidor`** (achados da revisão e dos executores; o commit `chore(plano): revisão` tem o texto completo). Cada item já tem frente dona:
+
+| Item | Peso | Frente |
+|---|---|---|
+| A conferência no real parte do IP de fábrica e o motor não confere o MAC: com outra câmera de fábrica presa no portão nesse IP, a conferência pode falar com a câmera errada. **Medir primeiro** (o job do `Start-JobCamera` e a retomada `-AteEtapa` do motor); se confirmado, travar pelo MAC ou partir do IP de destino. | alto: sem bancada, nada mais pega isso antes do usuário | F5, Task 0 |
+| Porta e canal do painel atual não chegam à câmera (o auto-incremento do vigia saiu); o registro sai com porta e canal vazios. | alto: regressão visível | F6 (cartão editável, `POST /api/camera`) |
+| Durante o download da atualização uma câmera ainda pode começar, e a instalação fecha o painel no meio dela. | médio: toca o caminho da atualização | F5 |
+| O 409 do encerrar lê estado com até ~250 ms de atraso; câmera que entra nessa janela tem o job cortado (a placa fica limpa). | baixo | F5 |
+| Sobra a fase `escolher` nas guardas do listener; falta espaço em `$VersaoPainel =Get-VersaoPainel`. | menor | F5 |
+| DHIP, ping, ARP e o modo sem Administrador só têm prova com dependências falsas e simulação. | aceito pela decisão acima | F8 |
 
 Vocabulário: o de `CONTEXT.md`. Termos novos estão em "Termos novos" e entram no glossário na frente F7.
 
@@ -352,7 +373,7 @@ Os planos de frente da Onda 2 em diante se escrevem quando a Onda 0 fechar, a pa
   6. **Encerrar e atualizar:** `Test-PainelOciosoAgora` conta os jobs. O encerrar espera os jobs ou recusa com texto, solta todos os vizinhos estáticos e restaura a placa (ADR 0002). Pronto: em simulação, o encerrar com conferência em curso recusa e, depois do fim, encerra limpo.
 
 #### F5. Simulação com N câmeras
-- **Arquivos:** `fonte/web/Servidor-Painel.ps1` e, se preciso, só o ramo `-Simular` de `fonte/Motor-Cameras.ps1`.
+- **Arquivos:** `fonte/web/Servidor-Painel.ps1`, `fonte/Coordenador-Cameras.ps1` e, se preciso, só o ramo `-Simular` de `fonte/Motor-Cameras.ps1` (a Task 0 da herança, seção 0, pode precisar do motor fora do ramo `-Simular`: o plano da F5 decide).
 - **Depende de:** F4 (mesmo arquivo).
 - **Paralela com:** F7.
 - **Tasks:**
@@ -382,9 +403,9 @@ Os planos de frente da Onda 2 em diante se escrevem quando a Onda 0 fechar, a pa
 - **Paralela com:** F5 e F6.
 - **Pronto quando:** `git grep -n "uma por vez"` só sobra onde for verdade (retomada manual, sem DHIP), e nenhum MAC ou IP real da bancada aparece (`git grep` com os valores dos prints, guardados fora do repo, sai vazio).
 
-### Onda 4: validação real e release
+### Onda 4: release; F8 depois, quando houver câmeras
 
-#### F8. Bancada com 2 a 3 câmeras reais
+#### F8. Bancada com 2 a 3 câmeras reais (fora do caminho da release, decisão de 18/11 na seção 0)
 - **Arquivos:** `fonte/testes/Conferir-Bancada.ps1` (novo, só leitura: lê `GET /api/estado` e o registro e confere os invariantes; não vai no instalador).
 - **Depende de:** F4, F5, F6; permissão do usuário.
 - **Pronto quando:** o roteiro (seção 8.3) passou, com a saída do `Conferir-Bancada.ps1` colada no commit.
@@ -422,6 +443,8 @@ Os planos de frente da Onda 2 em diante se escrevem quando a Onda 0 fechar, a pa
 Teste só da frente: o roteiro não junta prova de outras pendências do LEIA-ME (reset real, etc.).
 
 ## 9. Release (só com aprovação explícita do usuário)
+
+Pré-condição: F5, F6 e F7 fechadas no `main`, com os itens "alto" da herança (seção 0) resolvidos. Não depende da F8.
 
 1. Número conforme a Q6: `fonte/VERSAO.txt` para 1.3.0 (plano de UI + paralelo), num commit só.
 2. Antes do push, `git ls-files | findstr /i senha` tem que sair vazio. Nunca subir o bundle de histórico. Push pelo credential helper do `gh` (conta ativa conferida).
