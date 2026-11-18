@@ -1052,6 +1052,9 @@ $scriptWorker = {
                             $W.Aviso = $(if ($f.bloqueada) { $TextoBloqueada } else { $TextoSenhaRecusada })
                             return
                         }
+                        # Serial e bloqueante (D1, U3): com camera em portao ou
+                        # conferindo, recusado como a retomada pelo IP.
+                        if (Test-ComandoRecusado 'retomar') { return }
                         Write-Log "Operador: tentar de novo." 'Cyan'
                         Invoke-ConfigurarManual
                         return

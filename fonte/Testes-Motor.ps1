@@ -162,6 +162,16 @@ T 'Servidor: GET /api/sessao publica o catalogo; vigia ja ligado nao loga de nov
     Assert-Verdade ($txt -match 'outros = \$outros') 'mudancas do encoder vao para o log'
 }
 
+T 'Servidor: tentar da retomada manual passa pela guarda retomar' {
+    $txt = [IO.File]::ReadAllText((Join-Path $raiz 'web\Servidor-Painel.ps1'), [Text.Encoding]::UTF8)
+    $i = $txt.IndexOf("'decisao' {")
+    $bloco = $txt.Substring($i, $txt.IndexOf('Step-Decisao', $i) - $i)
+    $g = $bloco.IndexOf("Test-ComandoRecusado 'retomar'")
+    $c = $bloco.IndexOf('Invoke-ConfigurarManual')
+    Assert-Verdade ($c -gt 0) 'tentar manual chama Invoke-ConfigurarManual'
+    Assert-Verdade ($g -ge 0 -and $g -lt $c) 'guarda retomar antes de Invoke-ConfigurarManual'
+}
+
 # ------------------------------------------------------ login RPC2
 
 Write-Host ""
