@@ -1,6 +1,8 @@
 # Frente simulacao: conferência segura e simulação com N câmeras (F5 do mapa)
 
-**Status:** Ativo (aprovado em 18/11) · **Frente:** `simulacao`
+**Status:** Concluído (18/11) · **Frente:** `simulacao`
+
+Herança da frente `servidor` (seção 0 do mapa) fechada aqui: conferência no real partindo do IP de fábrica (alto, Task 0/S1), câmera começando durante o download da atualização (médio, Task 3/S4 c), janela de ~250 ms do 409 do encerrar (baixo, Task 3/S4 a e b) e `escolher` nas guardas do listener mais `$VersaoPainel` (menor, Task 4). Seguem com outras frentes: porta e canal do cartão (F6) e a prova real de DHIP, ping, ARP e modo sem Administrador (F8).
 
 Plano de frente da F5 de `docs/plans/2026-11-cameras-em-paralelo.md`, escrito sobre o `main` em e76f4e9 (frentes `motor`, `orquestrador`, `ui` e `servidor` fechadas). Além das Tasks 1 e 2 da F5 no mapa, leva os itens da herança da frente `servidor` (seção 0 do mapa) que são da F5. Onde divergir do mapa, vale este plano (as divergências estão em "Decisões").
 
