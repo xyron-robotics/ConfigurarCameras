@@ -200,6 +200,8 @@ $E = [hashtable]::Synchronized(@{
     Ocupado = $false
     Simular = [bool]$Simular
     Parar   = $false
+    # Cameras em portao ou conferindo (Publicar): as guardas do listener leem daqui.
+    EmCurso = 0
     # Ultimo GET /api/estado: a pagina sumiu quando isso envelhece (auto-encerrar).
     UltimoPoll = (Get-Date)
     # Atualizacao (runspace atualizador): retrato JSON, pedido do operador e o
@@ -234,6 +236,9 @@ $scriptWorker = {
     param($E, $Q, $Motor, $Arquivos, $AdicionarLog)
     $ErrorActionPreference = 'Stop'
     . $Motor
+    # Orquestrador (decide) e coordenador (executa) ao lado do motor.
+    . (Join-Path (Split-Path -Parent $Motor) 'Orquestrador-Cameras.ps1')
+    . (Join-Path (Split-Path -Parent $Motor) 'Coordenador-Cameras.ps1')
     Set-MotorLog -Arquivo $Arquivos.Log -Sink ([scriptblock]::Create($AdicionarLog.ToString()))
 
     $W = @{
@@ -242,15 +247,23 @@ $scriptWorker = {
         # guarda a geracao: "Tentar de novo" so volta com senha mais nova
         # (repetir senha recusada gasta tentativa do lockout da camera).
         SenhaGeracao = 0
-        Fase = 'ocioso'          # ocioso | fila | configurando | escolher | decisao | concluida | encerrada
         Trabalho = ''; Etapa = ''
-        TrabalhoBase = ''        # texto da camera em curso; o detalhe do motor passa por cima
+        TrabalhoBase = ''        # texto da retomada manual em curso; o detalhe do motor passa por cima
         Progresso = $null        # @{ atual; total } quando ha contagem (espera do boot, verificacao)
-        Fila = $null             # @{ Itens; Local; Rack; Andar }
-        Atual = -1               # indice na fila da camera em configuracao
-        Camera = $null           # contexto da configuracao em curso (para "Tentar de novo")
-        CameraDoVigia = $false   # a camera em curso foi achada pelo vigia (porta/canal avancam no sucesso)
-        Falha = $null; Escolha = @(); Ferramenta = $null; Aviso = ''; Ultimo = ''
+        Fila = $null             # @{ Local; Rack; Andar; Inicio; Fim } (as posicoes moram no Coord)
+        # Coordenador da fila (Coordenador-Cameras.ps1): estado paralelo, deps
+        # e pool. Nulo sem fila. A fase publicada sai dele (Get-FaseAtual).
+        Coord = $null
+        # Acoes dos Step-* do laco, executadas juntas no passo 4.
+        AcoesPendentes = (New-Object 'System.Collections.Generic.List[object]')
+        # Retomada pelo IP (Camera conectada com IP): serial, uma por vez.
+        # @{ Fase = 'configurando'|'decisao'; Posicao; Camera; Falha }
+        Manual = $null
+        # MACs que ja viraram "ultima instalada" (aviso uma vez por camera).
+        Feitas = @{}
+        # Fase do ultimo Publicar (o vigia consulta sem recalcular o contrato).
+        FasePublicada = 'ocioso'
+        Ferramenta = $null; Aviso = ''; Ultimo = ''
         # AvisoOrigem = comando que gerou o aviso (a pagina mostra junto dele).
         # AvisoN sobe a cada aviso novo: o mesmo texto duas vezes seguidas
         # continua sendo dois avisos.
@@ -271,8 +284,6 @@ $scriptWorker = {
         # Broadcast: com a chave ligada o vigia tambem aceita camera de fabrica
         # em qualquer faixa (broadcast DHIP); desligada, so o IP de fabrica.
         Vigia = @{ Ligado = $false; Porta = ''; Canal = ''; Vistos = @{}; Proximo = [datetime]::MinValue; Motivo = ''; SemSucesso = 0; Broadcast = $false }
-        # Achados completos da lista de escolha (a pagina so ve o resumo).
-        EscolhaAchados = @()
         # Sem Administrador (-SemElevar, ou elevacao recusada) a placa de rede nao muda.
         Admin = [bool](Test-EhAdministrador)
     }
@@ -336,21 +347,71 @@ $scriptWorker = {
         return [ordered]@{ existe = $true; completa = (Test-SessaoCompleta $s); iniciada = [bool]$W.SessaoIniciada; etapa = [int]$s.Etapa; geracao = [int]$W.SessaoGeracao; placa = $placa; fila = $fila; quando = [string]$s.Quando }
     }
 
+    # Fase da fila: 'ocioso' sem coordenador; a da retomada manual enquanto
+    # ela existe; senao a fase legada do contrato (fila | configurando |
+    # decisao | concluida | encerrada).
+    function Get-FaseAtual {
+        if ($null -eq $W.Coord) { return 'ocioso' }
+        if ($null -ne $W.Manual) { return [string]$W.Manual.Fase }
+        return [string](ConvertTo-EstadoPublicadoParalelo -Coord $W.Coord).fase
+    }
+
+    # Indice (base 0) da posicao de numero dado nas posicoes do estado, ou -1.
+    function Get-IndicePosicao {
+        param([int]$Numero)
+        if ($null -eq $W.Coord) { return -1 }
+        $posicoes = @($W.Coord.Estado.Posicoes)
+        for ($i = 0; $i -lt $posicoes.Count; $i++) { if ([int]$posicoes[$i].Posicao -eq $Numero) { return $i } }
+        return -1
+    }
+
+    # "Ultima instalada": uma vez por camera que chega a 'feita'.
+    function Update-UltimaInstalada {
+        param($Cameras)
+        foreach ($c in @($Cameras)) {
+            if ([string]$c.fase -ne 'feita') { continue }
+            $k = Get-ChaveMac $c.mac
+            if ($W.Feitas.ContainsKey($k)) { continue }
+            $W.Feitas[$k] = $true
+            $W.Ultimo = 'Câmera instalada em ' + $c.destino + ' (MAC ' + (Format-Mac $c.mac) + ').'
+        }
+    }
+
     function Publicar {
         if ($W.Aviso -ne $W.AvisoPublicado) {
             $W.AvisoPublicado = $W.Aviso
             if ($W.Aviso) { $W.AvisoN = [int]$W.AvisoN + 1 }
         }
-        $fila = $null
-        if ($null -ne $W.Fila) {
-            $fila = [ordered]@{ itens = @($W.Fila.Itens); local = $W.Fila.Local; rack = $W.Fila.Rack; andar = $W.Fila.Andar; inicio = $W.Fila.Inicio; fim = $W.Fila.Fim }
+        $fila = $null; $cameras = @(); $portao = $null; $paralelo = $null
+        $fase = 'ocioso'; $atual = -1; $camera = $null; $falha = $null; $emCurso = 0
+        $trabalho = $W.Trabalho; $etapa = $W.Etapa; $progresso = $W.Progresso
+        if ($null -ne $W.Coord) {
+            # Contrato da F6 (Coordenador-Cameras.ps1, ConvertTo-EstadoPublicadoParalelo).
+            $c = ConvertTo-EstadoPublicadoParalelo -Coord $W.Coord
+            $W.Coord.Sujo = $false
+            $fila = [ordered]@{ itens = @($c.filaItens); local = $W.Fila.Local; rack = $W.Fila.Rack; andar = $W.Fila.Andar; inicio = $W.Fila.Inicio; fim = $W.Fila.Fim }
+            $cameras = @($c.cameras); $portao = $c.portao; $paralelo = $c.paralelo; $emCurso = [int]$c.paralelo.emCurso
+            $fase = [string]$c.fase; $atual = $c.atual; $camera = $c.camera; $falha = $c.falha
+            if ($null -ne $W.Manual) {
+                $fase = [string]$W.Manual.Fase; $camera = $W.Manual.Camera; $falha = $W.Manual.Falha
+                $atual = Get-IndicePosicao ([int]$W.Manual.Posicao)
+            } elseif (-not $trabalho) {
+                # Campos legados (UI de um cartao): a primeira camera em curso.
+                $cur = @($cameras | Where-Object { $_.fase -eq 'portao' -or $_.fase -eq 'conferindo' }) | Select-Object -First 1
+                if ($null -ne $cur) { $trabalho = $cur.trabalho; $etapa = $cur.etapa; $progresso = $cur.progresso }
+            }
+            Update-UltimaInstalada $cameras
         }
+        $E.EmCurso = $emCurso
+        $W.FasePublicada = $fase
+        Update-Vigia -Fase $fase
         $o = [ordered]@{
             senhaDefinida = (-not [string]::IsNullOrEmpty($W.Senha)); senhaGeracao = [int]$W.SenhaGeracao
             simular = $W.Simular; falharEm = $W.FalharEm
-            fase = $W.Fase; trabalho = $W.Trabalho; etapa = $W.Etapa; progresso = $W.Progresso
-            fila = $fila; atual = $W.Atual
-            camera = $W.Camera; falha = $W.Falha; escolha = @($W.Escolha)
+            fase = $fase; trabalho = $trabalho; etapa = $etapa; progresso = $progresso
+            fila = $fila; atual = $atual
+            camera = $camera; falha = $falha
+            cameras = $cameras; portao = $portao; paralelo = $paralelo
             ferramenta = $W.Ferramenta; aviso = $W.Aviso; avisoOrigem = $W.AvisoOrigem; avisoN = $W.AvisoN; ultimo = $W.Ultimo
             rede = $W.Rede; ocupado = [bool]$E.Ocupado; admin = $W.Admin
             internet = [ordered]@{ agora = $W.Internet; antes = $W.InternetAntes; quando = $W.InternetQuando }
@@ -465,19 +526,72 @@ $scriptWorker = {
         return $r
     }
 
-    function Get-ProximaPendente {
-        if ($null -eq $W.Fila) { return -1 }
-        $itens = $W.Fila.Itens
-        for ($i = 0; $i -lt $itens.Count; $i++) { if ($itens[$i].Estado -eq 'pendente') { return $i } }
-        return -1
+    # ------------------------------------------------------------ fila (coordenador)
+
+    # Posicao do estado paralelo pelo numero (o estado e do coordenador; so a
+    # retomada manual mexe direto, com o laco parado no comando). Sem posicao, nada.
+    function Set-PosicaoCoord {
+        param([int]$Numero, [string]$Estado, [string]$Motivo = '', [string]$Mac = '')
+        foreach ($p in @($W.Coord.Estado.Posicoes)) {
+            if ([int]$p.Posicao -ne $Numero) { continue }
+            $p.Estado = $Estado
+            $p.Motivo = $Motivo
+            if ($Mac) { $p.Mac = $Mac }
+            $W.Coord.Sujo = $true
+            return
+        }
     }
 
-    function Set-ItemFila {
-        param([int]$Indice, [string]$Estado, [string]$Motivo = '', [string]$Mac = '')
-        $it = $W.Fila.Itens[$Indice]
-        $it.Estado = $Estado
-        $it.Motivo = $Motivo
-        if ($Mac) { $it.Mac = $Mac }
+    # O que todo job recebe (senha so em memoria): a cada fila nova, senha,
+    # sessao salva e simulacao trocada.
+    function Update-TrabalhoCoord {
+        if ($null -eq $W.Coord) { return }
+        $t = $W.Coord.Trabalho
+        $t.Senha = [string]$W.Senha
+        $t.Padroes = Get-SessaoOuFabrica
+        $t.CaminhoRegistro = Get-CaminhoRegistroAtual
+        $t.Simular = [bool]$W.Simular
+        $t.FalharEm = $(if ($W.Simular) { [string]$W.FalharEm } else { '' })
+        if ($null -ne $W.Fila) { $t.Local = [string]$W.Fila.Local; $t.Rack = [string]$W.Fila.Rack; $t.Andar = [string]$W.Fila.Andar }
+        $W.Coord.Geracao = [int]$W.SenhaGeracao
+    }
+
+    # Descarta a fila: fecha o pool (job ainda rodando e parado) e esquece o
+    # coordenador e a retomada manual.
+    function Clear-Fila {
+        if ($null -ne $W.Coord) { Close-PoolCameras -Pool $W.Coord.Pool }
+        $W.Coord = $null; $W.Fila = $null; $W.Manual = $null
+        $W.AcoesPendentes.Clear()
+    }
+
+    # Guarda global (Step-Comando): com camera em portao ou conferindo, o
+    # comando e recusado com o texto do orquestrador. $true = recusado.
+    function Test-ComandoRecusado {
+        param([string]$Comando)
+        if ($null -eq $W.Coord) { return $false }
+        $g = Step-Comando -Estado $W.Coord.Estado -Comando $Comando
+        if ($g.Aceito) { return $false }
+        $W.Aviso = [string](@($g.Acoes)[0].Texto)
+        return $true
+    }
+
+    # Achados do tique do vigia, no formato do orquestrador ({ Mac, Serial,
+    # Modelo, Ip, HttpPort, Init, Marca }). Vira Deps.Descobrir do coordenador.
+    # Em simulacao: as 3 cameras de fabrica ficticias (U1), no IP de fabrica.
+    # No real: broadcast DHIP + IP de fabrica, sem varredura (o tique nao pode
+    # prender o worker por minutos); com a chave de broadcast desligada, so o
+    # IP de fabrica conta.
+    $DescobrirAchados = {
+        param($Sessao)
+        if ($W.Simular) {
+            return @(1..3 | ForEach-Object {
+                @{ Mac = ('AA:00:00:00:00:0' + $_); Serial = ('SIM-' + $_); Modelo = 'SIM-IPC'; Ip = [string]$Sessao.IpFabrica
+                   HttpPort = 80; Init = 1; Marca = 'Intelbras' } })
+        }
+        $todos = @(Find-CamerasNaRede -IpFabrica $Sessao.IpFabrica -GatewayDestino $Sessao.Gateway -ArquivoBlacklist $Arquivos.Blacklist `
+                                      -SemVarredura -Silencioso -IfIndex ([int]$Sessao.Placa.IfIndex))
+        if (-not $W.Vigia.Broadcast) { $todos = @($todos | Where-Object { [string]$_.Ip -eq [string]$Sessao.IpFabrica }) }
+        return @($todos | ForEach-Object { ConvertTo-AchadoParalelo $_ })
     }
 
     # Placa escolhida nas duas faixas (fabrica e gateway). Sem isso tudo vira timeout.
@@ -509,123 +623,83 @@ $scriptWorker = {
     }
 
     # Desliga sozinho quando a fila acaba, e quando a sessao perde a senha.
+    # -Fase: a fase que o Publicar acabou de calcular.
     function Update-Vigia {
+        param([string]$Fase)
         if (-not $W.Vigia.Ligado) { return }
-        if ($null -eq $W.Fila -or $W.Fase -eq 'ocioso') { Set-VigiaDesligado 'sem fila' }
-        elseif ($W.Fase -eq 'concluida') { Set-VigiaDesligado 'fila concluida' }
-        elseif ($W.Fase -eq 'encerrada') { Set-VigiaDesligado 'fila encerrada' }
+        if ($null -eq $W.Coord -or $Fase -eq 'ocioso') { Set-VigiaDesligado 'sem fila' }
+        elseif ($Fase -eq 'concluida') { Set-VigiaDesligado 'fila concluida' }
+        elseif ($Fase -eq 'encerrada') { Set-VigiaDesligado 'fila encerrada' }
         elseif (-not $W.Simular -and [string]::IsNullOrEmpty($W.Senha)) { Set-VigiaDesligado 'senha da sessao apagada' }
     }
 
-    # So com a fila parada esperando camera: em decisao ou escolher o vigia
-    # fica em pausa (continua ligado) ate o operador resolver.
+    # So com a fila esperando camera: com camera em curso ou em decisao o
+    # vigia fica em pausa (continua ligado). A fase e a do ultimo Publicar.
     function Test-VezDoVigia {
-        return ($W.Vigia.Ligado -and $W.Fase -eq 'fila' -and (Get-Date) -ge $W.Vigia.Proximo)
+        return ($W.Vigia.Ligado -and $null -ne $W.Coord -and $W.FasePublicada -eq 'fila' -and (Get-Date) -ge $W.Vigia.Proximo)
     }
 
     <#
-        Um tique do vigia. Camera de fabrica no IP de fabrica -> configura na
-        proxima posicao livre, pelo MESMO caminho do "Camera conectada" sem IP
-        (varias cameras -> escolher; IP de destino ocupado -> pula a posicao).
-        Camera ja inicializada no IP de fabrica: so avisa, uma vez por MAC, sem
-        login - retomar e sempre acao do operador (login errado trava a camera).
-        Em simulacao, "aparece" uma camera de fabrica a cada tique.
+        Um tique do vigia, pelo orquestrador: Deps.Descobrir traz os achados
+        (DHIP; em simulacao as 3 cameras de fabrica), Step-Descoberta poe as
+        de fabrica em espera e Step-JaInicializada avisa das inicializadas
+        (uma vez por MAC, sem login: retomar e sempre acao do operador). As
+        acoes vao para o passo 4 do laco; a admissao faz o resto.
+        -Manual: "Camera conectada" sem IP (procurar agora); sem camera nova,
+        aviso para o operador.
     #>
-    # Camera ja inicializada no IP de fabrica: aviso uma vez por MAC, sem login.
-    function Add-AvisoJaInicializada {
-        param([string]$Ip, [string]$Mac)
-        $mac = Get-MacNormalizado $Mac
-        if ($W.Vigia.Vistos.ContainsKey($mac)) { return }
-        $W.Vigia.Vistos[$mac] = $true
-        $quem = ''; if ($mac) { $quem = ' (MAC ' + (Format-Mac $mac) + ')' }
-        $W.AvisoOrigem = 'vigia'
-        $W.Aviso = 'Câmera já inicializada em ' + $Ip + $quem + ': o vigia não mexe nela. Para retomar, abra "Retomar câmera já inicializada", informe ' +
-                   $Ip + ' e clique em Câmera conectada.'
-        Write-Log ("Vigia: camera ja inicializada em " + $Ip + $quem + " - nao tocada. Para retomar, informe o IP em Camera conectada.") 'Yellow'
-    }
-
     function Invoke-TiqueVigia {
+        param([switch]$Manual)
         $p = Get-SessaoPronta
         if ($null -eq $p) { Set-VigiaDesligado 'sessao incompleta'; return }
-        $ipf = $p.IpFabrica
-        $achados = $null
-        $onde = $ipf
-        if (-not $W.Simular) {
-            if ($W.Vigia.Broadcast) {
-                # Chave ligada: broadcast DHIP + atalho no IP de fabrica, sem varredura
-                # (o tique nao pode prender o worker por minutos).
-                $todos = @(Find-CamerasNaRede -IpFabrica $ipf -GatewayDestino $p.Gateway -ArquivoBlacklist $Arquivos.Blacklist -SemVarredura -Silencioso -IfIndex ([int]$p.Placa.IfIndex))
-                $achados = @($todos | Where-Object { $_.Virgem })
-                if ($achados.Count -eq 0) {
-                    $noIpf = @($todos | Where-Object { $_.Ip -eq $ipf -and $_.Confirmado -and -not $_.Virgem })
-                    if ($noIpf.Count -gt 0) { Add-AvisoJaInicializada -Ip $ipf -Mac $noIpf[0].Mac }
-                    return
-                }
-                $onde = ($achados | ForEach-Object { $_.Ip }) -join ', '
-            } else {
-                if (@(Invoke-PingSweep -Ips @($ipf) -TimeoutMs 1000).Count -eq 0) { return }
-                # 5 s: o tique nao pode prender o worker por 25 s a cada camera muda.
-                $st = Get-CamInitStatus -Ip $ipf -Timeout 5
-                if (-not $st.Ok) { return }
-                if ($st.Init -ne 1) {
-                    $m = Get-VizinhosMac -Ips @($ipf)
-                    $mac = ''; if ($m.ContainsKey($ipf)) { $mac = $m[$ipf] }
-                    Add-AvisoJaInicializada -Ip $ipf -Mac $mac
-                    return
-                }
-            }
+        $coord = $W.Coord
+        $antes = @($coord.Estado.Cameras).Count
+        $achados = @(& (Get-DepCoordenador -Coord $coord -Nome 'Descobrir') -Sessao $p)
+        $passo = Step-Descoberta -Estado $coord.Estado -Achados $achados
+        $coord.Estado = $passo.Estado
+        foreach ($a in @($passo.Acoes)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
+        $registro = @()
+        if (@($achados | Where-Object { (Get-InitOrquestrador $_.Init) -ne 1 }).Count -gt 0) { $registro = @((Read-Registro (Get-CaminhoRegistroAtual)).Cameras) }
+        $passo = Step-JaInicializada -Estado $coord.Estado -Achados $achados -Registro $registro
+        $coord.Estado = $passo.Estado
+        foreach ($a in @($passo.Acoes)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
+        $coord.Sujo = $true
+        $novas = @(@($coord.Estado.Cameras) | Select-Object -Skip $antes)
+        if ($novas.Count -gt 0) {
+            Write-Log ("Vigia: " + $novas.Count + " camera(s) nova(s) em espera: " + (($novas | ForEach-Object { [string]$_.Mac + ' em ' + [string]$_.IpOrigem }) -join ', ')) 'Cyan'
+        } elseif ($Manual) {
+            $W.Aviso = 'Nenhuma câmera de fábrica nova encontrada. Confira o cabo, o PoE e a porta P+D do injetor, e tente de novo.'
         }
-
-        $E.Ocupado = $true
-        $W.Aviso = ''; $W.AvisoOrigem = 'vigia'
-        $W.CameraDoVigia = $true
-        $pos = Get-ProximaPendente
-        $txtPos = ''; if ($pos -ge 0) { $txtPos = ' -> posicao ' + $W.Fila.Itens[$pos].Posicao }
-        $txtPorta = ''
-        if ($W.Vigia.Porta) { $txtPorta += ', porta ' + $W.Vigia.Porta }
-        if ($W.Vigia.Canal) { $txtPorta += ', canal ' + $W.Vigia.Canal }
-        Write-Log ("Vigia: camera de fabrica em " + $onde + $txtPos + $txtPorta) 'Cyan'
-        Publicar
-        Invoke-Conectada ([pscustomobject]@{ porta = $W.Vigia.Porta; canal = $W.Vigia.Canal; ip = '' }) -Achados $achados
-        # Nao chegou a configurar (aviso, fila concluida): a camera nao e "do vigia".
-        if ($W.Fase -notin @('decisao', 'escolher')) { $W.CameraDoVigia = $false }
-        if ($W.Aviso) {
-            $W.Vigia.SemSucesso = [int]$W.Vigia.SemSucesso + 1
-            if ($W.Vigia.SemSucesso -ge 5) { Set-VigiaDesligado '5 tentativas sem configurar' }
-        } else { $W.Vigia.SemSucesso = 0 }
     }
 
-    function Invoke-Configurar {
+    # Retomada pelo IP (serial, D1): configura a camera de $W.Manual na
+    # posicao reservada, bloqueando o worker como antes do paralelo.
+    function Invoke-ConfigurarManual {
+        $m = $W.Manual
         $p = Get-SessaoOuFabrica
-        $W.Fase = 'configurando'; $W.Falha = $null; $W.Aviso = ''; $W.Etapa = ''
-        $W.TrabalhoBase = 'Configurando a câmera para ' + $W.Camera.Destino
+        $m.Fase = 'configurando'; $m.Falha = $null; $W.Aviso = ''; $W.Etapa = ''
+        Set-PosicaoCoord -Numero ([int]$m.Posicao) -Estado 'reservada' -Mac ([string]$m.Camera.Mac)
+        $W.TrabalhoBase = 'Configurando a câmera para ' + $m.Camera.Destino
         $W.Trabalho = $W.TrabalhoBase; $W.Progresso = $null
         Publicar
         $falharEm = ''
         if ($W.Simular) { $falharEm = $W.FalharEm }
-        $r = Invoke-ConfiguracaoCamera -Contexto $W.Camera -Padroes $p -Senha $W.Senha `
+        $r = Invoke-ConfiguracaoCamera -Contexto $m.Camera -Padroes $p -Senha $W.Senha `
                                        -CaminhoRegistro (Get-CaminhoRegistroAtual) -Simular:$W.Simular -FalharEm $falharEm
-        if ($r.Mac) { $W.Camera.Mac = $r.Mac }
+        if ($r.Mac) { $m.Camera.Mac = $r.Mac }
         $W.Etapa = ''
         $W.Trabalho = ''; $W.TrabalhoBase = ''; $W.Progresso = $null
         if ($r.Ok) {
-            Set-ItemFila -Indice $W.Atual -Estado 'feita' -Mac $r.Mac
-            $W.Ultimo = 'Câmera instalada em ' + $W.Camera.Destino + ' (MAC ' + (Format-Mac $r.Mac) + ').'
-            if ($W.CameraDoVigia) {
-                # O cabeamento segue a ordem da fila: a proxima camera vem na porta/canal seguinte.
-                $W.Vigia.Porta = Step-Rotulo $W.Vigia.Porta
-                $W.Vigia.Canal = Step-Rotulo $W.Vigia.Canal
-                $W.CameraDoVigia = $false
-            }
-            $W.Camera = $null; $W.Atual = -1
-            if ((Get-ProximaPendente) -lt 0) { $W.Fase = 'concluida' } else { $W.Fase = 'fila' }
+            Set-PosicaoCoord -Numero ([int]$m.Posicao) -Estado 'feita' -Mac $r.Mac
+            $W.Ultimo = 'Câmera instalada em ' + $m.Camera.Destino + ' (MAC ' + (Format-Mac $r.Mac) + ').'
+            $W.Manual = $null
         } else {
             # Falha simulada e de uma vez so: o "Tentar de novo" tem que passar.
             if ($W.Simular -and $W.FalharEm) { $W.FalharEm = '' }
-            Set-ItemFila -Indice $W.Atual -Estado 'falhou' -Motivo ($r.Falhou + ': ' + $r.Erro) -Mac $r.Mac
-            $W.Falha = [ordered]@{ etapa = $r.Falhou; erro = $r.Erro; recusa = $r.Recusa
+            Set-PosicaoCoord -Numero ([int]$m.Posicao) -Estado 'falhou' -Motivo ($r.Falhou + ': ' + $r.Erro) -Mac $r.Mac
+            $m.Falha = [ordered]@{ etapa = $r.Falhou; erro = $r.Erro; recusa = $r.Recusa
                                    loginRecusado = [bool]$r.LoginRecusado; bloqueada = [bool]$r.Bloqueada; geracao = [int]$W.SenhaGeracao }
-            $W.Fase = 'decisao'
+            $m.Fase = 'decisao'
         }
     }
 
@@ -654,97 +728,70 @@ $scriptWorker = {
         return $true
     }
 
-    # Comeca a configuracao de um achado na posicao da fila. Usado pelo
-    # "Camera conectada", pelo vigia e pela escolha entre varias cameras.
-    function Start-ConfiguracaoDoAchado {
-        param($Achado, [int]$Indice, $Cmd)
-        $p = Get-SessaoPronta
-        if ($null -eq $p) { return }
-        $informada = ([string]$Achado.Como -eq 'informado')
-        if (-not (Confirm-AlcanceCamera $Achado $p -SemInit:$informada)) {
-            if ($W.Fase -eq 'escolher') { $W.Escolha = @(); $W.EscolhaAchados = @(); $W.Camera = $null; $W.Atual = -1; $W.Fase = 'fila' }
-            return
-        }
-        $porta = 80
-        if ($null -ne $Achado.PSObject.Properties['HttpPort'] -and [int]$Achado.HttpPort -gt 0) { $porta = [int]$Achado.HttpPort }
-        $W.Atual = $Indice
-        $W.Camera = [pscustomobject]@{
-            IpOrigem = $Achado.Ip; Destino = $W.Fila.Itens[$Indice].Ip; Mac = [string]$Achado.Mac
-            Local = $W.Fila.Local; Rack = $W.Fila.Rack; Andar = $W.Fila.Andar
-            Porta = [string]$Cmd.porta; Canal = [string]$Cmd.canal; HttpPort = $porta
-        }
-        Invoke-Configurar
-    }
-
-    # -Achados: cameras de fabrica ja achadas (vigia com broadcast); sem ele,
-    # com o campo IP vazio, procura (broadcast + IP de fabrica + varredura).
+    <#
+        "Camera conectada". Sem IP: procurar agora (tique imediato do vigia,
+        U3); as cameras achadas entram na espera e a admissao as leva.
+        Com IP: retomada de camera ja inicializada, serial e uma por vez (D1),
+        recusada com camera em curso (Step-Comando 'retomar').
+    #>
     function Invoke-Conectada {
-        param($Cmd, $Achados = $null)
-        if ($null -eq $W.Fila -or $W.Fase -eq 'ocioso') { $W.Aviso = 'Monte a fila antes: informe a faixa de IPs e clique em Montar fila.'; return }
-        if ($W.Fase -eq 'encerrada') { $W.Aviso = 'A fila foi encerrada: monte uma fila nova para continuar.'; return }
-        if ($W.Fase -in @('decisao', 'configurando', 'escolher')) { $W.Aviso = 'Termine a câmera atual antes: escolha a câmera da lista ou decida o que fazer com a falha.'; return }
+        param($Cmd)
+        if ($null -eq $W.Coord) { $W.Aviso = 'Monte a fila antes: informe a faixa de IPs e clique em Montar fila.'; return }
+        if ($null -ne $W.Manual) { $W.Aviso = 'Termine a câmera atual antes: decida o que fazer com a falha.'; return }
+        $fase = Get-FaseAtual
+        if ($fase -eq 'encerrada') { $W.Aviso = 'A fila foi encerrada: monte uma fila nova para continuar.'; return }
+        if ($fase -eq 'concluida') { $W.Aviso = 'Fila concluída: nenhuma posição pendente. Monte uma fila nova para continuar.'; return }
         if (-not $W.Simular -and [string]::IsNullOrEmpty($W.Senha)) { $W.Aviso = $TextoSemSenha; return }
         # IP invalido e recusado antes de mexer na placa ou pular posicoes.
         $ipDado = ([string]$Cmd.ip).Trim()
         if ($ipDado -and -not (Test-Ipv4Estrito $ipDado)) { $W.Aviso = Get-TextoIpInvalido $ipDado; return }
+        if ($ipDado -and (Test-ComandoRecusado 'retomar')) { return }
         $p = Get-SessaoPronta
         if ($null -eq $p) { return }
-        $ifIndex = [int]$p.Placa.IfIndex
         if (-not (Confirm-PlacaPronta $p)) { return }
 
-        # Proxima posicao livre. IP que ja responde e de outro equipamento -
+        if (-not $ipDado) {
+            Write-Log "Operador: procurar camera de fabrica agora." 'Cyan'
+            Invoke-TiqueVigia -Manual
+            return
+        }
+
+        # Proxima posicao pendente. IP que ja responde e de outro equipamento -
         # a menos que seja a propria camera informada pelo operador.
-        while ($true) {
-            $i = Get-ProximaPendente
-            if ($i -lt 0) { $W.Fase = 'concluida'; $W.Trabalho = ''; $W.Aviso = 'Fila concluída: nenhuma posição pendente. Monte uma fila nova para continuar.'; return }
-            $ip = $W.Fila.Itens[$i].Ip
-            if (-not $W.Simular -and $ip -ne $ipDado -and (Test-IpEmUso -Ip $ip)) {
-                Write-Log ("  posicao " + $W.Fila.Itens[$i].Posicao + ": " + $ip + " ja responde ao ping - pulada") 'Yellow'
-                Set-ItemFila -Indice $i -Estado 'pulada' -Motivo 'IP ja responde na rede'
+        $pos = $null
+        foreach ($q in @($W.Coord.Estado.Posicoes)) {
+            if ([string]$q.Estado -ne 'pendente') { continue }
+            if (-not $W.Simular -and [string]$q.Ip -ne $ipDado -and (Test-IpEmUso -Ip $q.Ip)) {
+                Write-Log ("  posicao " + $q.Posicao + ": " + $q.Ip + " ja responde ao ping - pulada") 'Yellow'
+                Set-PosicaoCoord -Numero ([int]$q.Posicao) -Estado 'pulada' -Motivo 'IP ja responde na rede'
                 Publicar
                 continue
             }
+            $pos = $q
             break
         }
+        if ($null -eq $pos) { $W.Aviso = 'Fila concluída: nenhuma posição pendente. Monte uma fila nova para continuar.'; return }
 
-        $achado = $null
-        if ($W.Simular) {
-            $achado = [pscustomobject]@{ Ip = $p.IpFabrica; Mac = ''; Alcancavel = $true; Confirmado = $true; Init = 1; HttpPort = 80; Como = 'simulado' }
-        } elseif ($ipDado) {
+        $mac = ''; $alcancavel = $true; $porta = 80
+        if (-not $W.Simular) {
             $null = Invoke-PingSweep -Ips @($ipDado)
             $m = Get-VizinhosMac -Ips @($ipDado)
-            $mac = ''; if ($m.ContainsKey($ipDado)) { $mac = $m[$ipDado] }
-            $achado = [pscustomobject]@{ Ip = $ipDado; Mac = $mac; Alcancavel = (Test-IpAlcancavel -Ip $ipDado -Locais @(Get-FaixasDaPlaca -IfIndex $ifIndex))
-                                         Confirmado = $false; Init = -1; HttpPort = (Get-CamPortaHttp $ipDado); Mascara = ''; Gateway = ''; Como = 'informado' }
-        } else {
-            $virgens = @()
-            if ($null -ne $Achados) { $virgens = @($Achados | Where-Object { $_.Virgem }) }
-            else {
-                $W.Trabalho = 'Procurando camera de fabrica na rede'; Publicar
-                $achados = @(Find-CamerasNaRede -IpFabrica $p.IpFabrica -GatewayDestino $p.Gateway -ArquivoBlacklist $Arquivos.Blacklist -IfIndex $ifIndex)
-                $virgens = @($achados | Where-Object { $_.Virgem })
-                $W.Trabalho = ''
-                if ($virgens.Count -eq 0) {
-                    $jaInit = @($achados | Where-Object { $_.EhCamera -and -not $_.Virgem } | ForEach-Object { $_.Ip })
-                    $W.Aviso = 'Nenhuma câmera de fábrica encontrada. Confira o cabo, o PoE e a porta P+D do injetor, e tente de novo.'
-                    if ($jaInit.Count -gt 0) { $W.Aviso += ' Já inicializadas na rede (não tocadas): ' + ($jaInit -join ', ') + '. Para retomar uma delas, abra "Retomar câmera já inicializada" e informe o IP dela.' }
-                    return
-                }
-            }
-            if ($virgens.Count -eq 0) { $W.Aviso = 'Nenhuma câmera de fábrica encontrada.'; return }
-            if ($virgens.Count -gt 1) {
-                $W.Escolha = @($virgens | ForEach-Object { [ordered]@{ ip = $_.Ip; mac = (Format-Mac $_.Mac); ouiConhecido = $_.OuiConhecido; modelo = [string]$_.Modelo
-                                                                        mascara = [string]$_.Mascara; alcancavel = [bool]$_.Alcancavel; confirmado = [bool]$_.Confirmado; httpPort = [int]$_.HttpPort } })
-                $W.EscolhaAchados = @($virgens)
-                $W.Fase = 'escolher'
-                $W.Camera = [pscustomobject]@{ Porta = [string]$Cmd.porta; Canal = [string]$Cmd.canal }
-                $W.Atual = $i
-                return
-            }
-            $achado = $virgens[0]
+            if ($m.ContainsKey($ipDado)) { $mac = $m[$ipDado] }
+            $alcancavel = (Test-IpAlcancavel -Ip $ipDado -Locais @(Get-FaixasDaPlaca -IfIndex ([int]$p.Placa.IfIndex)))
+            $porta = [int](Get-CamPortaHttp $ipDado)
+            if ($porta -le 0) { $porta = 80 }
         }
-
-        Start-ConfiguracaoDoAchado -Achado $achado -Indice $i -Cmd $Cmd
+        $achado = [pscustomobject]@{ Ip = $ipDado; Mac = $mac; Alcancavel = $alcancavel; Confirmado = $false; Init = -1; HttpPort = $porta; Mascara = ''; Gateway = ''; Como = 'informado' }
+        if (-not (Confirm-AlcanceCamera $achado $p -SemInit)) { return }
+        $W.Manual = @{
+            Fase = 'configurando'; Posicao = [int]$pos.Posicao; Falha = $null
+            Camera = [pscustomobject]@{
+                IpOrigem = $ipDado; Destino = [string]$pos.Ip; Mac = $mac
+                Local = $W.Fila.Local; Rack = $W.Fila.Rack; Andar = $W.Fila.Andar
+                Porta = [string]$Cmd.porta; Canal = [string]$Cmd.canal; HttpPort = $porta
+            }
+        }
+        Invoke-ConfigurarManual
     }
 
     # Monta a fila a partir da faixa e guarda a faixa na sessao (volta como
@@ -753,6 +800,8 @@ $scriptWorker = {
     # rede em Opcoes. -Silencioso: sem o aviso "nenhuma posicao livre".
     function Invoke-MontarFila {
         param([string]$Inicio, [string]$Fim, [string]$Local = '', [string]$Rack = '', [string]$Andar = '', [switch]$Guardar = $true)
+        # Fila nova com camera em curso e recusada (Step-Comando 'nova-fila').
+        if (Test-ComandoRecusado 'nova-fila') { return $false }
         $p = Get-SessaoPronta
         if ($null -eq $p) { return $false }
         $Inicio = ([string]$Inicio).Trim(); $Fim = ([string]$Fim).Trim()
@@ -776,9 +825,17 @@ $scriptWorker = {
             return $false
         }
         Set-VigiaDesligado 'fila nova'
-        $W.Fila = @{ Itens = $itens; Local = [string]$Local; Rack = [string]$Rack; Andar = [string]$Andar; Inicio = $Inicio; Fim = $Fim }
-        $W.Atual = -1; $W.Camera = $null; $W.Falha = $null; $W.Aviso = ''; $W.Escolha = @(); $W.Ultimo = ''
-        $W.Fase = 'fila'
+        Clear-Fila
+        $W.Fila = @{ Local = [string]$Local; Rack = [string]$Rack; Andar = [string]$Andar; Inicio = $Inicio; Fim = $Fim }
+        # Coordenador + pool: a placa (Prender/Soltar), o despacho dos jobs e a
+        # descoberta (DHIP; em simulacao, as 3 cameras de fabrica).
+        $deps = New-DepsPlaca -IfIndex ([int]$p.Placa.IfIndex) -CaminhoRastro $Arquivos.SessaoPlaca -Simular:$W.Simular
+        $deps.Despachar = (New-DepsPool).Despachar
+        $deps.Descobrir = $DescobrirAchados
+        $W.Coord = New-Coordenador -Posicoes $itens -Max 0 -Deps $deps
+        $W.Coord.Pool = New-PoolCameras -Max ([Math]::Max(1, $pend)) -CaminhoMotor $Motor
+        Update-TrabalhoCoord
+        $W.Aviso = ''; $W.Ultimo = ''; $W.Feitas = @{}
         Write-Log ("Fila montada: " + $Inicio + " a " + $Fim + " (" + $pend + " posicao(oes) livre(s) de " + $itens.Count + ")") 'Cyan'
         if ($Guardar) {
             # A proxima abertura do painel volta com esta faixa na sessao.
@@ -798,6 +855,7 @@ $scriptWorker = {
                 $W.SenhaGeracao = [int]$W.SenhaGeracao + 1
                 if ($W.Senha) { Write-Log "Senha da sessao definida (fica so na memoria)." 'Gray' }
                 else { Write-Log "Senha da sessao apagada." 'Gray' }
+                Update-TrabalhoCoord
             }
             # Uma secao do passo a passo / Opcoes, ja mesclada e validada pelo
             # listener. aplicarRede: rede ou placa mudaram com a placa preparada
@@ -809,6 +867,7 @@ $scriptWorker = {
                 $campos = @(Test-SessaoParaGravar -Sessao $nova -Enviados @($Cmd.enviados))
                 if ($campos.Count -gt 0) { $W.Aviso = 'Nada foi salvo: ' + (($campos | ForEach-Object { $_.msg }) -join ' '); return }
                 $aplicar = [bool]$Cmd.aplicarRede
+                if ($aplicar -and (Test-ComandoRecusado 'salvar-sessao')) { return }
                 if ($aplicar) {
                     Set-VigiaDesligado 'rede da sessao alterada'
                     if (-not $W.Simular -and $W.Admin -and (Test-Path -LiteralPath $Arquivos.SessaoPlaca)) {
@@ -827,7 +886,7 @@ $scriptWorker = {
                         $null = Invoke-PrepararPlaca $nova
                         if (-not $W.Rede.ok) { $W.Aviso = 'A sessão foi salva, mas não deu para preparar a placa de rede com ela. Veja o log.' }
                     }
-                    if ($null -ne $W.Fila -and @($W.Fila.Itens).Count -gt 0) {
+                    if ($null -ne $W.Coord -and $null -ne $W.Fila) {
                         if ((Test-SessaoCompleta $nova) -and (Test-FilaCabeNaRede -Inicio $W.Fila.Inicio -Fim $W.Fila.Fim -Mascara $nova.Mascara -Gateway $nova.Gateway)) {
                             $f = $W.Fila
                             if (Invoke-MontarFila -Inicio $f.Inicio -Fim $f.Fim -Local $f.Local -Rack $f.Rack -Andar $f.Andar -Guardar:$false) {
@@ -835,12 +894,13 @@ $scriptWorker = {
                             }
                         } else {
                             $faixa = [string]$W.Fila.Inicio + ' a ' + [string]$W.Fila.Fim
-                            $W.Fila = $null; $W.Atual = -1; $W.Camera = $null; $W.Falha = $null; $W.Escolha = @(); $W.Fase = 'ocioso'
+                            Clear-Fila
                             $W.Aviso = 'A fila foi descartada: a faixa ' + $faixa + ' não cabe na rede nova. Monte outra no Painel.'
                             Write-Log ("  a fila " + $faixa + " nao cabe na rede nova e foi descartada.") 'Yellow'
                         }
                     }
                 }
+                Update-TrabalhoCoord
                 Update-Rede
             }
             # Fim do passo a passo: etapa 7, placa preparada e, se pedido, a fila da sessao montada.
@@ -868,7 +928,8 @@ $scriptWorker = {
             }
             # Volta ao passo a passo (etapa 1): a sessao fica incompleta ate concluir de novo.
             'sessao-refazer' {
-                if ($W.Fase -in @('configurando', 'decisao', 'escolher')) { $W.Aviso = 'Termine a câmera atual antes de refazer o passo a passo.'; return }
+                if (Test-ComandoRecusado 'refazer-sessao') { return }
+                if ($null -ne $W.Manual) { $W.Aviso = 'Termine a câmera atual antes de refazer o passo a passo.'; return }
                 $s = Get-SessaoOuFabrica
                 $s.Etapa = 1
                 $null = Save-SessaoAtual $s
@@ -878,27 +939,27 @@ $scriptWorker = {
                 Update-Rede
             }
             'simular' {
+                if (Test-ComandoRecusado 'simular') { return }
                 $novo = [bool]$Cmd.ligado
                 if ($novo -ne $W.Simular) {
-                    # Registro diferente: fila, camera em curso, escolha, ultimo
-                    # resultado e ferramenta nao valem mais.
-                    $W.Fila = $null; $W.Camera = $null; $W.Atual = -1; $W.Falha = $null; $W.Fase = 'ocioso'
-                    $W.Escolha = @(); $W.Ultimo = ''; $W.Ferramenta = $null
+                    # Registro diferente: fila, retomada, ultimo resultado e
+                    # ferramenta nao valem mais.
+                    Set-VigiaDesligado 'modo trocado'
+                    Clear-Fila
+                    $W.Ultimo = ''; $W.Ferramenta = $null
                 }
                 $W.Simular = $novo
                 $W.FalharEm = [string]$Cmd.falharEm
                 $E.Simular = $novo
+                Update-TrabalhoCoord
                 Write-Log ("Simulacao " + $(if ($novo) { 'LIGADA - nada e enviado para camera nem para a placa' } else { 'desligada' }) +
                            $(if ($W.FalharEm) { '; falha forcada em ' + $W.FalharEm } else { '' })) 'Yellow'
             }
             'fila' {
-                if ($W.Fase -in @('configurando', 'decisao', 'escolher')) { $W.Aviso = 'Termine a câmera atual antes de montar outra fila.'; return }
+                if ($null -ne $W.Manual) { $W.Aviso = 'Termine a câmera atual antes de montar outra fila.'; return }
                 $null = Invoke-MontarFila -Inicio ([string]$Cmd.inicio) -Fim ([string]$Cmd.fim) -Local ([string]$Cmd.local) -Rack ([string]$Cmd.rack) -Andar ([string]$Cmd.andar)
             }
-            'conectada' {
-                if ($W.Fase -notin @('decisao', 'configurando', 'escolher')) { $W.CameraDoVigia = $false }
-                Invoke-Conectada $Cmd
-            }
+            'conectada' { Invoke-Conectada $Cmd }
             'vigia' {
                 if (-not [bool]$Cmd.ligado) { Set-VigiaDesligado 'pelo operador'; return }
                 # Ja ligado (pedido repetido): so porta, canal e broadcast; sem
@@ -909,7 +970,7 @@ $scriptWorker = {
                     $W.Vigia.Broadcast = [bool]$Cmd.broadcast
                     return
                 }
-                if ($null -eq $W.Fila -or $W.Fase -in @('ocioso', 'concluida', 'encerrada')) { $W.Aviso = 'Monte uma fila com posição livre antes de ligar o vigia.'; return }
+                if ($null -eq $W.Coord -or (Get-FaseAtual) -in @('ocioso', 'concluida', 'encerrada')) { $W.Aviso = 'Monte uma fila com posição livre antes de ligar o vigia.'; return }
                 if (-not $W.Simular -and [string]::IsNullOrEmpty($W.Senha)) { $W.Aviso = $TextoSemSenha; return }
                 $p = Get-SessaoPronta
                 if ($null -eq $p) { return }
@@ -923,47 +984,54 @@ $scriptWorker = {
                 $W.Vigia.Proximo = (Get-Date).AddSeconds((Get-IntervaloVigia))
                 $W.Vigia.Ligado = $true
                 Write-Log ("Vigia ligado: observando " + $(if ($W.Vigia.Broadcast) { 'qualquer faixa (broadcast DHIP) e ' } else { '' }) + $p.IpFabrica +
-                           " a cada " + (Get-IntervaloVigia) + " s. Proxima camera: porta '" +
-                           $W.Vigia.Porta + "', canal '" + $W.Vigia.Canal + "' (+1 a cada camera instalada).") 'Cyan'
+                           " a cada " + (Get-IntervaloVigia) + " s. Porta '" + $W.Vigia.Porta + "', canal '" + $W.Vigia.Canal + "'.") 'Cyan'
             }
-            'escolher' {
-                if ($W.Fase -ne 'escolher') { return }
-                $sel = @($W.EscolhaAchados | Where-Object { [string]$_.Ip -eq [string]$Cmd.ip }) | Select-Object -First 1
-                if ($null -eq $sel) { $W.Aviso = 'Essa câmera não está na lista. Escolha outra ou cancele.'; return }
-                $cmdPC = [pscustomobject]@{ porta = [string]$W.Camera.Porta; canal = [string]$W.Camera.Canal }
-                $W.Escolha = @(); $W.EscolhaAchados = @()
-                Start-ConfiguracaoDoAchado -Achado $sel -Indice $W.Atual -Cmd $cmdPC
-            }
-            'cancelar-escolha' {
-                if ($W.Fase -eq 'escolher') {
-                    # Senao o proximo tique acharia as mesmas cameras e voltaria a perguntar.
-                    if ($W.CameraDoVigia) { Set-VigiaDesligado 'escolha cancelada' }
-                    $W.CameraDoVigia = $false
-                    $W.Escolha = @(); $W.EscolhaAchados = @(); $W.Camera = $null; $W.Atual = -1; $W.Fase = 'fila'
-                }
-            }
+            # Decisao sobre uma falha. Retomada manual (serial) em decisao e sem
+            # MAC: o caminho antigo. Senao, Step-Decisao no coordenador; sem MAC,
+            # 'encerrar' encerra a fila e as outras acoes valem para a primeira
+            # camera em decisao (a UI atual ainda nao manda o MAC).
             'decisao' {
-                if ($W.Fase -ne 'decisao') { return }
-                switch ([string]$Cmd.acao) {
-                    'tentar'   {
+                $acao = [string]$Cmd.acao
+                if ($acao -notin @('tentar', 'pular', 'encerrar')) { return }
+                $mac = [string]$Cmd.mac
+                if (-not $mac -and $null -ne $W.Manual -and $W.Manual.Fase -eq 'decisao') {
+                    $f = $W.Manual.Falha
+                    if ($acao -eq 'tentar') {
                         # Senha recusada: repetir a mesma senha so gasta tentativa do lockout.
-                        if ($W.Falha.loginRecusado -and [int]$W.Falha.geracao -eq [int]$W.SenhaGeracao) {
-                            $W.Aviso = $(if ($W.Falha.bloqueada) { $TextoBloqueada } else { $TextoSenhaRecusada })
+                        if ($f.loginRecusado -and [int]$f.geracao -eq [int]$W.SenhaGeracao) {
+                            $W.Aviso = $(if ($f.bloqueada) { $TextoBloqueada } else { $TextoSenhaRecusada })
                             return
                         }
-                        Write-Log "Operador: tentar de novo." 'Cyan'; Invoke-Configurar
+                        Write-Log "Operador: tentar de novo." 'Cyan'
+                        Invoke-ConfigurarManual
+                        return
                     }
-                    'pular'    {
+                    if ($acao -eq 'pular') {
                         Write-Log "Operador: pular esta posicao." 'Cyan'
-                        Set-ItemFila -Indice $W.Atual -Estado 'pulada' -Motivo ('pulada pelo operador - ' + $W.Falha.etapa + ': ' + $W.Falha.erro)
-                        $W.Camera = $null; $W.Atual = -1; $W.Falha = $null; $W.CameraDoVigia = $false
-                        $W.Fase = $(if ((Get-ProximaPendente) -lt 0) { 'concluida' } else { 'fila' })
+                        Set-PosicaoCoord -Numero ([int]$W.Manual.Posicao) -Estado 'pulada' -Motivo ('pulada pelo operador - ' + $f.etapa + ': ' + $f.erro)
+                        $W.Manual = $null
+                        return
                     }
-                    'encerrar' {
-                        Write-Log "Operador: encerrar a fila." 'Cyan'
-                        $W.Camera = $null; $W.Atual = -1; $W.Falha = $null; $W.CameraDoVigia = $false; $W.Fase = 'encerrada'
-                    }
+                    $W.Manual = $null
                 }
+                if ($null -eq $W.Coord) { return }
+                if (-not $mac -and $acao -ne 'encerrar') {
+                    $c = @(@($W.Coord.Estado.Cameras) | Where-Object { $_.Fase -eq 'decisao' }) | Select-Object -First 1
+                    if ($null -eq $c) { return }
+                    $mac = [string]$c.Mac
+                }
+                switch ($acao) {
+                    'tentar'   { Write-Log ("Operador: tentar de novo (MAC " + (Format-Mac $mac) + ").") 'Cyan' }
+                    'pular'    { Write-Log ("Operador: pular a camera (MAC " + (Format-Mac $mac) + ").") 'Cyan' }
+                    'encerrar' { Write-Log "Operador: encerrar a fila." 'Cyan' }
+                }
+                $passo = Step-Decisao -Estado $W.Coord.Estado -Mac $mac -Acao $acao -Geracao ([int]$W.SenhaGeracao)
+                $W.Coord.Estado = $passo.Estado
+                $W.Coord.Sujo = $true
+                foreach ($a in @($passo.Acoes)) {
+                    if ($null -ne $a -and [string]$a.Tipo -eq 'avisar' -and [string]$a.Texto) { $W.Aviso = [string]$a.Texto }
+                }
+                Invoke-AcoesCoordenador -Coord $W.Coord -Acoes @($passo.Acoes)
             }
             'sondar' {
                 if ($W.Simular) { $W.Aviso = $TextoSoReal; return }
@@ -1092,50 +1160,99 @@ $scriptWorker = {
     }
     Publicar
 
+    # Log dos jobs de camera: vai para o log do painel com o MAC curto.
+    $logJob = {
+        param($Ev)
+        $quem = Format-Mac ([string]$Ev.Mac)
+        if ($quem.Length -gt 8) { $quem = $quem.Substring($quem.Length - 8) }
+        $cor = [string]$Ev.Cor
+        if (-not $cor) { $cor = 'Gray' }
+        Write-Log ('  [' + $quem + '] ' + [string]$Ev.Texto) $cor
+    }
+    $ultimaPublicacao = [datetime]::Now
+
+    <#
+        Laco que nao bloqueia. A cada volta, em ordem:
+          1. comando do operador (um por volta);
+          2. eventos dos jobs (log, progresso, fim);
+          3. tique do vigia, quando for a vez, e admissao das cameras em espera;
+          4. acoes do coordenador (prender, despachar, soltar, avisar);
+          5. Publicar se o estado mudou, ou a cada ~250 ms.
+        As cameras rodam nos jobs do pool; o worker so decide e publica.
+    #>
     while (-not $E.Parar) {
         $cmd = $null
-        if (-not $Q.TryDequeue([ref]$cmd)) {
-            # Comando do operador sempre vem antes: o tique so roda com a fila de comandos vazia.
-            if (-not (Test-VezDoVigia)) { Start-Sleep -Milliseconds 120; continue }
-            try {
-                Invoke-TiqueVigia
-            } catch {
-                Write-Log ("ERRO interno no vigia: " + $_.Exception.Message) 'Red'
-                $W.AvisoOrigem = 'vigia'
-                $W.Aviso = 'Erro interno no vigia: ' + $_.Exception.Message + '. Veja o log.'
-                if ($W.Fase -eq 'configurando') { $W.Fase = 'decisao'; $W.Falha = [ordered]@{ etapa = $W.Etapa; erro = $_.Exception.Message; recusa = $false } }
-                else { Set-VigiaDesligado 'erro interno' }
-            } finally {
-                $W.Vigia.Proximo = (Get-Date).AddSeconds((Get-IntervaloVigia))
-                if ($E.Ocupado) {
-                    $W.Trabalho = ''; $W.Progresso = $null
-                    try { Update-Rede } catch { }
-                    $E.Ocupado = $false
-                }
-                Update-Vigia
-                Publicar
-            }
-            continue
-        }
-        $E.Ocupado = $true
-        $W.Aviso = ''; $W.AvisoOrigem = [string]$cmd.tipo
-        Publicar
-        try {
-            Invoke-Comando $cmd
-        } catch {
-            Write-Log ("ERRO interno em '" + $cmd.tipo + "': " + $_.Exception.Message) 'Red'
-            $W.Aviso = 'Erro interno: ' + $_.Exception.Message + '. Veja o log.'
-            if ($W.Fase -eq 'configurando') { $W.Fase = 'decisao'; $W.Falha = [ordered]@{ etapa = $W.Etapa; erro = $_.Exception.Message; recusa = $false } }
-        } finally {
-            $W.Trabalho = ''; $W.Progresso = $null
-            # Ferramenta interrompida por erro nao fica "em curso" para sempre.
-            if ($null -ne $W.Ferramenta -and $W.Ferramenta.emCurso) { $W.Ferramenta = $null }
-            try { Update-Rede } catch { }
-            Update-Vigia
-            $E.Ocupado = $false
+        $temComando = $Q.TryDequeue([ref]$cmd)
+        if ($temComando) {
+            $E.Ocupado = $true
+            $W.Aviso = ''; $W.AvisoOrigem = [string]$cmd.tipo
             Publicar
+            try {
+                Invoke-Comando $cmd
+            } catch {
+                Write-Log ("ERRO interno em '" + $cmd.tipo + "': " + $_.Exception.Message) 'Red'
+                $W.Aviso = 'Erro interno: ' + $_.Exception.Message + '. Veja o log.'
+                if ($null -ne $W.Manual -and $W.Manual.Fase -eq 'configurando') {
+                    $W.Manual.Falha = [ordered]@{ etapa = $W.Etapa; erro = $_.Exception.Message; recusa = $false; loginRecusado = $false; bloqueada = $false; geracao = [int]$W.SenhaGeracao }
+                    $W.Manual.Fase = 'decisao'
+                }
+            } finally {
+                $W.Trabalho = ''; $W.Progresso = $null
+                # Ferramenta interrompida por erro nao fica "em curso" para sempre.
+                if ($null -ne $W.Ferramenta -and $W.Ferramenta.emCurso) { $W.Ferramenta = $null }
+                try { Update-Rede } catch { }
+                $E.Ocupado = $false
+                Publicar
+                $ultimaPublicacao = [datetime]::Now
+            }
         }
+
+        $coord = $W.Coord
+        if ($null -ne $coord) {
+            try {
+                Receive-EventosCoordenador -Coord $coord -Log $logJob
+                if (Test-VezDoVigia) {
+                    try {
+                        Invoke-TiqueVigia
+                    } catch {
+                        Write-Log ("ERRO interno no vigia: " + $_.Exception.Message) 'Red'
+                        $W.AvisoOrigem = 'vigia'
+                        $W.Aviso = 'Erro interno no vigia: ' + $_.Exception.Message + '. Veja o log.'
+                        Set-VigiaDesligado 'erro interno'
+                    } finally {
+                        $W.Vigia.Proximo = (Get-Date).AddSeconds((Get-IntervaloVigia))
+                    }
+                }
+                if (@(@($coord.Estado.Cameras) | Where-Object { $_.Fase -eq 'espera' }).Count -gt 0) {
+                    $passo = Step-Admissao -Estado $coord.Estado
+                    $coord.Estado = $passo.Estado
+                    $coord.Sujo = $true
+                    foreach ($a in @($passo.Acoes)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
+                }
+                if ($W.AcoesPendentes.Count -gt 0) {
+                    $acoes = $W.AcoesPendentes.ToArray()
+                    $W.AcoesPendentes.Clear()
+                    Invoke-AcoesCoordenador -Coord $coord -Acoes $acoes
+                }
+                if ([string]$coord.AvisoGlobal) {
+                    $W.AvisoOrigem = 'vigia'
+                    $W.Aviso = [string]$coord.AvisoGlobal
+                    $coord.AvisoGlobal = ''
+                    $coord.Sujo = $true
+                }
+            } catch {
+                Write-Log ("ERRO interno no coordenador: " + $_.Exception.Message) 'Red'
+            }
+        }
+
+        $agora = [datetime]::Now
+        if (($null -ne $W.Coord -and $W.Coord.Sujo) -or ($agora - $ultimaPublicacao).TotalMilliseconds -ge 250) {
+            Publicar
+            $ultimaPublicacao = $agora
+        }
+        if (-not $temComando) { Start-Sleep -Milliseconds 50 }
     }
+    if ($null -ne $W.Coord) { Close-PoolCameras -Pool $W.Coord.Pool }
 }
 
 $rs = [runspacefactory]::CreateRunspace()
@@ -1317,7 +1434,10 @@ function Read-Corpo {
 # em "Camera conectada" nao pode configurar duas posicoes seguidas.
 function Add-Comando {
     param($Ctx, [hashtable]$Cmd, [switch]$Sempre, [hashtable]$Resposta = @{})
-    if (-not $Sempre -and ($E.Ocupado -or $Q.Count -gt 0)) {
+    # Decisao, vigia e camera passam com o worker ocupado: com cameras em
+    # paralelo o operador age num cartao enquanto as outras seguem.
+    $livre = $Sempre -or ([string]$Cmd.tipo -in @('decisao', 'vigia', 'camera'))
+    if (-not $livre -and ($E.Ocupado -or $Q.Count -gt 0)) {
         Send-Json $Ctx @{ erro = 'Aguarde: o painel está terminando a operação atual.' } 409
         return
     }
@@ -1478,8 +1598,6 @@ function Invoke-Rota {
             $b = Read-Corpo $Ctx
             Add-Comando $Ctx @{ tipo = 'vigia'; ligado = [bool]$b.ligado; porta = [string]$b.porta; canal = [string]$b.canal; broadcast = [bool]$b.broadcast } -Sempre
         }
-        'POST /api/escolher'   { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'escolher'; ip = $b.ip } }
-        'POST /api/escolher/cancelar' { Add-Comando $Ctx @{ tipo = 'cancelar-escolha' } }
         'POST /api/decisao'    { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'decisao'; acao = [string]$b.acao } }
         'GET /api/registro'    { Send-Json $Ctx @{ cameras = @((Read-RegistroAtual).Cameras); simulado = [bool]$E.Simular } }
         'GET /api/relatorio.csv' {
