@@ -1,6 +1,8 @@
 # Frente servidor: coordenador e pool (F4 do mapa)
 
-**Status:** Ativo · **Frente:** `servidor`
+**Status:** Concluído · **Frente:** `servidor`
+
+Fechado em 18/11: o contrato publicado da Task 4 (`ConvertTo-EstadoPublicadoParalelo`) é o que a F6 consome, e a F5 restante (`FalharEm` por câmera, cenários `mac-trocado`/`ja-inicializada`, atrasos por etapa) segue no mapa.
 
 Plano de frente da F4 de `docs/plans/2026-11-cameras-em-paralelo.md`, escrito sobre o `main` integrado depois das frentes `motor`, `orquestrador` e `ui` fecharem. Onde divergir do mapa, vale este plano (as divergências estão em "Decisões").
 
