@@ -94,7 +94,7 @@ $www   = Join-Path $raizWeb 'www'
 # Orquestrador (puro, nao executa nada ao carregar): o listener usa o texto
 # da recusa das guardas globais (Get-TextoRecusaComando).
 . (Join-Path (Split-Path -Parent $motor) 'Orquestrador-Cameras.ps1')
-$VersaoPainel =Get-VersaoPainel -Pasta (Split-Path -Parent $motor)
+$VersaoPainel = Get-VersaoPainel -Pasta (Split-Path -Parent $motor)
 
 # Abre a pagina no Edge em modo app (InPrivate: nao oferece salvar a senha
 # nem guarda historico); sem Edge, no navegador padrao.
@@ -1791,7 +1791,7 @@ function Invoke-Rota {
             $preparada = ($null -ne $est -and $null -ne $est.rede -and [bool]$est.rede.preparada)
             $aplicarRede = ($mudou.Count -gt 0 -and $null -ne $atual -and (Test-SessaoCompleta $atual) -and ($preparada -or $temFila))
             if ($aplicarRede) {
-                if ($null -ne $est -and [string]$est.fase -in @('configurando', 'decisao', 'escolher')) {
+                if ($null -ne $est -and [string]$est.fase -in @('configurando', 'decisao')) {
                     Send-Json $Ctx @{ erro = 'Termine a câmera atual (ou encerre a fila) antes de trocar a placa ou as faixas de rede.' } 409; return
                 }
                 if ($temFila -and -not [bool]$b.confirmar) {
@@ -1814,7 +1814,7 @@ function Invoke-Rota {
         'POST /api/sessao/refazer' {
             if (Test-RecusaGuardada $Ctx 'refazer-sessao') { return }
             $est = Get-EstadoPublicado
-            if ($null -ne $est -and [string]$est.fase -in @('configurando', 'decisao', 'escolher')) { Send-Json $Ctx @{ erro = 'Termine a câmera atual antes de refazer o passo a passo.' } 409; return }
+            if ($null -ne $est -and [string]$est.fase -in @('configurando', 'decisao')) { Send-Json $Ctx @{ erro = 'Termine a câmera atual antes de refazer o passo a passo.' } 409; return }
             Add-Comando $Ctx @{ tipo = 'sessao-refazer' }
         }
         'POST /api/fila' {
@@ -1862,7 +1862,7 @@ function Invoke-Rota {
             elseif (-not $ehAdmin) { $motivo = 'Atualizar exige o painel aberto como Administrador. Encerre e abra de novo pelo atalho.' }
             elseif ($E.AtualizarPedido) { $motivo = 'A atualização já foi pedida.' }
             elseif ($E.Ocupado -or $Q.Count -gt 0) { $motivo = 'Aguarde: o painel está terminando a operação atual.' }
-            elseif ($null -ne $s -and [string]$s.fase -in @('configurando', 'decisao', 'escolher')) { $motivo = 'Termine a câmera atual (ou encerre a fila) antes de atualizar.' }
+            elseif ($null -ne $s -and [string]$s.fase -in @('configurando', 'decisao')) { $motivo = 'Termine a câmera atual (ou encerre a fila) antes de atualizar.' }
             elseif ($null -ne $s -and $null -ne $s.vigia -and [bool]$s.vigia.ligado) { $motivo = 'Desligue o vigia antes de atualizar.' }
             if ($motivo) { Send-Json $Ctx @{ erro = $motivo } 409; return }
             # O worker confere a guarda de novo (Step-Comando) e faz o pedido.
