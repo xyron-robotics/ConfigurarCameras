@@ -2858,6 +2858,20 @@ T 'Tema: data-tema entra so no <html> do index.html real, e o servidor tem as ro
     foreach ($rota in @("'GET /api/tema'", "'PUT /api/tema'", 'Add-TemaNoHtml')) { Assert-Verdade ($txt.Contains($rota)) ('servidor tem ' + $rota) }
 }
 
+T 'Front paralelo: app.js e index.html reais sem textos do modo serial nem a fase escolher; cartao manda /api/camera' {
+    $js = [IO.File]::ReadAllText((Join-Path $raiz 'web\www\app.js'), [Text.Encoding]::UTF8)
+    $html = [IO.File]::ReadAllText((Join-Path $raiz 'web\www\index.html'), [Text.Encoding]::UTF8)
+    # Acentos por [char]: este arquivo e ASCII e o PowerShell 5.1 o le como ANSI.
+    $proibidos = @(('Tire a c' + [char]0xE2 + 'mera anterior'), ('Em pausa at' + [char]0xE9 + ' voc' + [char]0xEA + ' resolver'),
+                   'somam 1', '/api/escolher', 'bancada-escolha')
+    foreach ($p in $proibidos) {
+        Assert-Falso ($js.Contains($p)) ('app.js sem ' + $p)
+        Assert-Falso ($html.Contains($p)) ('index.html sem ' + $p)
+    }
+    Assert-Verdade ($js.Contains('/api/camera')) 'app.js manda /api/camera'
+    Assert-Verdade ($js.Contains('por broadcast')) 'app.js tem o texto do vigia paralelo'
+}
+
 # ------------------------------------------------------------------- resultado
 
 Write-Host ""

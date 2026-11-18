@@ -153,9 +153,8 @@
             <span class="apoio" id="vigia-estado" role="status" aria-live="polite">desligado</span>
           </div>
           <p class="apoio" id="vigia-texto" aria-live="polite"></p>
+          <p class="apoio" id="vigia-dhip" hidden>Sem broadcast: uma câmera por vez.</p>
           <form id="form-vigia" class="linha-campos">
-            <label><span id="vigia-rotulo-porta">Porta inicial</span><input name="porta" autocomplete="off" placeholder="ex. 1 ou Gi1/0/1…"></label>
-            <label><span id="vigia-rotulo-canal">Canal inicial</span><input name="canal" autocomplete="off" placeholder="ex. 1…"></label>
             <label class="check largo" title="Broadcast DHIP (UDP 37810): acha câmera de fábrica mesmo fora do IP de fábrica; a placa recebe um IP temporário na rede dela. Na rede do escritório, só com a bancada isolada."><input type="checkbox" name="broadcast"> Aceitar câmera de fábrica em qualquer faixa (broadcast)</label>
             <button class="btn" type="submit" id="btn-vigia">Ligar vigia</button>
           </form>
@@ -192,13 +191,6 @@
           </ol>
           <p class="apoio" id="trabalho-texto" aria-live="polite"></p>
           <progress id="trabalho-progresso" max="120" value="0" hidden></progress>
-        </div>
-
-        <div id="bancada-escolha" hidden>
-          <p class="bancada-pos">Mais de uma câmera de fábrica na rede</p>
-          <p class="apoio">Confira o MAC (ou o serial) na etiqueta da câmera que está na bancada. Câmera fora das faixas da placa escolhida: a placa recebe um IP temporário na rede dela.</p>
-          <ul id="escolha-lista" class="escolha"></ul>
-          <button type="button" class="btn discreto" id="btn-escolha-cancelar">Cancelar a escolha</button>
         </div>
 
         <div id="bancada-decisao" hidden>

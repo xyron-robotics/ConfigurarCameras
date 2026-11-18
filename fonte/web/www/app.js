@@ -20,15 +20,13 @@ let cursorLog = 0;
 let estado = null;
 let ultimaFase = '';
 let ipFabrica = '';
-let vigiaLigadoAntes = false;
-let filaDoVigia = '';
-// Leitor de tela: so as transicoes (instalada, falhou, escolher, fim).
+// Leitor de tela: so as transicoes (instalada, falhou, fim).
 let ultimoVisto = null;
 let focarTentar = false;
 // Motivos que o servidor publica ao desligar o vigia sozinho.
 const MOTIVO_VIGIA = {
   'fila concluida': 'fila concluída', 'fila encerrada': 'fila encerrada', 'fila nova': 'fila nova', 'sem fila': 'sem fila',
-  'senha da sessao apagada': 'senha da sessão apagada', 'escolha cancelada': 'escolha cancelada', 'erro interno': 'erro interno (veja o log)',
+  'senha da sessao apagada': 'senha da sessão apagada', 'erro interno': 'erro interno (veja o log)',
   '5 tentativas sem configurar': '5 tentativas seguidas sem configurar; resolva o aviso e ligue de novo',
   'rede da sessao alterada': 'a rede da sessão mudou', 'sessao incompleta': 'sessão incompleta', 'passo a passo reaberto': 'passo a passo reaberto',
 };
@@ -115,12 +113,12 @@ async function esperarEstado(cond, ms) {
 // O aviso aparece junto do formulario que o causou (data-aviso-de); se ele
 // nao estiver na tela, na faixa do topo.
 const ORIGEM_DA_ROTA = {
-  '/api/fila': 'fila', '/api/fila/conectada': 'conectada', '/api/escolher': 'conectada', '/api/escolher/cancelar': 'conectada',
+  '/api/fila': 'fila', '/api/fila/conectada': 'conectada',
   '/api/decisao': 'conectada', '/api/vigia': 'vigia', '/api/sondar': 'sondar', '/api/descobrir': 'descobrir',
   '/api/verificar': 'verificar', '/api/rede/restaurar': 'painel', '/api/sessao/refazer': 'painel',
 };
 const ORIGEM_DO_COMANDO = {
-  fila: 'fila', conectada: 'conectada', escolher: 'conectada', 'cancelar-escolha': 'conectada', decisao: 'conectada',
+  fila: 'fila', conectada: 'conectada', decisao: 'conectada',
   vigia: 'vigia', sondar: 'sondar', descobrir: 'descobrir', verificar: 'verificar',
   'rede-restaurar': 'painel', 'sessao-refazer': 'painel', 'sessao-concluir': 'concluir',
 };
@@ -175,7 +173,7 @@ async function comando(caminho, corpo, opcoes) {
 function aplicarOcupado(ocupado) {
   const simular = !!(estado && estado.simular);
   const sel = '#view-ferramentas .btn, #btn-preparar, #btn-restaurar, #btn-refazer, #form-conectada .btn, ' +
-              '[data-decisao], #escolha-lista .btn, #btn-escolha-cancelar, #btn-avancar, #btn-comecar, #btn-montar-depois, ' +
+              '[data-decisao], #btn-avancar, #btn-comecar, #btn-montar-depois, ' +
               '#btn-usar-sessao, #btn-revisar-sessao, .secao-form .btn[type="submit"]';
   for (const b of document.querySelectorAll(sel)) {
     b.disabled = ocupado || (simular && b.hasAttribute('data-so-real'));
@@ -442,9 +440,8 @@ function desenhar() {
   ultimoVisto = e.ultimo || '';
   if (ultimaFase && ultimaFase !== e.fase) {
     if (rota().view === 'painel' && modoAtual === 'normal') carregarRegistro();
-    if (e.fase === 'escolher') falas.push('Mais de uma câmera de fábrica na rede. Escolha pelo MAC da etiqueta.');
     // Falha de camera do cartao: quem anuncia e a linha de estado do cartao.
-    else if (e.fase === 'decisao' && e.falha && !$('bancada-decisao').hidden) { falas.push($('decisao-titulo').textContent + '. ' + e.falha.erro); focarTentar = true; }
+    if (e.fase === 'decisao' && e.falha && !$('bancada-decisao').hidden) { falas.push($('decisao-titulo').textContent + '. ' + e.falha.erro); focarTentar = true; }
     else if (e.fase === 'concluida') falas.push('Fila concluída.');
     else if (e.fase === 'encerrada') falas.push('Fila encerrada.');
   }
@@ -512,7 +509,10 @@ function desenharAtualizacao(a, e) {
   if (a.pagina) notas.href = a.pagina;
   let motivo = '';
   if (e.ocupado) motivo = 'Aguarde: o painel está terminando a operação atual.';
-  else if (['configurando', 'decisao', 'escolher'].includes(e.fase)) motivo = 'Termine a câmera atual (ou encerre a fila) antes de atualizar.';
+  // Camera em curso no paralelo, ou a retomada manual pelo IP (fase legada).
+  else if ((e.paralelo && e.paralelo.emCurso > 0) || ['configurando', 'decisao'].includes(e.fase)) {
+    motivo = 'Espere as câmeras em curso terminarem antes de atualizar.';
+  }
   else if (e.vigia && e.vigia.ligado) motivo = 'Desligue o vigia antes de atualizar.';
   else if (e.admin === false) motivo = 'Atualizar exige o painel aberto como Administrador.';
   if (estadoA === 'disponivel') {
@@ -558,8 +558,8 @@ function desenharFila(e) {
   $('fita-bloco').hidden = !temFila;
   $('bancada').hidden = !temFila;
   const ult = $('ultimo');
-  // Na falha e na escolha, a "ultima instalada" so distrai da decisao.
-  ult.hidden = !e.ultimo || e.fase === 'decisao' || e.fase === 'escolher';
+  // Na falha, a "ultima instalada" so distrai da decisao.
+  ult.hidden = !e.ultimo || e.fase === 'decisao';
   ult.textContent = e.ultimo || '';
   const cams = temFila ? listaCameras(e) : [];
   // Encerrar a fila: botao da fila enquanto ela esta aberta (admitindo).
@@ -570,7 +570,15 @@ function desenharFila(e) {
   const itens = fila.itens;
   const pendentes = itens.filter((i) => i.Estado === 'pendente');
   const feitas = itens.filter((i) => i.Estado === 'feita').length;
-  const proxima = pendentes.length ? pendentes[0] : null;
+  // Posicao com camera (cameras[].indice e base 0 em fila.itens).
+  const comCamera = new Set(cams.filter((c) => c.indice >= 0).map((c) => c.indice));
+  const aberta = !['concluida', 'encerrada'].includes(e.fase) && !(e.paralelo && e.paralelo.admitindo === false);
+  // Proxima: a primeira pendente sem camera.
+  const proxima = aberta ? itens.find((i, idx) => i.Estado === 'pendente' && !comCamera.has(idx)) || null : null;
+  // "agora" em toda posicao com camera no portao, conferindo ou em decisao
+  // (varias ao mesmo tempo); sem nenhuma, a retomada manual pela fase legada (C7).
+  const agora = new Set(cams.filter((c) => c.indice >= 0 && ['portao', 'conferindo', 'decisao'].includes(c.fase)).map((c) => c.indice));
+  if (!agora.size && e.atual >= 0 && ['configurando', 'decisao'].includes(e.fase)) agora.add(e.atual);
   // Posicoes que contam para "N de M": as puladas na montagem (gateway, fora
   // da rede, com camera instalada) nao sao lugar para camera nenhuma.
   const usavel = (i) => i.Estado !== 'pulada' || /operador|responde/.test(i.Motivo || '');
@@ -586,8 +594,8 @@ function desenharFila(e) {
     const cls = [i.Estado];
     // Estado em palavra, nao so na cor.
     let palavra = ESTADO_NA_FITA[i.Estado] || '';
-    if (idx === e.atual && e.fase !== 'fila') { cls.push('atual'); if (i.Estado !== 'falhou') palavra = 'agora'; }
-    else if (proxima && i === proxima && e.fase === 'fila') { cls.push('proxima'); palavra = 'próxima'; }
+    if (agora.has(idx)) { cls.push('atual'); if (i.Estado !== 'falhou') palavra = 'agora'; }
+    else if (i === proxima) { cls.push('proxima'); palavra = 'próxima'; }
     // Mesma numeracao da bancada: so as posicoes usaveis contam.
     const n = usaveis.indexOf(i);
     const rotulo = n >= 0 ? 'câmera ' + (n + 1) : '';
@@ -599,7 +607,7 @@ function desenharFila(e) {
 
   desenharCartoes(cams, itens, usaveis, e);
 
-  const blocos = { pronta: false, trabalho: false, escolha: false, decisao: false, fim: false };
+  const blocos = { pronta: false, trabalho: false, decisao: false, fim: false };
   const posAtual = e.atual >= 0 ? itens[e.atual] : null;
   const ordinal = (item) => 'Câmera ' + (usaveis.indexOf(item) + 1) + ' de ' + livres;
   // Bloco de camera unica (C7): so a retomada manual pelo IP, isto e, fase
@@ -626,15 +634,6 @@ function desenharFila(e) {
       const j = ETAPAS.indexOf(li.dataset.etapa);
       li.className = e.fase !== 'configurando' ? '' : (j < i ? 'feita' : (j === i ? 'agora' : ''));
     }
-  } else if (e.fase === 'escolher') {
-    blocos.escolha = true;
-    $('escolha-lista').replaceChildren(...(e.escolha || []).map((c) =>
-      h('li', null, h('button', { type: 'button', class: 'btn', onclick: () => comando('/api/escolher', { ip: c.ip }) },
-        h('span', { text: c.ip + (c.httpPort && c.httpPort !== 80 ? ':' + c.httpPort : '') + (c.mascara ? ' / ' + c.mascara : '') }),
-        h('span', { text: 'MAC ' + (c.mac || 'não lido') }),
-        c.modelo ? h('span', { text: c.modelo }) : null,
-        c.alcancavel === false ? h('span', { text: 'fora das faixas da placa: ela recebe um IP temporário' }) : null,
-        c.ouiConhecido || c.modelo ? null : h('span', { text: 'fabricante desconhecido' })))));
   } else if (manualDecisao) {
     blocos.decisao = true;
     $('decisao-titulo').textContent = 'Falhou na etapa ' + (NOME_ETAPA[e.falha.etapa] || e.falha.etapa) +
@@ -660,11 +659,7 @@ function desenharFila(e) {
     $('btn-conectada').className = vigiando || temFase(['decisao']) ? 'btn' : 'btn acento';
   }
   for (const [k, v] of Object.entries(blocos)) $('bancada-' + k).hidden = !v;
-  desenharVigia(e, !blocos.fim, {
-    fila: itens[0].Ip + '|' + itens[itens.length - 1].Ip + '|' + (fila.rack || ''),
-    proxima: proxima ? ordinal(proxima) + ' (destino ' + proxima.Ip + ')' : '',
-    feitas,
-  });
+  desenharVigia(e, !blocos.fim);
 }
 
 // ------------------------------------------------------------------ cartoes
@@ -954,48 +949,31 @@ function desenharPrevia() {
   else p.textContent = (n === 1 ? '1 endereço: ' + a : numero(n) + ' endereços, de ' + a + ' a ' + b) + '.';
 }
 
-function desenharVigia(e, visivel, ctx) {
+// Vigia do modo paralelo (C1, C4): porta e canal nao moram aqui, cada
+// cartao tem os seus. Sem DHIP, o coordenador cai para uma camera por vez.
+function desenharVigia(e, visivel) {
   $('vigia').hidden = !visivel;
+  if (!visivel) return;
   const v = e.vigia || {};
   const f = $('form-vigia').elements;
-  const filaNova = !!ctx && ctx.fila !== filaDoVigia;
-  if (ctx) filaDoVigia = ctx.fila;
-  if (filaNova) {
-    // Porta/canal da fila anterior nao valem para outro rack.
-    f.porta.value = ''; f.canal.value = '';
-  } else if (vigiaLigadoAntes && !v.ligado && e.fase === 'fila') {
-    // Desligado no meio da fila: os campos ficam com a porta/canal da proxima camera, e religar continua dali.
-    f.porta.value = v.porta || ''; f.canal.value = v.canal || '';
-  }
-  vigiaLigadoAntes = !!v.ligado;
-  if (!visivel) return;
-
   const ip = ipFabrica || 'o IP de fábrica';
   $('vigia-luz').className = 'luz' + (v.ligado ? ' ok' : '');
   $('vigia-estado').textContent = v.ligado ? 'ligado' : 'desligado';
   $('btn-vigia').textContent = v.ligado ? 'Desligar vigia' : 'Ligar vigia';
-  $('vigia-rotulo-porta').textContent = v.ligado ? 'Porta da próxima câmera' : 'Porta inicial';
-  $('vigia-rotulo-canal').textContent = v.ligado ? 'Canal da próxima câmera' : 'Canal inicial';
-  f.porta.disabled = f.canal.disabled = f.broadcast.disabled = !!v.ligado;
-  if (v.ligado) { f.porta.value = v.porta || ''; f.canal.value = v.canal || ''; f.broadcast.checked = !!v.broadcast; }
-  const onde = v.ligado && v.broadcast ? 'qualquer faixa (broadcast) e ' + ip : ip;
+  f.broadcast.disabled = !!v.ligado;
+  if (v.ligado) f.broadcast.checked = !!v.broadcast;
 
   let texto;
   if (!v.ligado) {
     texto = (v.motivo ? 'Desligado: ' + (MOTIVO_VIGIA[v.motivo] || v.motivo) + '. ' : '') +
       'Ligado, o painel observa ' + ip + ' e configura sozinho cada câmera de fábrica que aparecer, na próxima posição livre. ' +
-      'Com a caixa marcada, aceita também câmera de fábrica em qualquer faixa (broadcast): só com a bancada isolada da rede do escritório. ' +
-      'Porta e canal somam 1 a cada câmera instalada: ligue as câmeras na ordem do cabeamento.';
-  } else if (e.fase === 'escolher' || e.fase === 'decisao') {
-    texto = 'Em pausa até você resolver a câmera atual.';
-  } else if (e.fase === 'configurando' || e.ocupado) {
-    texto = 'Configurando. Não desligue o cabo. Depois volta a observar ' + onde + '.';
+      'Com a caixa marcada, aceita também câmera de fábrica em qualquer faixa (broadcast): só com a bancada isolada da rede do escritório.';
   } else {
-    texto = 'Observando ' + onde + '. ' + (ctx.feitas ? 'Tire a câmera anterior e ligue a ' : 'Ligue a ') +
-      ctx.proxima.replace('Câmera', 'câmera') + ' na porta ' + (v.porta || 'não informada') +
-      ', canal ' + (v.canal || 'não informado') + '.';
+    texto = 'Observando ' + ip + ' por broadcast. Ligue quantas câmeras quiser no switch: cada uma entra na próxima posição livre. ' +
+      'Digite porta e canal no cartão de cada câmera, pelo serial da etiqueta.';
   }
   $('vigia-texto').textContent = texto;
+  $('vigia-dhip').hidden = !(v.ligado && e.paralelo && e.paralelo.dhip === 'sem-resposta');
 }
 
 // Uma linha por stream: "1920 × 1080, 20 fps, 1596 kbps, H.264", sem os campos vazios.
@@ -1697,7 +1675,7 @@ function ligar() {
     ev.preventDefault();
     const f = ev.target.elements;
     const ligado = !(estado && estado.vigia && estado.vigia.ligado);
-    comando('/api/vigia', { ligado, porta: f.porta.value, canal: f.canal.value, broadcast: f.broadcast.checked });
+    comando('/api/vigia', { ligado, broadcast: f.broadcast.checked });
   });
   // Bloco legado (retomada manual pelo IP, C7): decisao sem MAC, como antes.
   for (const b of document.querySelectorAll('[data-decisao]')) {
@@ -1717,7 +1695,6 @@ function ligar() {
     if (!confirm('Encerrar a fila? As câmeras em curso terminam antes; as pendentes ficam sem câmera.' + resto)) return;
     comando('/api/decisao', { acao: 'encerrar' });
   });
-  $('btn-escolha-cancelar').addEventListener('click', () => comando('/api/escolher/cancelar'));
   $('btn-registro-atualizar').addEventListener('click', carregarRegistro);
 
   // Ferramentas.

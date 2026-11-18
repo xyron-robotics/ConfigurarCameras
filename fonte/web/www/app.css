@@ -455,8 +455,6 @@ legend { font-family: var(--sans-titulo); font-weight: 600; font-size: 14px; pad
 }
 @media (max-width: 760px) { .etapas { grid-template-columns: 1fr 1fr; } }
 
-.escolha { list-style: none; padding: 0; margin: 0.75rem 0; display: flex; flex-direction: column; gap: 6px; }
-.escolha button { width: 100%; justify-content: flex-start; gap: 1rem; font-family: var(--mono); font-weight: 500; }
 .ultimo { margin: 0; padding: 0.5rem 0.8rem; border-left: 4px solid var(--ok); background: var(--ok-fraco); border-radius: var(--r-sm); }
 .registro-bloco { margin-top: 0.5rem; }
 
