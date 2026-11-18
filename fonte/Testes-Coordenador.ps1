@@ -13,7 +13,10 @@
       - ConvertTo-AchadoParalelo com a fixture de duas cameras de fabrica
         no mesmo IP;
       - New-DepsPlaca com as funcoes pequenas do motor trocadas por falsas
-        (tabela de vizinhos, IP da placa) e o rastro numa pasta temporaria.
+        (tabela de vizinhos, IP da placa) e o rastro numa pasta temporaria;
+      - pool e jobs: RunspacePool real com o motor em -Simular e o registro
+        numa pasta temporaria (3 cameras ate 'feita', no maximo 1 MAC preso,
+        conferencias sobrepostas, senha fora dos eventos, job que estoura).
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -100,17 +103,22 @@ function New-DepsFalsas {
     $script:despachos = @()
     $script:prenderFalha = ''
     $script:prenderEstoura = $false
+    $script:presos = @{}
+    $script:maxPresos = 0
     return @{
         Prender   = {
             param($Mac, $Ip)
             $script:chamadas += ('prender ' + $Mac + ' ' + $Ip)
             if ($script:prenderEstoura) { throw 'tabela de vizinhos travada' }
             if ($script:prenderFalha -ne '') { return [pscustomobject]@{ Ok = $false; Erro = $script:prenderFalha } }
+            $script:presos[[string]$Mac] = $true
+            if ($script:presos.Count -gt $script:maxPresos) { $script:maxPresos = $script:presos.Count }
             return [pscustomobject]@{ Ok = $true; Erro = '' }
         }
         Soltar    = {
             param($Mac, $Ip)
             $script:chamadas += ('soltar ' + $Mac + ' ' + $Ip)
+            $script:presos.Remove([string]$Mac)
             return [pscustomobject]@{ Ok = $true; Erro = '' }
         }
         Despachar = {
@@ -507,6 +515,228 @@ T 'New-DepsPlaca ligado ao coordenador: admissao prende pela tabela falsa e fim 
         Assert-Igual 0 @($script:arp).Count 'solta pela tabela'
         Assert-Igual 0 @((Read-JsonArquivo $script:rastro).Vizinhos).Count 'rastro sem vizinho'
     } finally { Remove-PlacaFalsa }
+}
+
+# ------------------------------------------------------------------- pool e jobs
+
+Write-Host ""
+Write-Host "Pool e jobs" -ForegroundColor Cyan
+
+$script:senhaTeste = 'NaoPodeVazar#9'
+$script:pastaPool = ''
+
+# Padroes da sessao com a rede das posicoes de teste (192.0.2.x).
+function New-PadroesTeste {
+    $p = Get-SessaoFabrica
+    $p.Gateway = '192.0.2.1'
+    return $p
+}
+
+# Coordenador com pool real (1 runspace por posicao), registro temporario,
+# deps de placa falsas (contam os presos) e o despacho ligado ao pool.
+function New-CoordPool {
+    param([int]$N = 3, [double]$EsperaPortao = 0.2, [double]$EsperaConferencia = 2.5)
+    $deps = New-DepsFalsas
+    $deps.Despachar = (New-DepsPool).Despachar
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste $N) -Deps $deps
+    $coord.Pool = New-PoolCameras -Max $N
+    $script:pastaPool = Join-Path ([IO.Path]::GetTempPath()) ('coord-pool-' + [guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Force -Path $script:pastaPool
+    $coord.Trabalho.Senha = $script:senhaTeste
+    $coord.Trabalho.Padroes = New-PadroesTeste
+    $coord.Trabalho.CaminhoRegistro = Join-Path $script:pastaPool 'registro-simulacao.json'
+    $coord.Trabalho.Simular = $true
+    $coord.Trabalho.EsperaSimuladaSeg = @{ Portao = $EsperaPortao; Conferencia = $EsperaConferencia }
+    $coord.Trabalho.Local = 'Obra exemplo'; $coord.Trabalho.Rack = 'R1'; $coord.Trabalho.Andar = '1'
+    $achados = @()
+    for ($i = 1; $i -le $N; $i++) { $achados += New-AchadoTeste $i }
+    $coord.Estado = (Step-Descoberta -Estado $coord.Estado -Achados $achados).Estado
+    return $coord
+}
+
+function Remove-CoordPool {
+    param($Coord)
+    if ($null -ne $Coord) { Close-PoolCameras -Pool $Coord.Pool }
+    if ($script:pastaPool) { Remove-Item -LiteralPath $script:pastaPool -Recurse -Force -ErrorAction SilentlyContinue }
+    $script:pastaPool = ''
+}
+
+# O laco do servidor em miniatura: eventos, admissao, acoes. Para quando
+# nenhuma camera esta em espera/portao/conferindo e nao ha job; $false no
+# tempo esgotado.
+function Invoke-LacoTeste {
+    param($Coord, [int]$TimeoutSeg = 90)
+    $script:eventos = New-Object 'System.Collections.Generic.List[object]'
+    $script:logsJob = New-Object 'System.Collections.Generic.List[object]'
+    $limite = (Get-Date).AddSeconds($TimeoutSeg)
+    while ((Get-Date) -lt $limite) {
+        Receive-EventosCoordenador -Coord $Coord -Log { param($Ev) $script:logsJob.Add($Ev) } -Observar { param($Ev) $script:eventos.Add($Ev) }
+        $p = Step-Admissao -Estado $Coord.Estado
+        $Coord.Estado = $p.Estado
+        Invoke-AcoesCoordenador -Coord $Coord -Acoes $p.Acoes
+        $vivas = @(@($Coord.Estado.Cameras) | Where-Object { $_.Fase -in @('espera', 'portao', 'conferindo') }).Count
+        if ($vivas -eq 0 -and $Coord.Jobs.Count -eq 0) { return $true }
+        Start-Sleep -Milliseconds 50
+    }
+    return $false
+}
+
+T 'New-PoolCameras: RunspacePool aberto de 1 a N (N = posicoes da fila)' {
+    $pool = New-PoolCameras -Max 3
+    try {
+        Assert-Igual 'Opened' ([string]$pool.Pool.RunspacePoolStateInfo.State) 'aberto'
+        Assert-Igual 3 $pool.Pool.GetMaxRunspaces() 'maximo'
+        Assert-Igual 1 $pool.Pool.GetMinRunspaces() 'minimo'
+        Assert-Verdade (Test-Path -LiteralPath $pool.CaminhoMotor) ('motor achado: ' + $pool.CaminhoMotor)
+    } finally { Close-PoolCameras -Pool $pool }
+    Assert-Igual 'Closed' ([string]$pool.Pool.RunspacePoolStateInfo.State) 'fechado'
+}
+
+T 'New-ContextoJob: camera do estado, destino da acao, Local/Rack/Andar da fila, porta/canal do cartao' {
+    $coord = New-CoordComEspera -N 1
+    $c = Get-Camera $coord.Estado 1
+    $c.HttpPort = 8080
+    $acao = @{ Tipo = 'despachar'; Mac = $c.Mac; AteEtapa = 'rede'; Posicao = 2; Destino = '192.0.2.12' }
+    $ctx = New-ContextoJob -Camera $c -Acao $acao -Fila @{ Local = 'Obra exemplo'; Rack = 'R1'; Andar = '3' } -PortaCanal @{ Porta = '5'; Canal = '7' }
+    Assert-Igual '192.168.1.108|8080|AA:00:00:00:00:01|SIM-1|192.0.2.12' ($ctx.IpOrigem + '|' + $ctx.HttpPort + '|' + $ctx.Mac + '|' + $ctx.Serial + '|' + $ctx.Destino) 'camera e destino'
+    Assert-Igual 'Obra exemplo|R1|3|5|7' ($ctx.Local + '|' + $ctx.Rack + '|' + $ctx.Andar + '|' + $ctx.Porta + '|' + $ctx.Canal) 'fila e cartao'
+    Assert-Verdade ($null -ne $ctx.PSObject.Properties['HttpPort']) 'objeto com propriedades (o motor le PSObject.Properties)'
+    $ctx2 = New-ContextoJob -Camera $c -Acao $acao -Fila $null -PortaCanal $null
+    Assert-Igual '||||' ($ctx2.Local + '|' + $ctx2.Rack + '|' + $ctx2.Andar + '|' + $ctx2.Porta + '|' + $ctx2.Canal) 'sem fila nem cartao: vazios'
+}
+
+T 'despachar sem pool: decisao da camera, sem job' {
+    $coord = New-CoordComEspera -N 1
+    $coord.Deps.Despachar = (New-DepsPool).Despachar
+    $p = Step-Admissao -Estado $coord.Estado
+    $coord.Estado = $p.Estado
+    Invoke-AcoesCoordenador -Coord $coord -Acoes $p.Acoes
+    $c = Get-Camera $coord.Estado 1
+    Assert-Igual 'decisao' $c.Fase 'fase'
+    Assert-Verdade ($c.Falha.Erro -like '*pool*') ('erro cita o pool: ' + $c.Falha.Erro)
+    Assert-Igual 0 $coord.Jobs.Count 'sem job'
+}
+
+# Cenario principal: roda uma vez, os testes abaixo conferem pedacos dele.
+$script:coordTres = $null
+$script:fimTres = $false
+$script:erroTres = ''
+$script:regTres = $null
+$script:eventosTres = @()
+$script:maxPresosTres = -1
+try {
+    $script:coordTres = New-CoordPool -N 3
+    $script:fimTres = Invoke-LacoTeste -Coord $script:coordTres
+    $script:eventosTres = $script:eventos.ToArray()
+    $script:maxPresosTres = $script:maxPresos
+    $script:regTres = Read-Registro $script:coordTres.Trabalho.CaminhoRegistro
+} catch {
+    $script:erroTres = $_.Exception.Message
+} finally {
+    Remove-CoordPool $script:coordTres
+}
+
+T 'pool: 3 cameras de fabrica terminam feita' {
+    Assert-Igual '' $script:erroTres 'cenario sem excecao'
+    Assert-Verdade $script:fimTres 'laco terminou no tempo'
+    Assert-Igual 'feita,feita,feita' ((@($script:coordTres.Estado.Cameras) | ForEach-Object { $_.Fase }) -join ',') 'fases'
+    Assert-Igual 'feita,feita,feita' ((@($script:coordTres.Estado.Posicoes) | ForEach-Object { $_.Estado }) -join ',') 'posicoes'
+    Assert-Igual 0 $script:coordTres.Jobs.Count 'nenhum job sobrando'
+}
+
+T 'pool: registro com 3 Instalada, MACs e destinos distintos' {
+    $cams = @($script:regTres.Cameras)
+    Assert-Igual 3 $cams.Count 'entradas'
+    Assert-Igual 'Instalada,Instalada,Instalada' (($cams | ForEach-Object { $_.Status }) -join ',') 'status'
+    Assert-Igual 'AA0000000001=192.0.2.11,AA0000000002=192.0.2.12,AA0000000003=192.0.2.13' `
+        ((@($cams | Sort-Object Mac) | ForEach-Object { $_.Mac + '=' + $_.Ip }) -join ',') 'MAC e destino'
+    Assert-Igual 'Obra exemplo|R1|1' ($cams[0].Local + '|' + $cams[0].Rack + '|' + $cams[0].Andar) 'Local/Rack/Andar da fila'
+}
+
+T 'pool: nunca mais de 1 MAC preso ao mesmo tempo' {
+    Assert-Igual 1 $script:maxPresosTres 'maximo de presos'
+    Assert-Igual 0 $script:presos.Count 'todos soltos no fim'
+}
+
+T 'pool: as conferencias se sobrepoem (janelas de tempo pelos eventos)' {
+    $janelas = @()
+    foreach ($n in 1..3) {
+        $mac = 'AA:00:00:00:00:0' + $n
+        $ini = @($script:eventosTres | Where-Object { $_.Mac -eq $mac -and $_.Tipo -eq 'log' -and $_.Texto -like '*confer*ncia ---*' }) | Select-Object -First 1
+        $fim = @($script:eventosTres | Where-Object { $_.Mac -eq $mac -and $_.Tipo -eq 'log' -and $_.Texto -like 'RESULTADO: instalada*' }) | Select-Object -Last 1
+        Assert-Verdade ($null -ne $ini -and $null -ne $fim) ('janela da conferencia de ' + $mac)
+        $janelas += @{ Mac = $mac; Ini = $ini.Quando; Fim = $fim.Quando }
+    }
+    $sobrepostas = 0
+    for ($i = 0; $i -lt 3; $i++) {
+        for ($j = $i + 1; $j -lt 3; $j++) {
+            if ($janelas[$i].Ini -lt $janelas[$j].Fim -and $janelas[$j].Ini -lt $janelas[$i].Fim) { $sobrepostas++ }
+        }
+    }
+    Assert-Verdade ($sobrepostas -ge 1) ('pares sobrepostos: ' + $sobrepostas)
+}
+
+T 'pool: eventos de log, progresso e fim por MAC, e a senha em nenhum deles' {
+    $tipos = (@($script:eventosTres | ForEach-Object { $_.Tipo }) | Sort-Object -Unique) -join ','
+    Assert-Igual 'fim,log,progresso' $tipos 'tipos de evento'
+    Assert-Igual 6 @($script:eventosTres | Where-Object { $_.Tipo -eq 'fim' }).Count 'um fim por job (portao + conferencia de 3)'
+    Assert-Verdade (@($script:eventosTres | Where-Object { $_.Tipo -eq 'progresso' -and $_.Etapa -eq 'rede' }).Count -ge 3) 'progresso da etapa rede'
+    $vazou = @($script:eventosTres | Where-Object { (ConvertTo-Json -InputObject $_ -Depth 8 -Compress) -like ('*' + $script:senhaTeste + '*') })
+    Assert-Igual 0 $vazou.Count 'eventos com a senha'
+    Assert-Igual 0 @($script:logsJob | Where-Object { [string]$_.Texto -like ('*' + $script:senhaTeste + '*') }).Count 'logs com a senha'
+    Assert-Verdade ($script:logsJob.Count -gt 0) 'logs entregues ao callback'
+}
+
+T 'pool: job que estoura vira decisao daquela camera, e as outras terminam' {
+    $coord = $null
+    try {
+        $coord = New-CoordPool -N 3 -EsperaConferencia 0.5
+        # A conferencia da 2 recebe Padroes nulo: o motor estoura no job.
+        $coord.Deps.Despachar = {
+            param($Acao, $Camera, $Geracao, $Coord)
+            $t = $Coord.Trabalho
+            $antes = $t.Padroes
+            if ([string]$Acao.Mac -eq 'AA:00:00:00:00:02' -and [string]$Acao.AteEtapa -eq '') { $t.Padroes = $null }
+            try { Start-DespachoCoordenador -Coord $Coord -Acao $Acao -Camera $Camera -Geracao $Geracao } finally { $t.Padroes = $antes }
+        }
+        $coord.Geracao = 4
+        Assert-Verdade (Invoke-LacoTeste -Coord $coord) 'laco terminou no tempo'
+        Assert-Igual 'feita,decisao,feita' ((@($coord.Estado.Cameras) | ForEach-Object { $_.Fase }) -join ',') 'fases'
+        $c = Get-Camera $coord.Estado 2
+        Assert-Igual 'conferencia' $c.Falha.Etapa 'etapa da falha'
+        Assert-Verdade ($c.Falha.Erro -like 'erro interno no job:*Padroes*') ('erro: ' + $c.Falha.Erro)
+        Assert-Igual 4 $c.Falha.Geracao 'geracao do despacho'
+        Assert-Igual 'rede' $c.Etapa 'ultima etapa feita continua (o tentar retoma pela conferencia)'
+        Assert-Igual 0 $coord.Jobs.Count 'nenhum job sobrando'
+    } finally { Remove-CoordPool $coord }
+}
+
+T 'pool: handle concluido sem fim vira falha na etapa do ultimo progresso' {
+    $coord = $null
+    try {
+        $coord = New-CoordPool -N 1
+        # Despacho falso: o job manda um progresso e estoura antes de qualquer 'fim'.
+        $coord.Deps.Despachar = {
+            param($Acao, $Camera, $Geracao, $Coord)
+            $ps = [PowerShell]::Create()
+            $ps.RunspacePool = $Coord.Pool.Pool
+            $id = [guid]::NewGuid().ToString('N')
+            $null = $ps.AddScript({
+                param($Eventos, $Mac, $Id)
+                $Eventos.Enqueue(@{ Mac = $Mac; Job = $Id; Tipo = 'progresso'; Etapa = 'encoder'; Atual = 0; Total = 0; Detalhe = ''; Quando = [datetime]::Now })
+                throw 'runspace quebrou'
+            }.ToString()).AddParameter('Eventos', $Coord.Eventos).AddParameter('Mac', [string]$Acao.Mac).AddParameter('Id', $id)
+            $Coord.Jobs[(Get-ChaveMac $Acao.Mac)] = @{ Id = $id; Mac = [string]$Acao.Mac; Chave = (Get-ChaveMac $Acao.Mac); PowerShell = $ps
+                                                      Handle = $ps.BeginInvoke(); Geracao = $Geracao; AteEtapa = [string]$Acao.AteEtapa; Etapa = '' }
+        }
+        Assert-Verdade (Invoke-LacoTeste -Coord $coord -TimeoutSeg 30) 'laco terminou no tempo'
+        $c = Get-Camera $coord.Estado 1
+        Assert-Igual 'decisao' $c.Fase 'fase'
+        Assert-Igual 'encoder' $c.Falha.Etapa 'etapa do ultimo progresso'
+        Assert-Verdade ($c.Falha.Erro -like 'erro interno no job:*runspace quebrou*') ('erro: ' + $c.Falha.Erro)
+        Assert-Igual 0 $coord.Jobs.Count 'job retirado'
+        Assert-Igual 0 $script:presos.Count 'solta depois da falha no portao'
+    } finally { Remove-CoordPool $coord }
 }
 
 # ------------------------------------------------------------------- resultado
