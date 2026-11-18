@@ -16,7 +16,9 @@
         (tabela de vizinhos, IP da placa) e o rastro numa pasta temporaria;
       - pool e jobs: RunspacePool real com o motor em -Simular e o registro
         numa pasta temporaria (3 cameras ate 'feita', no maximo 1 MAC preso,
-        conferencias sobrepostas, senha fora dos eventos, job que estoura).
+        conferencias sobrepostas, senha fora dos eventos, job que estoura);
+      - estado publicado (contrato da F6): formato com 2 cameras pelo JSON
+        e a tabela de derivacao dos campos legados.
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -737,6 +739,183 @@ T 'pool: handle concluido sem fim vira falha na etapa do ultimo progresso' {
         Assert-Igual 0 $coord.Jobs.Count 'job retirado'
         Assert-Igual 0 $script:presos.Count 'solta depois da falha no portao'
     } finally { Remove-CoordPool $coord }
+}
+
+# ------------------------------------------------------------ estado publicado
+
+Write-Host ""
+Write-Host "ConvertTo-EstadoPublicadoParalelo" -ForegroundColor Cyan
+
+# Aplica um Step no coordenador: estado do Step e acoes executadas (Deps falsas).
+function Invoke-PassoTeste {
+    param($Coord, $Passo)
+    $Coord.Estado = $Passo.Estado
+    $null = Invoke-AcoesCoordenador -Coord $Coord -Acoes $Passo.Acoes
+}
+
+# Coordenador com N cameras em espera e a camera 1 ja no portao.
+function New-CoordNoPortao {
+    param([int]$N = 2, [int]$Posicoes = 3)
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste $Posicoes) -Deps (New-DepsFalsas)
+    $achados = @()
+    for ($i = 1; $i -le $N; $i++) { $achados += New-AchadoTeste $i }
+    $coord.Estado = (Step-Descoberta -Estado $coord.Estado -Achados $achados).Estado
+    Invoke-PassoTeste $coord (Step-Admissao -Estado $coord.Estado)
+    return $coord
+}
+
+# Camera 1 conferindo e camera 2 em decisao (falhou na rede no portao, login
+# recusado na geracao 3), com progresso, porta/canal, aviso e senha.
+function New-CoordPublicado {
+    $coord = New-CoordNoPortao -N 2
+    Invoke-PassoTeste $coord (Step-FimDoJob -Estado $coord.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $true; Etapa = 'rede' })
+    Invoke-PassoTeste $coord (Step-Admissao -Estado $coord.Estado)
+    Invoke-PassoTeste $coord (Step-FimDoJob -Estado $coord.Estado -Mac 'AA:00:00:00:00:02' -Geracao 3 -Resultado @{
+        Ok = $false; Etapa = 'inicializada'; Falhou = 'rede'; Erro = 'sem resposta'; LoginRecusado = $true })
+    $coord.Progresso['AA0000000001'] = @{ Etapa = 'encoder'; Atual = 2; Total = 5; Detalhe = 'Aguardando o boot' }
+    $coord.PortaCanal['AA0000000001'] = @{ Porta = '3'; Canal = '4' }
+    $coord.AvisosCamera['AA0000000002'] = 'aviso de teste'
+    $coord.Trabalho.Senha = $script:senhaTeste
+    $coord.Trabalho.Local = 'Bloco A'
+    return $coord
+}
+
+# Estado publicado como a UI recebe: ConvertTo-Json e de volta.
+function Get-PublicadoJson {
+    param($Coord)
+    $json = ConvertTo-Json -InputObject (ConvertTo-EstadoPublicadoParalelo -Coord $Coord) -Depth 12
+    return @{ Json = $json; Obj = ($json | ConvertFrom-Json) }
+}
+
+function Get-Nomes {
+    param($Obj)
+    return (@($Obj.PSObject.Properties | ForEach-Object { $_.Name }) -join ',')
+}
+
+T 'estado publicado: formato com 2 cameras (conferindo e decisao) pelo JSON' {
+    $r = Get-PublicadoJson (New-CoordPublicado)
+    $j = $r.Obj
+    Assert-Igual 'cameras,portao,paralelo,filaItens,fase,atual,camera,falha' (Get-Nomes $j) 'campos do topo'
+    Assert-Igual 2 @($j.cameras).Count 'cameras'
+    $c1 = @($j.cameras)[0]
+    Assert-Igual 'mac,serial,modelo,ipOrigem,indice,posicao,destino,porta,canal,fase,etapa,progresso,trabalho,aviso,falha' (Get-Nomes $c1) 'campos da camera'
+    Assert-Igual 'AA:00:00:00:00:01' $c1.mac 'mac 1'
+    Assert-Igual 'SIM-1' $c1.serial 'serial 1'
+    Assert-Igual 'IPC-EXEMPLO' $c1.modelo 'modelo 1'
+    Assert-Igual '192.168.1.108' $c1.ipOrigem 'ipOrigem 1'
+    Assert-Igual 0 $c1.indice 'indice 1 (posicao 1 em filaItens)'
+    Assert-Igual 1 $c1.posicao 'posicao 1'
+    Assert-Igual '192.0.2.11' $c1.destino 'destino 1'
+    Assert-Igual '3' $c1.porta 'porta 1'
+    Assert-Igual '4' $c1.canal 'canal 1'
+    Assert-Igual 'conferindo' $c1.fase 'fase 1'
+    Assert-Igual 'encoder' $c1.etapa 'etapa 1 (a do progresso)'
+    Assert-Igual 2 $c1.progresso.atual 'progresso.atual 1'
+    Assert-Igual 5 $c1.progresso.total 'progresso.total 1'
+    Assert-Igual 'Aguardando o boot' $c1.trabalho 'trabalho 1 (detalhe do progresso)'
+    Assert-Igual '' $c1.aviso 'aviso 1'
+    Assert-Verdade ($null -eq $c1.falha) 'camera 1 sem falha'
+
+    $c2 = @($j.cameras)[1]
+    Assert-Igual 'AA:00:00:00:00:02' $c2.mac 'mac 2'
+    Assert-Igual 'decisao' $c2.fase 'fase 2'
+    Assert-Igual 1 $c2.indice 'indice 2'
+    Assert-Igual 2 $c2.posicao 'posicao 2'
+    Assert-Igual '192.0.2.12' $c2.destino 'destino 2'
+    Assert-Igual '' $c2.porta 'porta 2'
+    Assert-Igual 'inicializada' $c2.etapa 'etapa 2 (a ultima feita)'
+    Assert-Verdade ($null -eq $c2.progresso) 'camera 2 sem progresso'
+    Assert-Igual '' $c2.trabalho 'trabalho 2'
+    Assert-Igual 'aviso de teste' $c2.aviso 'aviso 2'
+    Assert-Igual 'etapa,erro,recusa,loginRecusado,bloqueada,geracao' (Get-Nomes $c2.falha) 'campos da falha'
+    Assert-Igual 'rede' $c2.falha.etapa 'falha.etapa'
+    Assert-Igual 'sem resposta' $c2.falha.erro 'falha.erro'
+    Assert-Falso $c2.falha.recusa 'falha.recusa'
+    Assert-Verdade $c2.falha.loginRecusado 'falha.loginRecusado'
+    Assert-Falso $c2.falha.bloqueada 'falha.bloqueada'
+    Assert-Igual 3 $c2.falha.geracao 'falha.geracao'
+
+    Assert-Verdade ($null -eq $j.portao) 'portao livre'
+    Assert-Igual 'max,admitindo,dhip,emCurso' (Get-Nomes $j.paralelo) 'campos de paralelo'
+    Assert-Igual 0 $j.paralelo.max 'paralelo.max'
+    Assert-Verdade $j.paralelo.admitindo 'paralelo.admitindo'
+    Assert-Igual 'ok' $j.paralelo.dhip 'paralelo.dhip'
+    Assert-Igual 1 $j.paralelo.emCurso 'paralelo.emCurso'
+
+    Assert-Igual 3 @($j.filaItens).Count 'filaItens'
+    $i0 = @($j.filaItens)[0]
+    Assert-Igual 'Posicao,Ip,Estado,Motivo,Mac' (Get-Nomes $i0) 'campos do item da fila (formato de fila.itens)'
+    Assert-Igual 'reservada' $i0.Estado 'posicao 1 reservada'
+    Assert-Igual 'AA:00:00:00:00:01' $i0.Mac 'posicao 1 com o MAC'
+    Assert-Igual 'reservada' @($j.filaItens)[1].Estado 'posicao 2 reservada para a decisao'
+    Assert-Igual 'pendente' @($j.filaItens)[2].Estado 'posicao 3 pendente'
+
+    Assert-Igual 'configurando' $j.fase 'fase legada (camera em curso)'
+    Assert-Igual 1 $j.atual 'atual legado = camera em decisao'
+    Assert-Igual '192.0.2.12' $j.camera.Destino 'camera legada: destino'
+    Assert-Igual 'AA:00:00:00:00:02' $j.camera.Mac 'camera legada: mac'
+    Assert-Igual 'Bloco A' $j.camera.Local 'camera legada: local da fila'
+    Assert-Igual 'rede' $j.falha.etapa 'falha legada'
+    Assert-Verdade ($r.Json -notlike ('*' + $script:senhaTeste + '*')) 'senha fora do estado publicado'
+}
+
+T 'estado publicado: camera no portao, sem progresso, e dhip sem resposta' {
+    $coord = New-CoordNoPortao -N 1
+    $coord.Dhip = 'sem-resposta'
+    $j = (Get-PublicadoJson $coord).Obj
+    $c = @($j.cameras)[0]
+    Assert-Igual 'AA:00:00:00:00:01' $j.portao 'portao com o MAC'
+    Assert-Igual 'portao' $c.fase 'fase'
+    Assert-Igual '' $c.etapa 'sem etapa ainda'
+    Assert-Verdade ($null -eq $c.progresso) 'sem progresso'
+    Assert-Verdade ($c.trabalho -like '*192.0.2.11') ('trabalho cita o destino: ' + $c.trabalho)
+    Assert-Igual 'sem-resposta' $j.paralelo.dhip 'paralelo.dhip'
+    Assert-Igual 1 $j.paralelo.emCurso 'emCurso'
+    Assert-Igual 1 @($j.cameras).Count 'uma camera vira lista no JSON'
+}
+
+# Derivacao dos campos legados: caso -> (fase, atual, tem falha).
+$script:casosLegado = @(
+    @{ Nome = 'ocioso (sem camera, posicoes pendentes)'; Fase = 'fila'; Atual = -1; Falha = $false; Montar = {
+        New-Coordenador -Posicoes (New-PosicoesTeste 3) -Deps (New-DepsFalsas) } }
+    @{ Nome = 'cameras so em espera'; Fase = 'fila'; Atual = -1; Falha = $false; Montar = {
+        New-CoordComEspera -N 2 } }
+    @{ Nome = 'em curso'; Fase = 'configurando'; Atual = 0; Falha = $false; Montar = {
+        New-CoordNoPortao -N 2 } }
+    @{ Nome = 'decisao'; Fase = 'decisao'; Atual = 0; Falha = $true; Montar = {
+        $c = New-CoordNoPortao -N 1
+        Invoke-PassoTeste $c (Step-FimDoJob -Estado $c.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $false; Etapa = ''; Falhou = 'inicializada'; Erro = 'x' })
+        $c } }
+    @{ Nome = 'decisao e outra em curso'; Fase = 'configurando'; Atual = 1; Falha = $true; Montar = {
+        New-CoordPublicado } }
+    @{ Nome = 'concluida'; Fase = 'concluida'; Atual = -1; Falha = $false; Montar = {
+        $c = New-CoordNoPortao -N 1 -Posicoes 1
+        Invoke-PassoTeste $c (Step-FimDoJob -Estado $c.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $true; Etapa = 'rede' })
+        Invoke-PassoTeste $c (Step-FimDoJob -Estado $c.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $true; Etapa = 'encoder' })
+        $c } }
+    @{ Nome = 'encerrada (nada em curso)'; Fase = 'encerrada'; Atual = -1; Falha = $false; Montar = {
+        $c = New-CoordComEspera -N 1
+        Invoke-PassoTeste $c (Step-Decisao -Estado $c.Estado -Acao 'encerrar')
+        $c } }
+    @{ Nome = 'encerrada com camera em curso'; Fase = 'configurando'; Atual = 0; Falha = $false; Montar = {
+        $c = New-CoordNoPortao -N 2
+        Invoke-PassoTeste $c (Step-Decisao -Estado $c.Estado -Acao 'encerrar')
+        $c } }
+)
+
+foreach ($script:caso in $script:casosLegado) {
+    T ('campos legados: ' + $script:caso.Nome) {
+        $coord = & $script:caso.Montar
+        $j = (Get-PublicadoJson $coord).Obj
+        Assert-Igual $script:caso.Fase $j.fase 'fase'
+        Assert-Igual $script:caso.Atual $j.atual 'atual'
+        if ($script:caso.Falha) { Assert-Verdade ($null -ne $j.falha) 'falha publicada' } else { Assert-Verdade ($null -eq $j.falha) 'sem falha' }
+        if ($script:caso.Atual -ge 0) {
+            Assert-Igual @($j.filaItens)[$script:caso.Atual].Ip $j.camera.Destino 'camera legada aponta para a posicao de atual'
+        } else {
+            Assert-Verdade ($null -eq $j.camera) 'sem camera legada'
+        }
+    }
 }
 
 # ------------------------------------------------------------------- resultado

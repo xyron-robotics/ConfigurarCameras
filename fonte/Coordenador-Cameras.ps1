@@ -36,6 +36,8 @@
                       Conferencia } (só em -Simular) e Local/Rack/Andar
       Progresso       último progresso por MAC { Etapa; Atual; Total;
                       Detalhe }, enquanto o job corre
+      Dhip            'ok' ou 'sem-resposta' (o vigia sem DHIP põe
+                      'sem-resposta'; vai para paralelo.dhip)
 
     EVENTOS (fila Eventos, enfileirados pelos jobs no pool)
       { Mac; Job; Tipo='log';       Texto; Cor; Quando }
@@ -80,6 +82,7 @@ function New-Coordenador {
             Local = ''; Rack = ''; Andar = ''
         }
         Progresso       = @{}
+        Dhip            = 'ok'
     }
 }
 
@@ -665,5 +668,147 @@ function Receive-EventosCoordenador {
         if ($Coord.Jobs.ContainsKey($j.Chave) -and [string]$Coord.Jobs[$j.Chave].Id -eq [string]$j.Id) {
             Complete-JobCoordenador -Coord $Coord -Job $j
         }
+    }
+}
+
+# ---------------------------------------------------------- estado publicado
+
+# Falha do estado (Step-FimDoJob) no formato publicado, ou $null.
+function ConvertTo-FalhaPublicada {
+    param($Falha)
+    if ($null -eq $Falha) { return $null }
+    return [ordered]@{
+        etapa = [string]$Falha.Etapa; erro = [string]$Falha.Erro; recusa = [bool]$Falha.Recusa
+        loginRecusado = [bool]$Falha.LoginRecusado; bloqueada = [bool]$Falha.Bloqueada; geracao = [int]$Falha.Geracao
+    }
+}
+
+<#
+    Estado publicado do paralelo: o contrato da F6 (plano docs/plans/
+    2026-11-18-frente-servidor-plan.md, Task 4). Não mudar sem atualizar o
+    plano e o mapa. A senha nunca entra.
+      cameras    na ordem do estado: { mac, serial, modelo, ipOrigem,
+                 indice (posição da câmera em filaItens, base 0; -1 sem
+                 posição), posicao (número da posição; 0 sem posição),
+                 destino (IP da posição), porta, canal (do cartão), fase,
+                 etapa (a do último progresso enquanto o job corre; senão a
+                 última feita), progresso { atual, total } (só com total;
+                 senão null), trabalho (detalhe do progresso, ou o que a
+                 câmera está fazendo; vazio fora de portão/conferindo),
+                 aviso (último aviso da câmera), falha { etapa, erro,
+                 recusa, loginRecusado, bloqueada, geracao } ou null }
+      portao     MAC da câmera no portão, ou null
+      paralelo   { max, admitindo, dhip: 'ok'|'sem-resposta', emCurso
+                 (câmeras em portão + conferindo) }
+      filaItens  as posições, no formato de fila.itens ({ Posicao, Ip,
+                 Estado, Motivo, Mac })
+    Campos legados, para a UI atual seguir até a F6:
+      fase       'configurando' com câmera em curso; 'decisao' com câmera
+                 em decisão; 'concluida' sem posição pendente ou reservada;
+                 'encerrada' sem admitir; senão 'fila' (nessa ordem)
+      atual, camera, falha
+                 da primeira câmera em decisão, senão da primeira em curso:
+                 atual = indice dela (-1 sem câmera), camera = o contexto do
+                 job (New-ContextoJob: IpOrigem, Destino, Mac, Porta...),
+                 falha = a falha dela; sem câmera, -1, null e null.
+#>
+function ConvertTo-EstadoPublicadoParalelo {
+    param([Parameter(Mandatory = $true)]$Coord)
+
+    $e = $Coord.Estado
+
+    $itens = New-Object 'System.Collections.Generic.List[object]'
+    $indicePorNumero = @{}
+    $livres = 0
+    foreach ($p in @($e.Posicoes)) {
+        if ($null -eq $p) { continue }
+        $indicePorNumero[[int]$p.Posicao] = $itens.Count
+        $itens.Add([ordered]@{ Posicao = [int]$p.Posicao; Ip = [string]$p.Ip; Estado = [string]$p.Estado; Motivo = [string]$p.Motivo; Mac = [string]$p.Mac })
+        if ([string]$p.Estado -eq 'pendente' -or [string]$p.Estado -eq 'reservada') { $livres++ }
+    }
+
+    $cameras = New-Object 'System.Collections.Generic.List[object]'
+    $emCurso = 0
+    $alvoDecisao = $null
+    $alvoCurso = $null
+    foreach ($c in @($e.Cameras)) {
+        if ($null -eq $c) { continue }
+        $chave = Get-ChaveMac $c.Mac
+        $fase = [string]$c.Fase
+
+        $numero = [int]$c.Indice
+        $indice = -1
+        $destino = ''
+        if ($numero -gt 0 -and $indicePorNumero.ContainsKey($numero)) {
+            $indice = [int]$indicePorNumero[$numero]
+            $destino = [string]$itens[$indice].Ip
+        }
+
+        $pc = $null
+        if ($Coord.PortaCanal.ContainsKey($chave)) { $pc = $Coord.PortaCanal[$chave] }
+        $aviso = ''
+        if ($Coord.AvisosCamera.ContainsKey($chave)) { $aviso = [string]$Coord.AvisosCamera[$chave] }
+
+        $etapa = [string]$c.Etapa
+        $progresso = $null
+        $trabalho = ''
+        $curso = ($fase -eq 'portao' -or $fase -eq 'conferindo')
+        if ($curso) {
+            $emCurso++
+            if ($fase -eq 'portao') { $trabalho = 'Gravando a rede da câmera para ' + $destino }
+            else { $trabalho = 'Conferindo a câmera em ' + $destino }
+            $prog = $null
+            if ($Coord.Progresso.ContainsKey($chave)) { $prog = $Coord.Progresso[$chave] }
+            if ($null -ne $prog) {
+                if ([string]$prog.Etapa -ne '') { $etapa = [string]$prog.Etapa }
+                if ([string]$prog.Detalhe -ne '') { $trabalho = [string]$prog.Detalhe }
+                if ([int]$prog.Total -gt 0) { $progresso = [ordered]@{ atual = [int]$prog.Atual; total = [int]$prog.Total } }
+            }
+        }
+
+        $item = @{ Camera = $c; Indice = $indice; Destino = $destino; PortaCanal = $pc }
+        if ($fase -eq 'decisao' -and $null -eq $alvoDecisao) { $alvoDecisao = $item }
+        if ($curso -and $null -eq $alvoCurso) { $alvoCurso = $item }
+
+        $cameras.Add([ordered]@{
+            mac = [string]$c.Mac; serial = [string]$c.Serial; modelo = [string]$c.Modelo; ipOrigem = [string]$c.IpOrigem
+            indice = $indice; posicao = $numero; destino = $destino
+            porta = [string](Get-PropriedadeOuVazio $pc 'Porta' ''); canal = [string](Get-PropriedadeOuVazio $pc 'Canal' '')
+            fase = $fase; etapa = $etapa; progresso = $progresso; trabalho = $trabalho; aviso = $aviso
+            falha = (ConvertTo-FalhaPublicada $c.Falha)
+        })
+    }
+
+    $faseLegada = 'fila'
+    if ($emCurso -gt 0) { $faseLegada = 'configurando' }
+    elseif ($null -ne $alvoDecisao) { $faseLegada = 'decisao' }
+    elseif ($livres -eq 0) { $faseLegada = 'concluida' }
+    elseif (-not [bool]$e.Admitindo) { $faseLegada = 'encerrada' }
+
+    $alvo = $alvoDecisao
+    if ($null -eq $alvo) { $alvo = $alvoCurso }
+    $atual = -1
+    $cameraLegada = $null
+    $falhaLegada = $null
+    if ($null -ne $alvo) {
+        $atual = [int]$alvo.Indice
+        $cameraLegada = New-ContextoJob -Camera $alvo.Camera -Acao @{ Destino = $alvo.Destino } -Fila $Coord.Trabalho -PortaCanal $alvo.PortaCanal
+        $falhaLegada = ConvertTo-FalhaPublicada $alvo.Camera.Falha
+    }
+
+    $portao = $null
+    if (-not [string]::IsNullOrEmpty([string]$e.Portao)) { $portao = [string]$e.Portao }
+    $dhip = 'ok'
+    if ([string]$Coord.Dhip -eq 'sem-resposta') { $dhip = 'sem-resposta' }
+
+    return [ordered]@{
+        cameras   = $cameras.ToArray()
+        portao    = $portao
+        paralelo  = [ordered]@{ max = [int]$e.Max; admitindo = [bool]$e.Admitindo; dhip = $dhip; emCurso = $emCurso }
+        filaItens = $itens.ToArray()
+        fase      = $faseLegada
+        atual     = $atual
+        camera    = $cameraLegada
+        falha     = $falhaLegada
     }
 }
