@@ -13,7 +13,8 @@ Pedido do usuário: "a próxima versão [...] consiga operar qualquer tipo de c�
 | `ui` | `docs/plans/2026-11-17-frente-ui-plan.md` | F2b, F3 e F4 do plano de UI | 0 |
 | `servidor` | `docs/plans/2026-11-18-frente-servidor-plan.md` | F4 e o mínimo da F5 (3 câmeras simuladas) | 2 |
 | `simulacao` | `docs/plans/2026-11-18-frente-simulacao-plan.md` | F5 e os itens da herança da seção 0 marcados F5 | 2 |
-| F6, F7 | a escrever, um plano por frente | UI paralela, docs | 2 e 3 |
+| `ui-paralela` | `docs/plans/2026-11-18-frente-ui-paralela-plan.md` | F6 (cartão por câmera, porta e canal no cartão, decisão por cartão) | 3 |
+| `docs` | `docs/plans/2026-11-18-frente-docs-plan.md` | F7 (glossário, ADR 0004, protocolo, manual) | 3 |
 | release 1.3.0 | seção 9 deste mapa | versão, tag, atualização pelo painel | 4 |
 | F8 | fora do caminho da release (seção 0) | bancada com câmeras reais | depois |
 
@@ -25,17 +26,19 @@ Frentes `motor`, `orquestrador`, `ui` e `servidor` fechadas e integradas no `mai
 
 **Decisão do usuário (18/11):** as câmeras não estão mais disponíveis. A release 1.3.0 sai **sem a bancada real (F8)**, apoiada na medição P0 (seção 6.1) e na prova em simulação. O que tem de funcionar de verdade é a disponibilização: tag, `release.yml` verde, instalador publicado e "Atualizar" pelo painel nesta máquina chegando na 1.3.0. A F8 vira pendência para quando houver câmeras. O push continua precisando da confirmação do usuário no momento da release.
 
-**Ordem:** F5, F6 e F7 (paralelas: arquivos distintos, ver "Arquivos" de cada uma) → release (seção 9). Cada frente com plano próprio em `docs/plans/`, `/clear` depois do plano aprovado e execução pelo `/regime:maestro`.
+**Decisão do usuário (18/11, depois da frente `simulacao`):** porta e canal continuam editáveis no cartão da câmera depois de ela estar instalada, enquanto a fila estiver aberta; o servidor grava direto no registro. Câmera pulada continua recusada. Isso substitui o "até a conferência terminar" da D10. Detalhe na C2 de `docs/plans/2026-11-18-frente-ui-paralela-plan.md`.
+
+**Ordem:** F5 (fechada em eece536) → F6 e F7 juntas (arquivos distintos: a F6 só em `fonte/`, a F7 só em documentação) → release (seção 9). Cada frente com plano próprio em `docs/plans/`, `/clear` depois do plano aprovado e execução pelo `/regime:maestro`.
 
 **Herança da frente `servidor`** (achados da revisão e dos executores; o commit `chore(plano): revisão` tem o texto completo). Cada item já tem frente dona:
 
 | Item | Peso | Frente |
 |---|---|---|
-| A conferência no real parte do IP de fábrica e o motor não confere o MAC: com outra câmera de fábrica presa no portão nesse IP, a conferência pode falar com a câmera errada. **Medir primeiro** (o job do `Start-JobCamera` e a retomada `-AteEtapa` do motor); se confirmado, travar pelo MAC ou partir do IP de destino. | alto: sem bancada, nada mais pega isso antes do usuário | F5, Task 0 |
+| A conferência no real parte do IP de fábrica e o motor não confere o MAC: com outra câmera de fábrica presa no portão nesse IP, a conferência pode falar com a câmera errada. **Medir primeiro** (o job do `Start-JobCamera` e a retomada `-AteEtapa` do motor); se confirmado, travar pelo MAC ou partir do IP de destino. | alto: sem bancada, nada mais pega isso antes do usuário | F5, Task 0 (fechado: a conferência parte do IP de destino, 91e984c) |
 | Porta e canal do painel atual não chegam à câmera (o auto-incremento do vigia saiu); o registro sai com porta e canal vazios. | alto: regressão visível | F6 (cartão editável, `POST /api/camera`) |
-| Durante o download da atualização uma câmera ainda pode começar, e a instalação fecha o painel no meio dela. | médio: toca o caminho da atualização | F5 |
-| O 409 do encerrar lê estado com até ~250 ms de atraso; câmera que entra nessa janela tem o job cortado (a placa fica limpa). | baixo | F5 |
-| Sobra a fase `escolher` nas guardas do listener; falta espaço em `$VersaoPainel =Get-VersaoPainel`. | menor | F5 |
+| Durante o download da atualização uma câmera ainda pode começar, e a instalação fecha o painel no meio dela. | médio: toca o caminho da atualização | F5 (fechado, 25e3be9) |
+| O 409 do encerrar lê estado com até ~250 ms de atraso; câmera que entra nessa janela tem o job cortado (a placa fica limpa). | baixo | F5 (fechado, 25e3be9) |
+| Sobra a fase `escolher` nas guardas do listener; falta espaço em `$VersaoPainel =Get-VersaoPainel`. | menor | F5 (fechado, 0116dbd) |
 | DHIP, ping, ARP e o modo sem Administrador só têm prova com dependências falsas e simulação. | aceito pela decisão acima | F8 |
 
 Vocabulário: o de `CONTEXT.md`. Termos novos estão em "Termos novos" e entram no glossário na frente F7.
