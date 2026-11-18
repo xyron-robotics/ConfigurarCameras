@@ -1,6 +1,8 @@
 # Frente ui-paralela: bancada com N cartões (F6 do mapa)
 
-**Status:** Ativo (aprovado em 18/11) · **Frente:** `ui-paralela`
+**Status:** Concluído (18/11) · **Frente:** `ui-paralela`
+
+Fechamento: o item alto da herança (porta e canal não chegavam à câmera) fechou na Task 1 (`feita` aceita porta e canal, gravados no registro) e nos cartões (Tasks 2 e 3: porta e canal digitados no cartão de cada câmera); os dois menores da revisão da `simulacao` (S4 b, `-SemDespacho:$E.Parar` no laço do worker, e o ".." no log do atualizador) fecharam na Task 1; `falharEmCameras` está registrado nas Decisões.
 
 Plano de frente da F6 de `docs/plans/2026-11-cameras-em-paralelo.md`, escrito sobre o `main` em eece536 (frentes `motor`, `orquestrador`, `ui`, `servidor` e `simulacao` fechadas). Leva o item alto da herança da frente `servidor` (seção 0 do mapa: porta e canal não chegam à câmera) e dois menores da revisão da frente `simulacao`. Roda em paralelo com a frente `docs` (F7), que só mexe em documentação e cita os textos fixados em C4. Onde divergir do mapa, vale este plano.
 
