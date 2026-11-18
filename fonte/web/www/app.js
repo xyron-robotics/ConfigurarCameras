@@ -125,7 +125,7 @@ const ORIGEM_DO_COMANDO = {
   'rede-restaurar': 'painel', 'sessao-refazer': 'painel', 'sessao-concluir': 'concluir',
 };
 // Rotas que o servidor aceita mesmo ocupado: nao travam os botoes.
-const ROTA_SEMPRE = ['/api/senha', '/api/vigia'];
+const ROTA_SEMPRE = ['/api/senha', '/api/vigia', '/api/camera'];
 let avisoN = -1;
 let avisoDoServidor = false;
 let timerAviso = 0;
@@ -436,7 +436,8 @@ function desenhar() {
   if (ultimaFase && ultimaFase !== e.fase) {
     if (rota().view === 'painel' && modoAtual === 'normal') carregarRegistro();
     if (e.fase === 'escolher') falas.push('Mais de uma câmera de fábrica na rede. Escolha pelo MAC da etiqueta.');
-    else if (e.fase === 'decisao' && e.falha) { falas.push($('decisao-titulo').textContent + '. ' + e.falha.erro); focarTentar = true; }
+    // Falha de camera do cartao: quem anuncia e a linha de estado do cartao.
+    else if (e.fase === 'decisao' && e.falha && !$('bancada-decisao').hidden) { falas.push($('decisao-titulo').textContent + '. ' + e.falha.erro); focarTentar = true; }
     else if (e.fase === 'concluida') falas.push('Fila concluída.');
     else if (e.fase === 'encerrada') falas.push('Fila encerrada.');
   }
@@ -553,7 +554,8 @@ function desenharFila(e) {
   // Na falha e na escolha, a "ultima instalada" so distrai da decisao.
   ult.hidden = !e.ultimo || e.fase === 'decisao' || e.fase === 'escolher';
   ult.textContent = e.ultimo || '';
-  if (!temFila) { desenharVigia(e, false); return; }
+  const cams = temFila ? listaCameras(e) : [];
+  if (!temFila) { desenharCartoes([], [], []); desenharVigia(e, false); return; }
 
   const itens = fila.itens;
   const pendentes = itens.filter((i) => i.Estado === 'pendente');
@@ -585,11 +587,20 @@ function desenharFila(e) {
       i.Motivo ? h('span', { class: 'motivo', text: i.Motivo }) : null);
   }));
 
+  desenharCartoes(cams, itens, usaveis);
+
   const blocos = { pronta: false, trabalho: false, escolha: false, decisao: false, fim: false };
   const posAtual = e.atual >= 0 ? itens[e.atual] : null;
   const ordinal = (item) => 'Câmera ' + (usaveis.indexOf(item) + 1) + ' de ' + livres;
+  // Bloco de camera unica (C7): so a retomada manual pelo IP, isto e, fase
+  // legada que cameras[] nao explica (com camera em curso ou em decisao, a
+  // fase legada vem dela e quem mostra e o cartao).
+  const temFase = (fases) => cams.some((c) => fases.includes(c.fase));
+  const manualConfigurando = e.fase === 'configurando' && !temFase(['portao', 'conferindo']);
+  const manualDecisao = e.fase === 'decisao' && !!e.falha && !temFase(['decisao']);
+  const emAndamento = temFase(['espera', 'portao', 'conferindo', 'decisao']);
 
-  if (e.fase === 'configurando' || (e.ocupado && e.trabalho && e.fase === 'fila')) {
+  if (manualConfigurando || (e.ocupado && e.trabalho && e.fase === 'fila')) {
     blocos.trabalho = true;
     $('trabalho-titulo').textContent = posAtual ? ordinal(posAtual) + ' → ' + posAtual.Ip : (e.trabalho || 'Trabalhando…');
     $('trabalho-texto').textContent = e.trabalho || '';
@@ -614,19 +625,19 @@ function desenharFila(e) {
         c.modelo ? h('span', { text: c.modelo }) : null,
         c.alcancavel === false ? h('span', { text: 'fora das faixas da placa: ela recebe um IP temporário' }) : null,
         c.ouiConhecido || c.modelo ? null : h('span', { text: 'fabricante desconhecido' })))));
-  } else if (e.fase === 'decisao' && e.falha) {
+  } else if (manualDecisao) {
     blocos.decisao = true;
     $('decisao-titulo').textContent = 'Falhou na etapa ' + (NOME_ETAPA[e.falha.etapa] || e.falha.etapa) +
       (posAtual ? ' (' + posAtual.Ip + ')' : '');
     $('decisao-erro').textContent = e.falha.erro;
     $('decisao-apoio').textContent = textoDaFalha(e.falha, posAtual);
-  } else if (e.fase === 'concluida' || e.fase === 'encerrada' || !proxima) {
+  } else if (e.fase === 'concluida' || e.fase === 'encerrada' || (!proxima && !emAndamento)) {
     blocos.fim = true;
     $('fim-titulo').textContent = e.fase === 'encerrada' ? 'Fila encerrada' : 'Fila concluída';
     const motivo = e.vigia && !e.vigia.ligado && e.vigia.motivo;
     $('fim-texto').textContent = 'O registro abaixo tem cada câmera; Exportar relatório gera o CSV.' +
       (motivo ? ' O vigia foi desligado: ' + (MOTIVO_VIGIA[motivo] || motivo) + '.' : '');
-  } else {
+  } else if (proxima) {
     const vigiando = !!(e.vigia && e.vigia.ligado);
     blocos.pronta = true;
     $('bancada-pos').textContent = 'Conecte a ' + ordinal(proxima).replace('Câmera', 'câmera');
@@ -643,6 +654,172 @@ function desenharFila(e) {
     proxima: proxima ? ordinal(proxima) + ' (destino ' + proxima.Ip + ')' : '',
     feitas,
   });
+}
+
+// ------------------------------------------------------------------ cartoes
+// Um cartao por camera de cameras[] (modo paralelo). Chave no MAC: o no e
+// criado uma vez e atualizado campo a campo (C3). Campo com foco ou com texto
+// nao salvo nunca e sobrescrito pelo polling. A linha de estado (aria-live)
+// so muda quando a fase muda; o progresso nao e anunciado.
+const PALAVRA_FASE = {
+  espera: 'Na espera', portao: 'No portão', conferindo: 'Conferindo', decisao: 'Falhou',
+  feita: 'Instalada', pulada: 'Pulada', ignorada: 'Já inicializada: não tocada',
+};
+const cartoes = new Map();
+
+function listaCameras(e) {
+  const c = e && e.cameras;
+  return Array.isArray(c) ? c.filter(Boolean) : (c ? [c] : []);
+}
+
+function poeTexto(el, t) {
+  const v = t === null || t === undefined ? '' : String(t);
+  if (el.textContent !== v) el.textContent = v;
+}
+
+function poeOculto(el, oculto) {
+  if (el.hidden !== !!oculto) el.hidden = !!oculto;
+}
+
+function novoCartao(mac) {
+  const k = { mac, fase: null, publicado: { porta: '', canal: '' }, enviado: null };
+  k.titulo = h('span');
+  k.destino = h('span', { class: 'mono cartao-destino' });
+  k.quem = h('span', { class: 'so-leitor' });
+  k.selo = h('span', { class: 'selo' });
+  k.modelo = h('span', { class: 'mono' });
+  k.serial = h('span', { class: 'mono' });
+  k.macTxt = h('span', { class: 'mono' });
+  k.parteModelo = h('span', null, k.modelo);
+  k.parteSerial = h('span', null, 'Serial ', k.serial);
+  k.parteMac = h('span', null, 'MAC ', k.macTxt);
+  k.etapa = h('p', { class: 'cartao-etapa' });
+  k.barra = h('progress', { max: 1, value: 0, hidden: true });
+  k.trabalho = h('p', { class: 'apoio cartao-trabalho' });
+  k.curso = h('div', { class: 'cartao-curso' }, k.etapa, k.barra, k.trabalho);
+  k.aviso = h('p', { class: 'cartao-aviso' });
+  k.porta = h('input', { name: 'porta', autocomplete: 'off', spellcheck: 'false' });
+  k.canal = h('input', { name: 'canal', autocomplete: 'off', spellcheck: 'false' });
+  k.salvo = h('span', { class: 'cartao-salvo', role: 'status' });
+  k.campos = h('div', { class: 'linha-campos cartao-campos' },
+    h('label', null, 'Porta', k.porta), h('label', null, 'Canal', k.canal), k.salvo);
+  k.el = h('li', { class: 'cartao', 'data-mac': mac },
+    h('div', { class: 'cartao-cabeca' },
+      h('h3', { class: 'cartao-titulo' }, k.titulo, k.destino),
+      h('p', { class: 'cartao-estado', 'aria-live': 'polite' }, k.quem, k.selo)),
+    h('p', { class: 'cartao-id' }, k.parteModelo, k.parteSerial, k.parteMac),
+    k.curso, k.aviso, k.campos);
+  for (const campo of [k.porta, k.canal]) {
+    campo.addEventListener('input', () => { campo.dataset.sujo = '1'; poeTexto(k.salvo, ''); });
+    campo.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); salvarCartao(k); } });
+    // change: ao sair do campo, se o valor mudou desde o foco.
+    campo.addEventListener('change', () => salvarCartao(k));
+  }
+  return k;
+}
+
+// Envia porta e canal do cartao se diferem do publicado (ou do ultimo envio
+// ainda nao refletido). A recusa chega pelo aviso global.
+function salvarCartao(k) {
+  const porta = k.porta.value.trim();
+  const canal = k.canal.value.trim();
+  if (k.enviado && k.enviado.porta === porta && k.enviado.canal === canal) return;
+  if (!k.enviado && k.publicado.porta === porta && k.publicado.canal === canal) return;
+  k.enviado = { porta, canal };
+  comando('/api/camera', { mac: k.mac, porta, canal });
+}
+
+// Valor publicado entra no campo so sem foco e sem texto pendente; o texto
+// pendente deixa de ser pendente quando o publicado o alcanca.
+function sincronizarCampo(campo, valor) {
+  if (campo.dataset.sujo && campo.value.trim() === valor) delete campo.dataset.sujo;
+  if (document.activeElement === campo || campo.dataset.sujo) return;
+  if (campo.value !== valor) campo.value = valor;
+}
+
+function atualizarCartao(k, c, itens, usaveis) {
+  const fase = String(c.fase || '');
+  const item = c.indice >= 0 ? itens[c.indice] : null;
+  const n = item ? usaveis.indexOf(item) : -1;
+  // Mesma numeracao da fita: so as posicoes usaveis contam.
+  const titulo = n >= 0 ? 'Câmera ' + (n + 1) : (c.posicao > 0 ? 'Câmera ' + c.posicao : 'Sem posição');
+  poeTexto(k.titulo, titulo);
+  poeTexto(k.destino, c.destino || '');
+  poeOculto(k.destino, !c.destino);
+  if (k.fase !== fase) {
+    k.fase = fase;
+    k.el.dataset.fase = fase;
+    k.el.classList.toggle('compacto', ['feita', 'pulada', 'ignorada'].includes(fase));
+    poeTexto(k.quem, titulo + ': ');
+    poeTexto(k.selo, PALAVRA_FASE[fase] || fase);
+  }
+
+  poeTexto(k.modelo, c.modelo || '');
+  poeOculto(k.parteModelo, !c.modelo);
+  poeTexto(k.serial, c.serial || '');
+  poeOculto(k.parteSerial, !c.serial);
+  poeTexto(k.macTxt, formatarMac(c.mac));
+  poeOculto(k.parteMac, !c.mac);
+
+  const curso = fase === 'portao' || fase === 'conferindo';
+  poeOculto(k.curso, !curso);
+  if (curso) {
+    const i = ETAPAS.indexOf(c.etapa);
+    poeTexto(k.etapa, i >= 0 ? 'Etapa ' + (i + 1) + ' de ' + ETAPAS.length + ': ' + NOME_ETAPA[c.etapa] : '');
+    poeOculto(k.etapa, i < 0);
+    const p = c.progresso;
+    poeOculto(k.barra, !p);
+    if (p) {
+      if (k.barra.max !== p.total) k.barra.max = p.total;
+      if (k.barra.value !== p.atual) k.barra.value = p.atual;
+      k.barra.setAttribute('aria-label', c.trabalho || 'Progresso');
+    }
+    poeTexto(k.trabalho, c.trabalho || '');
+    poeOculto(k.trabalho, !c.trabalho);
+  }
+  poeTexto(k.aviso, c.aviso || '');
+  poeOculto(k.aviso, !c.aviso);
+
+  // Porta e canal ate a fila fechar (C2), menos pulada e ignorada.
+  poeOculto(k.campos, fase === 'pulada' || fase === 'ignorada');
+  k.publicado = { porta: String(c.porta || '').trim(), canal: String(c.canal || '').trim() };
+  sincronizarCampo(k.porta, k.publicado.porta);
+  sincronizarCampo(k.canal, k.publicado.canal);
+  if (k.enviado && k.enviado.porta === k.publicado.porta && k.enviado.canal === k.publicado.canal) {
+    k.enviado = null;
+    poeTexto(k.salvo, 'Salvo');
+  }
+}
+
+// Ordem (C6): pela posicao; sem posicao no fim, na ordem de cameras[].
+function desenharCartoes(cams, itens, usaveis) {
+  const caixa = $('cartoes');
+  const chave = (c) => (c.posicao > 0 ? c.posicao : Infinity);
+  const ordem = cams.map((c, i) => ({ c, i }))
+    .sort((a, b) => (chave(a.c) - chave(b.c)) || (a.i - b.i))
+    .map((x) => x.c);
+  const vistos = new Set();
+  const nos = [];
+  for (const c of ordem) {
+    const mac = String(c.mac || '');
+    if (vistos.has(mac)) continue;
+    vistos.add(mac);
+    let k = cartoes.get(mac);
+    if (!k) { k = novoCartao(mac); cartoes.set(mac, k); }
+    atualizarCartao(k, c, itens, usaveis);
+    nos.push(k.el);
+  }
+  for (const [mac, k] of cartoes) {
+    if (!vistos.has(mac)) { k.el.remove(); cartoes.delete(mac); }
+  }
+  // Mover o no com foco tira o foco: com foco num cartao, so entram os novos
+  // (no fim); a ordem se acerta no polling seguinte sem foco.
+  const atual = [...caixa.children];
+  if (nos.length !== atual.length || nos.some((el, i) => el !== atual[i])) {
+    if (caixa.contains(document.activeElement)) caixa.append(...nos.filter((el) => !el.isConnected));
+    else caixa.append(...nos);
+  }
+  poeOculto(caixa, !nos.length);
 }
 
 // O que a camera ja recebeu e o que "Tentar de novo" faz, por etapa. Espelha
