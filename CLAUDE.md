@@ -16,6 +16,7 @@ powershell.exe -File fonte\web\Servidor-Painel.ps1 -Simular -Porta 8765   # pain
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Motor.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Descoberta.ps1
 if (Test-Path fonte\Testes-Orquestrador.ps1) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Orquestrador.ps1 }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Coordenador.ps1
 git diff --check
 ```
 

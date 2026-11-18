@@ -37,6 +37,10 @@ jobs:
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Orquestrador.ps1
 
+      - name: Testes do coordenador
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File fonte\Testes-Coordenador.ps1
+
       - name: Gerar instalador
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File instalador\Gerar-Instalador.ps1 -SemTestes
