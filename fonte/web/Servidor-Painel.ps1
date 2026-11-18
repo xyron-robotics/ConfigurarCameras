@@ -277,13 +277,12 @@ $scriptWorker = {
         # ja clicou em "comecar" nesta abertura (so memoria: a cada abertura o
         # passo a passo oferece usar ou revisar a sessao).
         SessaoGeracao = 0; SessaoIniciada = $false
-        # Vigia: observa o IP de fabrica com a fila parada. Vistos = MACs de
-        # camera ja inicializada ja avisados (um aviso por MAC).
-        # SemSucesso: tiques seguidos em que a camera de fabrica apareceu mas
-        # nao foi configurada (aviso). Em 5 o vigia desliga em vez de insistir.
+        # Vigia: DHIP na placa escolhida a cada tique, mesmo com camera em
+        # curso (os avisos por MAC e o SemSucesso ficam no coordenador; em 5
+        # tiques sem poder configurar o vigia desliga em vez de insistir).
         # Broadcast: com a chave ligada o vigia tambem aceita camera de fabrica
         # em qualquer faixa (broadcast DHIP); desligada, so o IP de fabrica.
-        Vigia = @{ Ligado = $false; Porta = ''; Canal = ''; Vistos = @{}; Proximo = [datetime]::MinValue; Motivo = ''; SemSucesso = 0; Broadcast = $false }
+        Vigia = @{ Ligado = $false; Porta = ''; Canal = ''; Proximo = [datetime]::MinValue; Motivo = ''; Broadcast = $false }
         # Sem Administrador (-SemElevar, ou elevacao recusada) a placa de rede nao muda.
         Admin = [bool](Test-EhAdministrador)
     }
@@ -575,23 +574,49 @@ $scriptWorker = {
         return $true
     }
 
-    # Achados do tique do vigia, no formato do orquestrador ({ Mac, Serial,
-    # Modelo, Ip, HttpPort, Init, Marca }). Vira Deps.Descobrir do coordenador.
+    # Leitura de rede do tique do vigia (Deps.Descobrir do coordenador), para
+    # o Invoke-TiqueParalelo: { Achados (formato do orquestrador: Mac, Serial,
+    # Modelo, Ip, HttpPort, Init, Marca); DhipRespondeu; PingFabrica; MacArp;
+    # MacTrocando }.
     # Em simulacao: as 3 cameras de fabrica ficticias (U1), no IP de fabrica.
-    # No real: broadcast DHIP + IP de fabrica, sem varredura (o tique nao pode
-    # prender o worker por minutos); com a chave de broadcast desligada, so o
-    # IP de fabrica conta.
+    # No real: so o broadcast DHIP na placa escolhida (D9), sem varredura (o
+    # tique nao pode prender o worker por minutos) e sem o atalho HTTP no IP
+    # de fabrica (com duas cameras nesse IP, o Init do HTTP pode ser da
+    # outra). Com a chave de broadcast desligada, so o IP de fabrica conta.
+    # DHIP vazio: ping no IP de fabrica e, se responder, o MAC do ARP e duas
+    # leituras do vizinho (MAC trocando = duas cameras no mesmo IP).
     $DescobrirAchados = {
         param($Sessao)
+        $ipf = [string]$Sessao.IpFabrica
+        $l = @{ Achados = @(); DhipRespondeu = $true; PingFabrica = $false; MacArp = ''; MacTrocando = $false }
         if ($W.Simular) {
-            return @(1..3 | ForEach-Object {
-                @{ Mac = ('AA:00:00:00:00:0' + $_); Serial = ('SIM-' + $_); Modelo = 'SIM-IPC'; Ip = [string]$Sessao.IpFabrica
+            $l.Achados = @(1..3 | ForEach-Object {
+                @{ Mac = ('AA:00:00:00:00:0' + $_); Serial = ('SIM-' + $_); Modelo = 'SIM-IPC'; Ip = $ipf
                    HttpPort = 80; Init = 1; Marca = 'Intelbras' } })
+            return $l
         }
-        $todos = @(Find-CamerasNaRede -IpFabrica $Sessao.IpFabrica -GatewayDestino $Sessao.Gateway -ArquivoBlacklist $Arquivos.Blacklist `
-                                      -SemVarredura -Silencioso -IfIndex ([int]$Sessao.Placa.IfIndex))
-        if (-not $W.Vigia.Broadcast) { $todos = @($todos | Where-Object { [string]$_.Ip -eq [string]$Sessao.IpFabrica }) }
-        return @($todos | ForEach-Object { ConvertTo-AchadoParalelo $_ })
+        $todos = @(Find-CamerasNaRede -IpFabrica $ipf -GatewayDestino $Sessao.Gateway -ArquivoBlacklist $Arquivos.Blacklist `
+                                      -SemVarredura -SemAtalho -Silencioso -IfIndex ([int]$Sessao.Placa.IfIndex))
+        $l.DhipRespondeu = ($todos.Count -gt 0)
+        if (-not $W.Vigia.Broadcast) { $todos = @($todos | Where-Object { [string]$_.Ip -eq $ipf }) }
+        $l.Achados = @($todos | ForEach-Object { ConvertTo-AchadoParalelo $_ })
+        if (-not $l.DhipRespondeu) {
+            $l.PingFabrica = (@(Invoke-PingSweep -Ips @($ipf) -TimeoutMs 1000).Count -gt 0)
+            if ($l.PingFabrica) {
+                $m = Get-VizinhosMac -Ips @($ipf)
+                if ($m.ContainsKey($ipf)) { $l.MacArp = [string]$m[$ipf] }
+                $l.MacTrocando = [bool](Test-MacTrocandoNoIp -Ip $ipf -IntervaloMs 300)
+            }
+        }
+        return $l
+    }
+
+    # Pingar do coordenador (Get-IpsOcupadosAdmissao): IPs da fila que ja
+    # respondem. Em simulacao nada toca a rede real: ninguem responde.
+    $PingarPosicoes = {
+        param($Ips)
+        if ($W.Simular) { return @() }
+        return @(Invoke-PingSweep -Ips @($Ips) -TimeoutMs 1000)
     }
 
     # Placa escolhida nas duas faixas (fabrica e gateway). Sem isso tudo vira timeout.
@@ -617,7 +642,6 @@ $scriptWorker = {
         param([string]$Motivo)
         if (-not $W.Vigia.Ligado) { return }
         $W.Vigia.Ligado = $false
-        $W.Vigia.Vistos = @{}
         $W.Vigia.Motivo = $Motivo
         Write-Log ("Vigia desligado: " + $Motivo + ".") 'Cyan'
     }
@@ -633,18 +657,22 @@ $scriptWorker = {
         elseif (-not $W.Simular -and [string]::IsNullOrEmpty($W.Senha)) { Set-VigiaDesligado 'senha da sessao apagada' }
     }
 
-    # So com a fila esperando camera: com camera em curso ou em decisao o
-    # vigia fica em pausa (continua ligado). A fase e a do ultimo Publicar.
+    # O vigia roda a cada intervalo com a fila montada, mesmo com camera em
+    # curso ou em decisao (paralelo: a proxima camera entra enquanto a outra
+    # configura).
     function Test-VezDoVigia {
-        return ($W.Vigia.Ligado -and $null -ne $W.Coord -and $W.FasePublicada -eq 'fila' -and (Get-Date) -ge $W.Vigia.Proximo)
+        return ($W.Vigia.Ligado -and $null -ne $W.Coord -and (Get-Date) -ge $W.Vigia.Proximo)
     }
 
     <#
-        Um tique do vigia, pelo orquestrador: Deps.Descobrir traz os achados
-        (DHIP; em simulacao as 3 cameras de fabrica), Step-Descoberta poe as
-        de fabrica em espera e Step-JaInicializada avisa das inicializadas
-        (uma vez por MAC, sem login: retomar e sempre acao do operador). As
-        acoes vao para o passo 4 do laco; a admissao faz o resto.
+        Um tique do vigia, pelo coordenador: Deps.Descobrir le a rede (DHIP na
+        placa escolhida; DHIP vazio: ping, ARP e MAC trocando no IP de
+        fabrica; em simulacao as 3 cameras de fabrica) e Invoke-TiqueParalelo
+        aplica Step-Descoberta e Step-JaInicializada (inicializadas: um aviso
+        por MAC, sem login; retomar e sempre acao do operador), a reserva sem
+        DHIP (Max=1) e os avisos. As acoes vao para o passo 4 do laco; a
+        admissao faz o resto. Em 5 tiques seguidos sem poder configurar (so o
+        operador resolve) o vigia desliga.
         -Manual: "Camera conectada" sem IP (procurar agora); sem camera nova,
         aviso para o operador.
     #>
@@ -653,23 +681,26 @@ $scriptWorker = {
         $p = Get-SessaoPronta
         if ($null -eq $p) { Set-VigiaDesligado 'sessao incompleta'; return }
         $coord = $W.Coord
-        $antes = @($coord.Estado.Cameras).Count
-        $achados = @(& (Get-DepCoordenador -Coord $coord -Nome 'Descobrir') -Sessao $p)
-        $passo = Step-Descoberta -Estado $coord.Estado -Achados $achados
-        $coord.Estado = $passo.Estado
-        foreach ($a in @($passo.Acoes)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
+        $l = & (Get-DepCoordenador -Coord $coord -Nome 'Descobrir') -Sessao $p
+        $achados = @($l.Achados)
+        $semDhip = (-not [bool]$l.DhipRespondeu -and [bool]$l.PingFabrica)
         $registro = @()
-        if (@($achados | Where-Object { (Get-InitOrquestrador $_.Init) -ne 1 }).Count -gt 0) { $registro = @((Read-Registro (Get-CaminhoRegistroAtual)).Cameras) }
-        $passo = Step-JaInicializada -Estado $coord.Estado -Achados $achados -Registro $registro
-        $coord.Estado = $passo.Estado
-        foreach ($a in @($passo.Acoes)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
-        $coord.Sujo = $true
-        $novas = @(@($coord.Estado.Cameras) | Select-Object -Skip $antes)
+        if ($semDhip -or @($achados | Where-Object { (Get-InitOrquestrador $_.Init) -ne 1 }).Count -gt 0) {
+            $registro = @((Read-Registro (Get-CaminhoRegistroAtual)).Cameras)
+        }
+        $dhipAntes = [string]$coord.Dhip
+        $r = Invoke-TiqueParalelo -Coord $coord -Achados $achados -Registro $registro -DhipRespondeu ([bool]$l.DhipRespondeu) `
+                                  -PingFabrica ([bool]$l.PingFabrica) -MacArp ([string]$l.MacArp) -IpFabrica ([string]$p.IpFabrica) `
+                                  -MacTrocando ([bool]$l.MacTrocando)
+        foreach ($a in @($r.Acoes)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
+        if ([string]$coord.Dhip -ne $dhipAntes) { Write-Log ("Vigia: DHIP " + [string]$coord.Dhip + ", max " + [int]$coord.Estado.Max + ".") 'Cyan' }
+        $novas = @($r.Novas)
         if ($novas.Count -gt 0) {
             Write-Log ("Vigia: " + $novas.Count + " camera(s) nova(s) em espera: " + (($novas | ForEach-Object { [string]$_.Mac + ' em ' + [string]$_.IpOrigem }) -join ', ')) 'Cyan'
         } elseif ($Manual) {
             $W.Aviso = 'Nenhuma câmera de fábrica nova encontrada. Confira o cabo, o PoE e a porta P+D do injetor, e tente de novo.'
         }
+        if ([int]$coord.SemSucesso -ge 5) { Set-VigiaDesligado '5 tiques sem poder configurar' }
     }
 
     # Retomada pelo IP (serial, D1): configura a camera de $W.Manual na
@@ -827,16 +858,28 @@ $scriptWorker = {
         Set-VigiaDesligado 'fila nova'
         Clear-Fila
         $W.Fila = @{ Local = [string]$Local; Rack = [string]$Rack; Andar = [string]$Andar; Inicio = $Inicio; Fim = $Fim }
-        # Coordenador + pool: a placa (Prender/Soltar), o despacho dos jobs e a
-        # descoberta (DHIP; em simulacao, as 3 cameras de fabrica).
+        # Coordenador + pool: a placa (Prender/Soltar), o despacho dos jobs, a
+        # leitura de rede do vigia e o ping das posicoes na admissao.
+        # No real sem Administrador a placa nao recebe vizinho fixo: Prender e
+        # Soltar viram nada e a fila vai uma camera por vez (Max=1).
+        $semAdmin = (-not $W.Simular -and -not $W.Admin)
         $deps = New-DepsPlaca -IfIndex ([int]$p.Placa.IfIndex) -CaminhoRastro $Arquivos.SessaoPlaca -Simular:$W.Simular
+        if ($semAdmin) {
+            $deps.Prender = { param($Mac, $Ip) [pscustomobject]@{ Ok = $true; Erro = '' } }
+            $deps.Soltar  = { param($Mac, $Ip) [pscustomobject]@{ Ok = $true; Erro = '' } }
+        }
         $deps.Despachar = (New-DepsPool).Despachar
         $deps.Descobrir = $DescobrirAchados
-        $W.Coord = New-Coordenador -Posicoes $itens -Max 0 -Deps $deps
+        $deps.Pingar = $PingarPosicoes
+        $W.Coord = New-Coordenador -Posicoes $itens -Max ($(if ($semAdmin) { 1 } else { 0 })) -Deps $deps
         $W.Coord.Pool = New-PoolCameras -Max ([Math]::Max(1, $pend)) -CaminhoMotor $Motor
         Update-TrabalhoCoord
         $W.Aviso = ''; $W.Ultimo = ''; $W.Feitas = @{}
         Write-Log ("Fila montada: " + $Inicio + " a " + $Fim + " (" + $pend + " posicao(oes) livre(s) de " + $itens.Count + ")") 'Cyan'
+        if ($semAdmin) {
+            $W.Aviso = 'Sem administrador: uma câmera por vez.'
+            Write-Log "  sem Administrador: uma camera por vez (sem vizinho fixo na placa)." 'Yellow'
+        }
         if ($Guardar) {
             # A proxima abertura do painel volta com esta faixa na sessao.
             try {
@@ -978,9 +1021,8 @@ $scriptWorker = {
                 $W.Vigia.Porta = ([string]$Cmd.porta).Trim()
                 $W.Vigia.Canal = ([string]$Cmd.canal).Trim()
                 $W.Vigia.Broadcast = [bool]$Cmd.broadcast
-                $W.Vigia.Vistos = @{}
                 $W.Vigia.Motivo = ''
-                $W.Vigia.SemSucesso = 0
+                $W.Coord.SemSucesso = 0
                 $W.Vigia.Proximo = (Get-Date).AddSeconds((Get-IntervaloVigia))
                 $W.Vigia.Ligado = $true
                 Write-Log ("Vigia ligado: observando " + $(if ($W.Vigia.Broadcast) { 'qualquer faixa (broadcast DHIP) e ' } else { '' }) + $p.IpFabrica +
@@ -1223,12 +1265,9 @@ $scriptWorker = {
                         $W.Vigia.Proximo = (Get-Date).AddSeconds((Get-IntervaloVigia))
                     }
                 }
-                if (@(@($coord.Estado.Cameras) | Where-Object { $_.Fase -eq 'espera' }).Count -gt 0) {
-                    $passo = Step-Admissao -Estado $coord.Estado
-                    $coord.Estado = $passo.Estado
-                    $coord.Sujo = $true
-                    foreach ($a in @($passo.Acoes)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
-                }
+                # Admissao: com camera em espera e o portao livre, pinga so as
+                # proximas posicoes pendentes (IP ja ocupado fica de fora).
+                foreach ($a in @(Invoke-AdmissaoCoordenador -Coord $coord)) { if ($null -ne $a) { $W.AcoesPendentes.Add($a) } }
                 if ($W.AcoesPendentes.Count -gt 0) {
                     $acoes = $W.AcoesPendentes.ToArray()
                     $W.AcoesPendentes.Clear()

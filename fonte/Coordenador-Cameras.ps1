@@ -14,7 +14,12 @@
       Soltar    param($Mac, $Ip)            -> { Ok; Erro }
       Despachar param($Acao, $Camera, $Geracao, $Coord)
                 (New-DepsPool liga ao pool: Start-DespachoCoordenador)
-      Pingar, Descobrir, Agora              (usadas pelo laço do servidor)
+      Pingar    param($Ips)                 -> IPs que responderam
+                (Get-IpsOcupadosAdmissao)
+      Descobrir param($Sessao)              -> leitura do tique { Achados;
+                DhipRespondeu; PingFabrica; MacArp; MacTrocando } (o laço do
+                servidor chama e passa ao Invoke-TiqueParalelo)
+      Agora                                 (reservada; ninguém chama ainda)
     Dependência ausente só é erro quando alguém a chama.
 
     COORDENADOR (New-Coordenador)
@@ -38,6 +43,13 @@
                       Detalhe }, enquanto o job corre
       Dhip            'ok' ou 'sem-resposta' (o vigia sem DHIP põe
                       'sem-resposta'; vai para paralelo.dhip)
+      MaxBase         o Max fora da reserva sem DHIP (o Max da criação: 0
+                      sem limite; 1 no real sem administrador)
+      MacTrocando     o último tique viu o MAC trocar no IP de fábrica (o
+                      aviso sai só na passagem para verdadeiro)
+      SemSucesso      tiques seguidos que viram câmera e não puderam agir
+                      por algo que só o operador resolve (Invoke-
+                      TiqueParalelo); o servidor desliga o vigia em 5
 
     EVENTOS (fila Eventos, enfileirados pelos jobs no pool)
       { Mac; Job; Tipo='log';       Texto; Cor; Quando }
@@ -83,6 +95,9 @@ function New-Coordenador {
         }
         Progresso       = @{}
         Dhip            = 'ok'
+        MaxBase         = $Max
+        MacTrocando     = $false
+        SemSucesso      = 0
     }
 }
 
@@ -244,6 +259,160 @@ function ConvertTo-AchadoParalelo {
         Mac = $mac; Serial = [string](Get-PropriedadeOuVazio $Item 'Serial' ''); Modelo = [string](Get-PropriedadeOuVazio $Item 'Modelo' '')
         Ip = [string](Get-PropriedadeOuVazio $Item 'Ip' ''); HttpPort = $porta; Init = $init; Marca = $marca.Trim()
     }
+}
+
+# ------------------------------------------------------------ vigia paralelo
+
+# Aviso da D9: sem resposta DHIP, uma câmera por vez.
+$script:TextoSemDhip = 'O broadcast não responde. Libere a porta UDP 37810 no firewall ou ligue uma câmera por vez.'
+
+# Câmeras em 'portao' + 'conferindo'.
+function Get-EmCursoCoordenador {
+    param([Parameter(Mandatory = $true)]$Estado)
+    return @(@($Estado.Cameras) | Where-Object { $null -ne $_ -and ($_.Fase -eq 'portao' -or $_.Fase -eq 'conferindo') }).Count
+}
+
+<#
+    Invoke-TiqueParalelo: um tique do vigia no modo paralelo. A leitura da
+    rede chega como dado (o servidor lê pelo Deps.Descobrir; aqui nada toca
+    rede nem disco):
+      Achados        achados DHIP do tique (ConvertTo-AchadoParalelo);
+      Registro       { Mac, Status, Etapa } lidos do registro;
+      DhipRespondeu  o broadcast DHIP trouxe algum aparelho;
+      PingFabrica    o IP de fábrica responde ao ping (o servidor só pinga
+                     sem DHIP);
+      MacArp         MAC do vizinho no IP de fábrica (idem);
+      MacTrocando    Test-MacTrocandoNoIp no IP de fábrica deu verdadeiro.
+    Em ordem:
+      1. Step-Descoberta, depois Step-JaInicializada;
+      2. DHIP vazio e IP de fábrica respondendo: Dhip 'sem-resposta', Max 1
+         (uma por vez, D9), o aviso da D9 na passagem para sem resposta, e o
+         MAC do ARP entra como achado com Init -1 (espera com ConferirInit:
+         o portão confere depois de prender);
+      3. DHIP de volta: Dhip 'ok' e Max = MaxBase. DHIP vazio sem ping não
+         diz nada: Dhip e Max ficam como estão;
+      4. MacTrocando: aviso "Duas câmeras respondem em <IP de fábrica>.", na
+         passagem de falso para verdadeiro;
+      5. SemSucesso: com câmera em curso volta a 0. Tique que viu câmera
+         (achado, ou o IP de fábrica respondendo sem DHIP) e está travado
+         por algo que só o operador resolve soma 1: câmera em espera com
+         motivo (sem posição livre), câmera sem reserva com a fila
+         encerrada, ou IP de fábrica respondendo sem DHIP e sem MAC no ARP.
+         Viu câmera e não está travado: volta a 0. Não viu nada: não muda.
+         Câmera em decisão não trava: o vigia não pausa por ela (D6).
+    O estado fica no Coord; as ações ('avisar') voltam para quem chama
+    executar. Devolve { Acoes; Novas (câmeras que entraram em espera) }.
+#>
+function Invoke-TiqueParalelo {
+    param(
+        [Parameter(Mandatory = $true)]$Coord,
+        $Achados = @(),
+        $Registro = @(),
+        [bool]$DhipRespondeu = $true,
+        [bool]$PingFabrica = $false,
+        [string]$MacArp = '',
+        [string]$IpFabrica = '',
+        [bool]$MacTrocando = $false
+    )
+
+    $acoes = @()
+    $antes = @($Coord.Estado.Cameras).Count
+    $emCurso = Get-EmCursoCoordenador -Estado $Coord.Estado
+
+    $lista = @(@($Achados) | Where-Object { $null -ne $_ })
+    $semDhip = (-not $DhipRespondeu -and $PingFabrica)
+    $semMac = $false
+    if ($semDhip) {
+        if ((Get-ChaveMac $MacArp) -ne '') { $lista += ConvertTo-AchadoParalelo @{ Mac = $MacArp; Ip = $IpFabrica; Init = -1 } }
+        else { $semMac = $true }
+    }
+
+    $passo = Step-Descoberta -Estado $Coord.Estado -Achados $lista
+    $Coord.Estado = $passo.Estado
+    $acoes += @($passo.Acoes)
+    $passo = Step-JaInicializada -Estado $Coord.Estado -Achados $lista -Registro $Registro
+    $Coord.Estado = $passo.Estado
+    $acoes += @($passo.Acoes)
+
+    if ($semDhip) {
+        if ([string]$Coord.Dhip -ne 'sem-resposta') { $acoes += @{ Tipo = 'avisar'; Mac = ''; Texto = $script:TextoSemDhip } }
+        $Coord.Dhip = 'sem-resposta'
+        $Coord.Estado.Max = 1
+    } elseif ($DhipRespondeu) {
+        $Coord.Dhip = 'ok'
+        $Coord.Estado.Max = [int]$Coord.MaxBase
+    }
+
+    if ($MacTrocando -and -not [bool]$Coord.MacTrocando) {
+        $acoes += @{ Tipo = 'avisar'; Mac = ''; Texto = ('Duas câmeras respondem em ' + $IpFabrica + '.') }
+    }
+    $Coord.MacTrocando = $MacTrocando
+
+    $viu = ($lista.Count -gt 0 -or $semDhip)
+    if ($emCurso -gt 0) { $Coord.SemSucesso = 0 }
+    elseif ($viu) {
+        $travado = $semMac
+        foreach ($c in @($Coord.Estado.Cameras)) {
+            if ($null -eq $c -or $c.Fase -ne 'espera') { continue }
+            if ([string]$c.Motivo -ne '') { $travado = $true }
+            elseif (-not [bool]$Coord.Estado.Admitindo -and $null -eq (Get-PosicaoReservada -Estado $Coord.Estado -Camera $c)) { $travado = $true }
+        }
+        if ($travado) { $Coord.SemSucesso = [int]$Coord.SemSucesso + 1 } else { $Coord.SemSucesso = 0 }
+    }
+
+    $Coord.Sujo = $true
+    return @{ Acoes = @($acoes | Where-Object { $null -ne $_ }); Novas = @(@($Coord.Estado.Cameras) | Select-Object -Skip $antes) }
+}
+
+<#
+    IPs ocupados para a Step-Admissao: pinga (Deps.Pingar) as próximas
+    posições pendentes só quando uma câmera nova (sem posição reservada)
+    espera, o portão está livre, há vaga no Max e a fila admite; fora disso
+    nenhum ping. Pinga em lotes de -Lote IPs, na ordem da fila, até um lote
+    ter um IP que não respondeu (é nele que a câmera entra). Devolve os IPs
+    que responderam.
+#>
+function Get-IpsOcupadosAdmissao {
+    param([Parameter(Mandatory = $true)]$Coord, [int]$Lote = 3)
+
+    $e = $Coord.Estado
+    if (-not [string]::IsNullOrEmpty([string]$e.Portao) -or -not [bool]$e.Admitindo) { return @() }
+    if ([int]$e.Max -gt 0 -and (Get-EmCursoCoordenador -Estado $e) -ge [int]$e.Max) { return @() }
+    $nova = $false
+    foreach ($c in @($e.Cameras)) {
+        if ($null -ne $c -and $c.Fase -eq 'espera' -and $null -eq (Get-PosicaoReservada -Estado $e -Camera $c)) { $nova = $true; break }
+    }
+    if (-not $nova) { return @() }
+
+    $pendentes = @(@($e.Posicoes) | Where-Object { $null -ne $_ -and $_.Estado -eq 'pendente' } | ForEach-Object { [string]$_.Ip })
+    if ($pendentes.Count -eq 0) { return @() }
+    if ($Lote -lt 1) { $Lote = 1 }
+    $sb = Get-DepCoordenador -Coord $Coord -Nome 'Pingar'
+    $ocupados = @()
+    for ($i = 0; $i -lt $pendentes.Count; $i += $Lote) {
+        $bloco = @($pendentes[$i..([Math]::Min($i + $Lote, $pendentes.Count) - 1)])
+        $vivos = @(@(& $sb -Ips $bloco) | Where-Object { $null -ne $_ } | ForEach-Object { ([string]$_).Trim() })
+        $responderam = @($bloco | Where-Object { $vivos -contains $_ })
+        $ocupados += $responderam
+        if ($responderam.Count -lt $bloco.Count) { break }
+    }
+    return $ocupados
+}
+
+<#
+    Admissão das câmeras em espera: IPs ocupados (Get-IpsOcupadosAdmissao) e
+    Step-Admissao. O estado fica no Coord e as ações voltam para quem chama
+    executar. Sem câmera em espera, nada (nem ping).
+#>
+function Invoke-AdmissaoCoordenador {
+    param([Parameter(Mandatory = $true)]$Coord)
+
+    if (@(@($Coord.Estado.Cameras) | Where-Object { $null -ne $_ -and $_.Fase -eq 'espera' }).Count -eq 0) { return @() }
+    $ocupados = @(Get-IpsOcupadosAdmissao -Coord $Coord)
+    $passo = Step-Admissao -Estado $Coord.Estado -IpsOcupados $ocupados
+    $Coord.Estado = $passo.Estado
+    $Coord.Sujo = $true
+    return @($passo.Acoes)
 }
 
 # ------------------------------------------------------------- deps da placa

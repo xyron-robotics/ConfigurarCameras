@@ -18,7 +18,12 @@
         numa pasta temporaria (3 cameras ate 'feita', no maximo 1 MAC preso,
         conferencias sobrepostas, senha fora dos eventos, job que estoura);
       - estado publicado (contrato da F6): formato com 2 cameras pelo JSON
-        e a tabela de derivacao dos campos legados.
+        e a tabela de derivacao dos campos legados;
+      - vigia paralelo: reserva sem DHIP (Max 1, aviso, achado do ARP com
+        ConferirInit) e volta do DHIP, aviso de MAC trocando no IP de
+        fabrica, inicializada desconhecida sem prender/despachar, decisao
+        que nao segura a seguinte, ping das posicoes so na hora de admitir
+        e SemSucesso parado com camera em curso.
 
     Valores ficticios: MAC AA:00:00:00:00:0x, serial SIM-x, IPs de
     documentacao (192.0.2.x) e a faixa de fabrica 192.168.1.108.
@@ -916,6 +921,162 @@ foreach ($script:caso in $script:casosLegado) {
             Assert-Verdade ($null -eq $j.camera) 'sem camera legada'
         }
     }
+}
+
+# ------------------------------------------------------------ vigia paralelo
+
+Write-Host ""
+Write-Host "Vigia paralelo" -ForegroundColor Cyan
+
+$script:ipFabrica = '192.168.1.108'
+$script:TextoDuas = ('Duas c' + [char]0x00E2 + 'meras respondem em ')
+$script:TextoInicializada = ('C' + [char]0x00E2 + 'mera j' + [char]0x00E1 + ' inicializada: n' + [char]0x00E3 + 'o tocada.')
+$script:TextoIpOcupado = ('IP j' + [char]0x00E1 + ' responde na rede')
+$script:TextoSemPosicao = ('sem posi' + [char]0x00E7 + [char]0x00E3 + 'o livre')
+
+# Um tique do vigia com a leitura de rede dada; as acoes do tique e as da
+# admissao seguinte sao executadas pelas Deps falsas. Devolve o retorno do
+# tique mais Todas (as acoes do tique e da admissao, juntas).
+function Invoke-TiqueTeste {
+    param($Coord, $Achados = @(), $Registro = @(), [bool]$Dhip = $true, [bool]$Ping = $false, [string]$MacArp = '', [bool]$Trocando = $false)
+    $r = Invoke-TiqueParalelo -Coord $Coord -Achados $Achados -Registro $Registro -DhipRespondeu $Dhip -PingFabrica $Ping `
+                              -MacArp $MacArp -IpFabrica $script:ipFabrica -MacTrocando $Trocando
+    $todas = @($r.Acoes)
+    Invoke-AcoesCoordenador -Coord $Coord -Acoes $r.Acoes
+    $adm = @(Invoke-AdmissaoCoordenador -Coord $Coord)
+    $todas += $adm
+    Invoke-AcoesCoordenador -Coord $Coord -Acoes $adm
+    $r.Todas = $todas
+    return $r
+}
+
+function Get-Avisos {
+    param($Acoes)
+    return @(@($Acoes) | Where-Object { $null -ne $_ -and $_.Tipo -eq 'avisar' } | ForEach-Object { [string]$_.Texto })
+}
+
+T 'sem DHIP e IP de fabrica respondendo: Max 1, aviso da D9 e achado do ARP com ConferirInit' {
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 3) -Deps (New-DepsFalsas)
+    $r = Invoke-TiqueParalelo -Coord $coord -Achados @() -DhipRespondeu $false -PingFabrica $true -MacArp 'AA0000000003' -IpFabrica $script:ipFabrica
+    Assert-Igual 1 $coord.Estado.Max 'Max uma por vez'
+    Assert-Igual 'sem-resposta' $coord.Dhip 'dhip'
+    Assert-Igual 'sem-resposta' (ConvertTo-EstadoPublicadoParalelo -Coord $coord).paralelo.dhip 'dhip publicado'
+    $avisos = @(Get-Avisos $r.Acoes)
+    Assert-Igual 1 $avisos.Count 'um aviso'
+    Assert-Verdade ($avisos[0] -like '*UDP 37810*') ('aviso da D9: ' + $avisos[0])
+    $c = Get-Camera $coord.Estado 3
+    Assert-Verdade ($null -ne $c) 'achado do ARP entrou'
+    Assert-Igual 'espera' $c.Fase 'em espera'
+    Assert-Verdade $c.ConferirInit 'ConferirInit: o portao confere'
+    Assert-Igual $script:ipFabrica $c.IpOrigem 'no IP de fabrica'
+    Assert-Igual 1 @($r.Novas).Count 'uma nova'
+
+    $r = Invoke-TiqueParalelo -Coord $coord -Achados @() -DhipRespondeu $false -PingFabrica $true -MacArp 'AA0000000003' -IpFabrica $script:ipFabrica
+    Assert-Igual 0 @(Get-Avisos $r.Acoes).Count 'aviso so na passagem para sem resposta'
+    Assert-Igual 1 @($coord.Estado.Cameras).Count 'mesmo MAC nao entra de novo'
+
+    $null = Invoke-TiqueParalelo -Coord $coord -Achados @(New-AchadoTeste 1) -DhipRespondeu $true -IpFabrica $script:ipFabrica
+    Assert-Igual 0 $coord.Estado.Max 'DHIP de volta: sem limite'
+    Assert-Igual 'ok' $coord.Dhip 'dhip ok'
+}
+
+T 'sem DHIP e sem ping: nada muda; sem administrador o DHIP de volta mantem Max 1' {
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 3) -Deps (New-DepsFalsas)
+    $r = Invoke-TiqueParalelo -Coord $coord -Achados @() -DhipRespondeu $false -PingFabrica $false -IpFabrica $script:ipFabrica
+    Assert-Igual 0 $coord.Estado.Max 'Max'
+    Assert-Igual 'ok' $coord.Dhip 'dhip'
+    Assert-Igual 0 @($r.Acoes).Count 'sem acoes'
+
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 3) -Max 1 -Deps (New-DepsFalsas)
+    $null = Invoke-TiqueParalelo -Coord $coord -DhipRespondeu $false -PingFabrica $true -MacArp 'AA0000000003' -IpFabrica $script:ipFabrica
+    $null = Invoke-TiqueParalelo -Coord $coord -Achados @(New-AchadoTeste 1) -DhipRespondeu $true -IpFabrica $script:ipFabrica
+    Assert-Igual 1 $coord.Estado.Max 'Max base 1 (sem administrador) fica'
+}
+
+T 'MAC trocando no IP de fabrica: aviso "Duas cameras respondem em", uma vez por passagem' {
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 3) -Deps (New-DepsFalsas)
+    $r = Invoke-TiqueParalelo -Coord $coord -DhipRespondeu $false -PingFabrica $true -MacArp 'AA0000000003' -IpFabrica $script:ipFabrica -MacTrocando $true
+    $avisos = @(Get-Avisos $r.Acoes)
+    Assert-Verdade ($avisos -contains ($script:TextoDuas + $script:ipFabrica + '.')) ('aviso: ' + ($avisos -join ' | '))
+    $r = Invoke-TiqueParalelo -Coord $coord -DhipRespondeu $false -PingFabrica $true -MacArp 'AA0000000003' -IpFabrica $script:ipFabrica -MacTrocando $true
+    Assert-Igual 0 @(Get-Avisos $r.Acoes).Count 'sem repetir'
+    $null = Invoke-TiqueParalelo -Coord $coord -DhipRespondeu $false -PingFabrica $true -MacArp 'AA0000000003' -IpFabrica $script:ipFabrica -MacTrocando $false
+    $r = Invoke-TiqueParalelo -Coord $coord -DhipRespondeu $false -PingFabrica $true -MacArp 'AA0000000003' -IpFabrica $script:ipFabrica -MacTrocando $true
+    Assert-Igual 1 @(Get-Avisos $r.Acoes).Count 'volta a avisar depois de parar'
+}
+
+T 'camera em decisao nao impede a admissao da seguinte' {
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 3) -Deps (New-DepsFalsas)
+    $null = Invoke-TiqueTeste $coord -Achados @((New-AchadoTeste 1), (New-AchadoTeste 2))
+    Assert-Igual 'portao' (Get-Camera $coord.Estado 1).Fase 'camera 1 no portao'
+    Invoke-PassoTeste $coord (Step-FimDoJob -Estado $coord.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $false; Etapa = ''; Falhou = 'inicializada'; Erro = 'sem resposta' })
+    Assert-Igual 'decisao' (Get-Camera $coord.Estado 1).Fase 'camera 1 em decisao'
+    $script:chamadas = @()
+    $null = Invoke-TiqueTeste $coord -Achados @((New-AchadoTeste 1), (New-AchadoTeste 2))
+    Assert-Igual 'portao' (Get-Camera $coord.Estado 2).Fase 'camera 2 entrou no portao'
+    Assert-Igual 2 (Get-Camera $coord.Estado 2).Indice 'camera 2 na posicao 2'
+    Assert-Igual 'prender AA:00:00:00:00:02 192.168.1.108|despachar AA:00:00:00:00:02 rede 2 192.0.2.12' ($script:chamadas -join '|') 'acoes da camera 2'
+    Assert-Igual 'decisao' (Get-Camera $coord.Estado 1).Fase 'camera 1 continua em decisao'
+}
+
+T 'inicializada desconhecida: aviso unico e nenhuma prender/despachar' {
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 3) -Deps (New-DepsFalsas)
+    $ini = New-AchadoTeste 4
+    $ini.Init = 0
+    $todas = @()
+    for ($i = 0; $i -lt 3; $i++) { $todas += @((Invoke-TiqueTeste $coord -Achados @($ini)).Todas) }
+    Assert-Igual 'avisar' ((@($todas | ForEach-Object { [string]$_.Tipo }) | Sort-Object -Unique) -join ',') 'so avisar em todas as acoes'
+    Assert-Igual 1 @($todas).Count 'um aviso em tres tiques'
+    Assert-Igual $script:TextoInicializada ([string]@($todas)[0].Texto) 'texto'
+    Assert-Igual 0 @($script:chamadas).Count 'nenhuma chamada as Deps'
+    Assert-Igual 0 @($coord.Estado.Cameras).Count 'nao entrou no estado'
+}
+
+T 'ping das posicoes: so com camera nova esperando e portao livre; IP ocupado pula' {
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 3) -Deps (New-DepsFalsas)
+    $script:pings = @()
+    $coord.Deps.Pingar = { param($Ips) $script:pings += ($Ips -join ','); return @($Ips | Where-Object { $_ -eq '192.0.2.11' }) }
+    Assert-Igual 0 @(Invoke-AdmissaoCoordenador -Coord $coord).Count 'sem camera, sem acao'
+    Assert-Igual 0 $script:pings.Count 'sem camera, sem ping'
+
+    $null = Invoke-TiqueTeste $coord -Achados @((New-AchadoTeste 1), (New-AchadoTeste 2))
+    Assert-Igual '192.0.2.11,192.0.2.12,192.0.2.13' ($script:pings -join '|') 'um lote com as pendentes'
+    Assert-Igual 2 (Get-Camera $coord.Estado 1).Indice 'camera 1 na posicao 2'
+    Assert-Igual 'pulada' @($coord.Estado.Posicoes)[0].Estado 'posicao 1 pulada'
+    Assert-Igual $script:TextoIpOcupado @($coord.Estado.Posicoes)[0].Motivo 'motivo'
+
+    $script:pings = @()
+    $null = Invoke-TiqueTeste $coord -Achados @((New-AchadoTeste 1), (New-AchadoTeste 2))
+    Assert-Igual 0 $script:pings.Count 'portao ocupado: sem ping'
+}
+
+T 'SemSucesso nao sobe com camera em curso; sobe com camera sem posicao livre' {
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 1) -Deps (New-DepsFalsas)
+    $dois = @((New-AchadoTeste 1), (New-AchadoTeste 2))
+    $null = Invoke-TiqueTeste $coord -Achados $dois
+    Invoke-PassoTeste $coord (Step-FimDoJob -Estado $coord.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $true; Etapa = 'rede' })
+    $null = Invoke-AdmissaoCoordenador -Coord $coord
+    Assert-Igual 'conferindo' (Get-Camera $coord.Estado 1).Fase 'camera 1 em curso'
+    Assert-Igual $script:TextoSemPosicao (Get-Camera $coord.Estado 2).Motivo 'camera 2 sem posicao'
+    for ($i = 0; $i -lt 3; $i++) { $null = Invoke-TiqueTeste $coord -Achados $dois }
+    Assert-Igual 0 $coord.SemSucesso 'com camera em curso'
+
+    Invoke-PassoTeste $coord (Step-FimDoJob -Estado $coord.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $true; Etapa = 'conferencia' })
+    $null = Invoke-TiqueTeste $coord -Achados $dois
+    $null = Invoke-TiqueTeste $coord -Achados $dois
+    Assert-Igual 2 $coord.SemSucesso 'sem camera em curso, camera 2 travada'
+    $null = Invoke-TiqueTeste $coord -Achados @()
+    Assert-Igual 2 $coord.SemSucesso 'tique sem ver camera nao muda'
+}
+
+T 'SemSucesso: camera em decisao nao conta; sem DHIP e sem MAC no ARP conta' {
+    $coord = New-Coordenador -Posicoes (New-PosicoesTeste 3) -Deps (New-DepsFalsas)
+    $null = Invoke-TiqueTeste $coord -Achados @(New-AchadoTeste 1)
+    Invoke-PassoTeste $coord (Step-FimDoJob -Estado $coord.Estado -Mac 'AA:00:00:00:00:01' -Resultado @{ Ok = $false; Etapa = ''; Falhou = 'inicializada'; Erro = 'x' })
+    $null = Invoke-TiqueTeste $coord -Achados @(New-AchadoTeste 1)
+    Assert-Igual 0 $coord.SemSucesso 'decisao nao conta'
+    $null = Invoke-TiqueTeste $coord -Dhip $false -Ping $true -MacArp ''
+    Assert-Igual 1 $coord.SemSucesso 'IP de fabrica responde sem DHIP e sem MAC'
 }
 
 # ------------------------------------------------------------------- resultado
