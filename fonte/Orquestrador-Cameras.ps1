@@ -17,12 +17,15 @@
     ESTADO (plano docs/plans/2026-11-17-frente-orquestrador-plan.md)
       Cameras    câmeras por MAC, na ordem do primeiro aparecimento no DHIP:
                  { Mac, Serial, Modelo, IpOrigem, HttpPort, Indice,
-                   Fase: espera|portao|conferindo|decisao|feita|pulada,
-                   Etapa, Falha, GeracaoLogin, Motivo, ConferirInit }
+                   Fase: espera|portao|conferindo|decisao|feita|pulada|ignorada,
+                   Etapa, Falha, GeracaoLogin, Motivo, ConferirInit, Retomar }
                  Indice é o número da posição (0 = ainda sem posição);
                  Motivo diz por que a câmera continua em espera;
                  ConferirInit = o DHIP não trouxe o Init (o portão confere
-                 depois de prender)
+                 depois de prender); 'ignorada' = o portão achou a câmera
+                 já inicializada e não tocou nela;
+                 Retomar = 'conferencia' quando o "Tentar de novo" volta
+                 direto à conferência (rede já gravada), '' no resto
       Posicoes   cópia da fila ({ Posicao, Ip, Estado, Motivo, Mac }, o
                  formato de New-FilaDeFaixa). Além dos estados da fila,
                  'reservada' = presa a uma câmera em curso (Mac preenchido)
@@ -72,7 +75,7 @@ function Get-Resumo {
     param([Parameter(Mandatory = $true)]$Estado)
 
     $fases = [ordered]@{}
-    foreach ($f in @('espera', 'portao', 'conferindo', 'decisao', 'feita', 'pulada')) { $fases[$f] = 0 }
+    foreach ($f in @('espera', 'portao', 'conferindo', 'decisao', 'feita', 'pulada', 'ignorada')) { $fases[$f] = 0 }
 
     $total = 0
     foreach ($c in @($Estado.Cameras)) {
@@ -146,7 +149,7 @@ function New-CameraDoAchado {
         Mac = [string]$Achado.Mac; Serial = [string]$Achado.Serial; Modelo = [string]$Achado.Modelo
         IpOrigem = [string]$Achado.Ip; HttpPort = $porta; Indice = 0
         Fase = 'espera'; Etapa = ''; Falha = $null; GeracaoLogin = 0; Motivo = ''
-        ConferirInit = $ConferirInit
+        ConferirInit = $ConferirInit; Retomar = ''
     }
 }
 
@@ -311,24 +314,44 @@ function Step-JaInicializada {
 }
 
 <#
-    Step-Admissao: a primeira câmera em espera (ordem de chegada) entra no
-    portão quando tudo abaixo vale ao mesmo tempo:
-      - portão livre (1 vaga sempre, D2);
-      - Admitindo (depois de "encerrar" ninguém entra);
-      - vaga: Max 0 = sem limite; senão, câmeras em 'portao' + 'conferindo'
-        abaixo de Max (decisão não ocupa vaga, D6);
-      - posição livre: a primeira posição 'pendente' da fila (D10). Câmera
-        que volta do "Tentar de novo" já tem Indice e a posição reservada
-        com o MAC dela: reentra nessa mesma posição.
+    Posição reservada com o MAC da câmera (a do "Tentar de novo"), ou $null.
+#>
+function Get-PosicaoReservada {
+    param([Parameter(Mandatory = $true)]$Estado, [Parameter(Mandatory = $true)]$Camera)
+
+    if ([int]$Camera.Indice -le 0) { return $null }
+    $chave = Get-ChaveMac $Camera.Mac
+    foreach ($p in @($Estado.Posicoes)) {
+        if ([int]$p.Posicao -eq [int]$Camera.Indice -and $p.Estado -eq 'reservada' -and (Get-ChaveMac $p.Mac) -eq $chave) { return $p }
+    }
+    return $null
+}
+
+<#
+    Step-Admissao: percorre as câmeras em espera na ordem de chegada (R4).
+      - Vaga: Max 0 = sem limite; senão, câmeras em 'portao' + 'conferindo'
+        abaixo de Max (decisão não ocupa vaga, D6). Vale para as duas
+        entradas abaixo, na ordem da espera.
+      - Retomada pela conferência (Retomar = 'conferencia': "Tentar de novo"
+        com a rede já gravada, R1) com a posição reservada: 'despachar' com
+        AteEtapa vazio, Posicao e Destino, fase 'conferindo', sem 'prender'
+        e sem ocupar o portão. Pode sair mais de uma por chamada.
+      - As outras disputam o portão (1 vaga, D2): entra a primeira que pode.
+        Câmera com a posição reservada (volta do "Tentar de novo") reentra
+        nela, sem conferir IpsOcupados (o IP pode ser dela mesma). Câmera
+        sem reserva pega a primeira posição 'pendente' da fila (D10).
+      - Admitindo $false ("encerrar a fila") barra só câmera sem reserva: a
+        nova tentativa é do operador.
     IpsOcupados (dado de entrada: o servidor pinga, o orquestrador não toca
     a rede) pula a posição como Invoke-Conectada faz hoje: 'pulada', motivo
     "IP já responde na rede", e tenta a seguinte. Só pula quando há câmera
-    para admitir. Sem posição livre, todas as câmeras em espera ficam com o
-    motivo "sem posição livre" e nada sai.
-    Na entrada: Indice = número da posição, fase 'portao', Portao = MAC,
-    posição 'reservada' com o MAC, e as ações 'prender' (MAC no IP de origem)
-    e 'despachar' com AteEtapa 'rede', Posicao e Destino. Admite no máximo
-    uma por chamada, porque o portão tem uma vaga.
+    para admitir. Câmera sem reserva e sem posição livre fica com o motivo
+    "sem posição livre", e a busca segue: uma de trás com reserva ainda
+    entra. Portão ocupado ou Max cheio não dá motivo: a câmera só aguarda.
+    Na entrada do portão: Indice = número da posição, fase 'portao', Portao
+    = MAC, posição 'reservada' com o MAC, e as ações 'prender' (MAC no IP de
+    origem) e 'despachar' com AteEtapa 'rede', Posicao e Destino. No máximo
+    uma por chamada entra no portão.
 #>
 function Step-Admissao {
     param(
@@ -338,64 +361,73 @@ function Step-Admissao {
 
     $novo = Copy-EstadoParalelo -Estado $Estado
     $acoes = @()
-    $nada = @{ Estado = $novo; Acoes = $acoes }
-
-    if ($null -ne $novo.Portao -or -not $novo.Admitindo) { return $nada }
 
     $cameras = @($novo.Cameras)
-    if ($novo.Max -gt 0) {
-        $emCurso = @($cameras | Where-Object { $_.Fase -eq 'portao' -or $_.Fase -eq 'conferindo' }).Count
-        if ($emCurso -ge $novo.Max) { return $nada }
-    }
-
-    $camera = $null
-    foreach ($c in $cameras) { if ($c.Fase -eq 'espera') { $camera = $c; break } }
-    if ($null -eq $camera) { return $nada }
+    $emCurso = @($cameras | Where-Object { $_.Fase -eq 'portao' -or $_.Fase -eq 'conferindo' }).Count
+    $portaoLivre = ($null -eq $novo.Portao)
+    $semPosicaoLivre = $false
 
     $ocupados = @{}
     foreach ($ip in @($IpsOcupados)) { if ($null -ne $ip) { $ocupados[([string]$ip).Trim()] = $true } }
 
-    # "Tentar de novo" (Step-Decisao) guarda a posição reservada: a câmera
-    # volta para ela, sem conferir IpsOcupados (o IP pode ser dela mesma).
-    $posicao = $null
-    if ([int]$camera.Indice -gt 0) {
-        $chaveCamera = Get-ChaveMac $camera.Mac
-        foreach ($p in @($novo.Posicoes)) {
-            if ([int]$p.Posicao -eq [int]$camera.Indice -and $p.Estado -eq 'reservada' -and (Get-ChaveMac $p.Mac) -eq $chaveCamera) {
-                $posicao = $p
-                break
-            }
-        }
-    }
+    foreach ($camera in $cameras) {
+        if ($camera.Fase -ne 'espera') { continue }
+        $temVaga = ($novo.Max -le 0 -or $emCurso -lt $novo.Max)
+        $reserva = Get-PosicaoReservada -Estado $novo -Camera $camera
 
-    foreach ($p in @($novo.Posicoes)) {
-        if ($null -ne $posicao) { break }
-        if ($p.Estado -ne 'pendente') { continue }
-        if ($ocupados.ContainsKey([string]$p.Ip)) {
-            $p.Estado = 'pulada'
-            $p.Motivo = 'IP já responde na rede'
+        # R1: rede já gravada, direto para a conferência, fora do portão.
+        if ([string]$camera.Retomar -eq 'conferencia' -and $null -ne $reserva) {
+            if (-not $temVaga) { continue }
+            $camera.Fase = 'conferindo'
+            $camera.Retomar = ''
+            $camera.Motivo = ''
+            $emCurso++
+            $acoes += @{
+                Tipo = 'despachar'; Mac = [string]$camera.Mac; AteEtapa = ''
+                Posicao = [int]$reserva.Posicao; Destino = [string]$reserva.Ip
+            }
             continue
         }
-        $posicao = $p
-        break
-    }
 
-    if ($null -eq $posicao) {
-        foreach ($c in $cameras) { if ($c.Fase -eq 'espera') { $c.Motivo = 'sem posição livre' } }
-        return $nada
-    }
+        if (-not $portaoLivre -or -not $temVaga) { continue }
 
-    $posicao.Estado = 'reservada'
-    $posicao.Mac = [string]$camera.Mac
-    $camera.Indice = [int]$posicao.Posicao
-    $camera.Fase = 'portao'
-    $camera.Motivo = ''
-    $novo.Portao = [string]$camera.Mac
+        $posicao = $reserva
+        if ($null -eq $posicao) {
+            if (-not $novo.Admitindo) { continue }
+            if (-not $semPosicaoLivre) {
+                foreach ($p in @($novo.Posicoes)) {
+                    if ($p.Estado -ne 'pendente') { continue }
+                    if ($ocupados.ContainsKey([string]$p.Ip)) {
+                        $p.Estado = 'pulada'
+                        $p.Motivo = 'IP já responde na rede'
+                        continue
+                    }
+                    $posicao = $p
+                    break
+                }
+            }
+            if ($null -eq $posicao) {
+                $semPosicaoLivre = $true
+                $camera.Motivo = 'sem posição livre'
+                continue
+            }
+        }
 
-    $acoes += @{ Tipo = 'prender'; Mac = [string]$camera.Mac; Ip = [string]$camera.IpOrigem }
-    $acoes += @{
-        Tipo = 'despachar'; Mac = [string]$camera.Mac; AteEtapa = 'rede'
-        Posicao = [int]$posicao.Posicao; Destino = [string]$posicao.Ip
+        $posicao.Estado = 'reservada'
+        $posicao.Mac = [string]$camera.Mac
+        $camera.Indice = [int]$posicao.Posicao
+        $camera.Fase = 'portao'
+        $camera.Retomar = ''
+        $camera.Motivo = ''
+        $novo.Portao = [string]$camera.Mac
+        $portaoLivre = $false
+        $emCurso++
+
+        $acoes += @{ Tipo = 'prender'; Mac = [string]$camera.Mac; Ip = [string]$camera.IpOrigem }
+        $acoes += @{
+            Tipo = 'despachar'; Mac = [string]$camera.Mac; AteEtapa = 'rede'
+            Posicao = [int]$posicao.Posicao; Destino = [string]$posicao.Ip
+        }
     }
 
     return @{ Estado = $novo; Acoes = $acoes }
@@ -416,11 +448,17 @@ function Step-Admissao {
         recusado, bloqueada e geração; login recusado grava a geração em
         GeracaoLogin, para o "Tentar de novo" não repetir a mesma senha.
         A posição continua reservada para o cartão de decisão;
-      - MacTrocado (D7): 'soltar' se estava no portão; a câmera escolhida
-        volta para espera sem posição nem falha, a posição volta a
-        'pendente' e não há decisão. O MAC lido volta para espera se já é
-        conhecido e está em espera (fica no lugar dele da fila). MAC lido
-        desconhecido não entra: só o DHIP diz se ele é de fábrica (D8).
+      - MacTrocado no portão (D7): 'soltar'; a câmera escolhida volta para
+        espera sem posição nem falha, a posição volta a 'pendente' e não há
+        decisão. O MAC lido volta para espera se já é conhecido e está em
+        espera (fica no lugar dele da fila). MAC lido desconhecido não
+        entra: só o DHIP diz se ele é de fábrica (D8). MacTrocado na
+        conferência segue o ramo de falha (R7): a rede já foi gravada, e
+        liberar a posição causaria conflito de IP;
+      - NaoDeFabrica no portão (R8: o job conferiu o Init da câmera presa,
+        ConferirInit, e ela já estava inicializada): 'soltar', fase
+        'ignorada', Indice 0, a posição volta a 'pendente' e 'avisar'
+        "Câmera já inicializada: não tocada.", uma vez por MAC (Avisados).
     Evento de MAC desconhecido ou de câmera fora de 'portao'/'conferindo'
     (job atrasado) não muda nada. Admitindo nunca muda aqui.
 #>
@@ -457,12 +495,32 @@ function Step-FimDoJob {
         if ((Get-ChaveMac $novo.Portao) -eq $chave) { $novo.Portao = $null }
     }
 
-    if ([bool]$Resultado.MacTrocado) {
+    if ($estavaNoPortao -and [bool]$Resultado.NaoDeFabrica -and -not [bool]$Resultado.MacTrocado) {
+        $camera.Fase = 'ignorada'
+        $camera.Indice = 0
+        $camera.Etapa = ''
+        $camera.Falha = $null
+        $camera.Motivo = ''
+        $camera.Retomar = ''
+        if ($null -ne $posicao) {
+            $posicao.Estado = 'pendente'
+            $posicao.Mac = ''
+            $posicao.Motivo = ''
+        }
+        if (-not $novo.Avisados.ContainsKey($chave)) {
+            $novo.Avisados[$chave] = 'inicializada'
+            $acoes += @{ Tipo = 'avisar'; Mac = [string]$camera.Mac; Texto = 'Câmera já inicializada: não tocada.' }
+        }
+        return @{ Estado = $novo; Acoes = $acoes }
+    }
+
+    if ($estavaNoPortao -and [bool]$Resultado.MacTrocado) {
         $camera.Fase = 'espera'
         $camera.Indice = 0
         $camera.Etapa = ''
         $camera.Falha = $null
         $camera.Motivo = ''
+        $camera.Retomar = ''
         if ($null -ne $posicao) {
             $posicao.Estado = 'pendente'
             $posicao.Mac = ''
@@ -518,14 +576,17 @@ $script:TextoBloqueada = 'A câmera bloqueou o admin por senhas erradas. Espere 
       - tentar: a câmera volta para espera com a mesma posição (Indice e a
         posição reservada ficam; Falha, Etapa e Motivo são limpos;
         GeracaoLogin fica). A admissão a põe de volta no portão nessa
-        posição, na ordem de chegada. Recusado, com 'avisar' e o estado
+        posição, na ordem de chegada. Se a última etapa feita é 'rede'
+        (rede já gravada), Retomar = 'conferencia': a admissão despacha
+        direto a conferência, sem portão (R1). Recusado, com 'avisar' e o estado
         intacto, se a falha foi login recusado e GeracaoLogin é a geração
         atual: a guarda de lockout vale por cartão, não para a fila;
       - pular: câmera e posição 'pulada' (motivo com a etapa e o erro da
         falha); a câmera sai e o DHIP não a traz de volta;
-      - encerrar: Admitindo = $false. Não precisa de Mac: quem está no
-        portão ou conferindo termina, e as câmeras em decisão ou em espera
-        ficam como estão.
+      - encerrar (a fila, não o painel): Admitindo = $false. Não precisa
+        de Mac: quem está no portão ou conferindo termina, e as câmeras em
+        decisão ou em espera ficam como estão. Câmera nova não entra mais;
+        o "Tentar de novo" de uma câmera com reserva ainda entra (R4).
     tentar e pular só valem para câmera em 'decisao'; MAC desconhecido ou
     câmera em outra fase não muda nada. Nenhum ramo gera 'prender' nem
     'despachar': quem despacha é a admissão.
@@ -567,6 +628,8 @@ function Step-Decisao {
             $acoes += @{ Tipo = 'avisar'; Mac = [string]$camera.Mac; Texto = $texto }
             return @{ Estado = $novo; Acoes = $acoes }
         }
+        $camera.Retomar = ''
+        if ([string]$camera.Etapa -eq 'rede') { $camera.Retomar = 'conferencia' }
         $camera.Fase = 'espera'
         $camera.Falha = $null
         $camera.Etapa = ''
@@ -593,16 +656,42 @@ $script:ComandosGuardados = [ordered]@{
     'trocar-senha'    = 'trocar a senha'
     'restaurar-placa' = 'restaurar a placa de rede'
     'atualizar'       = 'atualizar o painel'
+    'preparar-placa'  = 'preparar a placa de rede'
+    'ferramenta'      = 'usar as ferramentas'
+    'retomar'         = 'retomar uma câmera pelo IP'
+    'refazer-sessao'  = 'refazer a sessão'
+    'encerrar-painel' = 'encerrar o painel'
+}
+
+<#
+    Texto da recusa de um comando guardado com EmCurso câmeras em 'portao'
+    ou 'conferindo'. Função pura: o Step-Comando e o listener do servidor
+    (que recusa com 409 antes de chegar ao worker) usam o mesmo texto.
+    Comando fora dos guardados ou EmCurso abaixo de 1 é erro de programação.
+#>
+function Get-TextoRecusaComando {
+    param([Parameter(Mandatory = $true)][string]$Comando, [Parameter(Mandatory = $true)][int]$EmCurso)
+
+    if (-not $script:ComandosGuardados.Contains($Comando)) { throw ('Comando sem guarda: ' + $Comando + '.') }
+    if ($EmCurso -lt 1) { throw ('Sem câmera em curso não há recusa (EmCurso ' + $EmCurso + ').') }
+
+    if ($EmCurso -eq 1) {
+        $texto = 'Há 1 câmera em configuração (portão ou conferência). Espere a câmera terminar para '
+    } else {
+        $texto = 'Há ' + $EmCurso + ' câmeras em configuração (portão ou conferência). Espere as câmeras terminarem para '
+    }
+    return ($texto + $script:ComandosGuardados[$Comando] + '.')
 }
 
 <#
     Step-Comando: guardas globais. O servidor pergunta antes de executar um
     comando do painel; o orquestrador só decide, quem executa (ou repassa a
     recusa) é a F4.
-      - nova-fila, simular, salvar-sessao, trocar-senha, restaurar-placa e
-        atualizar: recusados enquanto houver câmera em 'portao' ou
-        'conferindo', com 'avisar' de Mac vazio (é global) e o texto em
-        pt-BR que conta as câmeras em curso;
+      - nova-fila, simular, salvar-sessao, trocar-senha, restaurar-placa,
+        atualizar, preparar-placa, ferramenta, retomar, refazer-sessao e
+        encerrar-painel: recusados enquanto houver câmera em 'portao' ou
+        'conferindo', com 'avisar' de Mac vazio (é global) e o texto de
+        Get-TextoRecusaComando, que conta as câmeras em curso;
       - decisao (por MAC, inclusive encerrar), vigia e camera (porta/canal
         por cartão) passam em qualquer estado.
     Espera, decisão, feita e pulada não seguram comando: nenhuma delas está
@@ -613,7 +702,8 @@ function Step-Comando {
     param(
         [Parameter(Mandatory = $true)]$Estado,
         [Parameter(Mandatory = $true)]
-        [ValidateSet('nova-fila', 'simular', 'salvar-sessao', 'trocar-senha', 'restaurar-placa', 'atualizar', 'decisao', 'vigia', 'camera')]
+        [ValidateSet('nova-fila', 'simular', 'salvar-sessao', 'trocar-senha', 'restaurar-placa', 'atualizar',
+            'preparar-placa', 'ferramenta', 'retomar', 'refazer-sessao', 'encerrar-painel', 'decisao', 'vigia', 'camera')]
         [string]$Comando
     )
 
@@ -625,16 +715,9 @@ function Step-Comando {
     $emCurso = @(@($novo.Cameras) | Where-Object { $_.Fase -eq 'portao' -or $_.Fase -eq 'conferindo' }).Count
     if ($emCurso -eq 0) { return $aceito }
 
-    if ($emCurso -eq 1) {
-        $texto = 'Há 1 câmera em configuração (portão ou conferência). Espere a câmera terminar para '
-    } else {
-        $texto = 'Há ' + $emCurso + ' câmeras em configuração (portão ou conferência). Espere as câmeras terminarem para '
-    }
-    $texto = $texto + $script:ComandosGuardados[$Comando] + '.'
-
     return @{
         Estado = $novo
-        Acoes  = @(@{ Tipo = 'avisar'; Mac = ''; Texto = $texto })
+        Acoes  = @(@{ Tipo = 'avisar'; Mac = ''; Texto = (Get-TextoRecusaComando -Comando $Comando -EmCurso $emCurso) })
         Aceito = $false
     }
 }
