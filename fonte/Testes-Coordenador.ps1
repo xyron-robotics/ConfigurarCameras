@@ -1367,6 +1367,96 @@ T 'FalharEm: so o primeiro despacho que alcanca a etapa leva a falha' {
     Assert-Igual '' $coord.Trabalho.FalharEm 'desarmada (portao)'
 }
 
+# S2: cenarios por camera num mapa so.
+T 'FalharEm em tabela: so o despacho da camera 2 leva a falha da rede, uma vez' {
+    $coord = New-Coordenador -Deps (New-DepsFalsas)
+    $coord.Trabalho.FalharEm = Get-FalharEmTrabalho @{ '2' = 'rede' }
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'AA:00:00:00:00:01') 'portao da 1 passa'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa '' -Mac 'AA:00:00:00:00:02') 'conferencia da 2 nao alcanca rede'
+    Assert-Igual 'rede' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'aa-00-00-00-00-02') 'portao da 2 leva'
+    Assert-Igual 0 $coord.Trabalho.FalharEm.Count 'entrada da 2 saiu'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'AA:00:00:00:00:02') 'o tentar de novo da 2 passa'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'AA:00:00:00:00:03') 'portao da 3 passa'
+}
+
+T 'FalharEm em tabela: mac-trocado so no portao daquela camera; as outras entradas ficam' {
+    $coord = New-Coordenador -Deps (New-DepsFalsas)
+    $coord.Trabalho.FalharEm = Get-FalharEmTrabalho @{ '2' = 'mac-trocado'; '3' = 'conferida' }
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'AA:00:00:00:00:01') 'portao da 1 passa'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa '' -Mac 'AA:00:00:00:00:02') 'conferencia da 2 nao leva mac-trocado'
+    Assert-Igual 'mac-trocado' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'AA:00:00:00:00:02') 'portao da 2 leva'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'AA:00:00:00:00:02') 'a readmissao da 2 passa'
+    Assert-Igual 'AA0000000003' ((@($coord.Trabalho.FalharEm.Keys) | Sort-Object) -join ',') 'a entrada da 3 continua armada'
+    Assert-Igual 'conferida' (Use-FalharEmCoordenador -Coord $coord -AteEtapa '' -Mac 'AA:00:00:00:00:03') 'conferencia da 3 leva'
+}
+
+T 'FalharEm em texto: mac-trocado vale para o primeiro portao' {
+    $coord = New-Coordenador -Deps (New-DepsFalsas)
+    $coord.Trabalho.FalharEm = 'mac-trocado'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa '' -Mac 'AA:00:00:00:00:01') 'conferencia nao leva'
+    Assert-Igual 'mac-trocado' $coord.Trabalho.FalharEm 'continua armada'
+    Assert-Igual 'mac-trocado' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'AA:00:00:00:00:02') 'primeiro portao leva'
+    Assert-Igual '' $coord.Trabalho.FalharEm 'desarmada'
+    Assert-Igual '' (Use-FalharEmCoordenador -Coord $coord -AteEtapa 'rede' -Mac 'AA:00:00:00:00:03') 'o portao seguinte passa'
+}
+
+T 'ConvertTo-FalharEmSimulado: texto, mapa do JSON, numero fora de 1..N e valor desconhecido' {
+    $r = ConvertTo-FalharEmSimulado -Valor 'conferida' -Cameras 3
+    Assert-Verdade ($r.Ok -and $r.Valor -eq 'conferida') 'texto passa'
+    $r = ConvertTo-FalharEmSimulado -Valor $null -Cameras 3
+    Assert-Verdade ($r.Ok -and $r.Valor -eq '') 'nulo = nada armado'
+    $r = ConvertTo-FalharEmSimulado -Valor ('{"2":"rede","3":"ja-inicializada"}' | ConvertFrom-Json) -Cameras 3
+    Assert-Verdade $r.Ok ('mapa do JSON: ' + $r.Texto)
+    Assert-Igual '2=rede,3=ja-inicializada' ((@($r.Valor.Keys) | Sort-Object | ForEach-Object { $_ + '=' + $r.Valor[$_] }) -join ',') 'mapa n -> valor'
+    $r = ConvertTo-FalharEmSimulado -Valor ('{}' | ConvertFrom-Json) -Cameras 3
+    Assert-Verdade ($r.Ok -and $r.Valor -eq '') 'mapa vazio = nada armado'
+    $r = ConvertTo-FalharEmSimulado -Valor @{ '4' = 'rede' } -Cameras 3
+    Assert-Falso $r.Ok 'camera 4 com 3 simuladas'
+    Assert-Verdade ($r.Texto -like '*de 1 a 3*') ('texto: ' + $r.Texto)
+    $r = ConvertTo-FalharEmSimulado -Valor @{ '2' = 'portao' } -Cameras 3
+    Assert-Falso $r.Ok 'valor desconhecido'
+    Assert-Verdade ($r.Texto -like '*portao*') ('texto: ' + $r.Texto)
+}
+
+T 'Get-FalharEmTrabalho: numero vira MAC, ja-inicializada fica de fora, texto passa' {
+    $t = Get-FalharEmTrabalho @{ '2' = 'rede'; '11' = 'mac-trocado'; '3' = 'ja-inicializada' }
+    Assert-Igual 'AA0000000002=rede,AA000000000B=mac-trocado' ((@($t.Keys) | Sort-Object | ForEach-Object { $_ + '=' + $t[$_] }) -join ',') 'tabela por MAC'
+    Assert-Igual 'encoder' (Get-FalharEmTrabalho 'encoder') 'texto'
+    Assert-Igual 'AA:00:00:00:00:10' (Get-MacSimulado 16) 'MAC da camera 16'
+}
+
+T 'pool: tabela com a camera 2 na rede: so a 2 vai a decisao, e o tentar dela passa' {
+    $coord = $null
+    try {
+        $coord = New-CoordPool -N 3 -Escala 0.1
+        $coord.Trabalho.FalharEm = Get-FalharEmTrabalho @{ '2' = 'rede' }
+        Assert-Verdade (Invoke-LacoTeste -Coord $coord) 'laco terminou no tempo'
+        Assert-Igual 'feita,decisao,feita' ((@($coord.Estado.Cameras) | ForEach-Object { $_.Fase }) -join ',') 'fases'
+        Assert-Igual 'rede' (Get-Camera $coord.Estado 2).Falha.Etapa 'etapa da falha'
+        Assert-Igual 0 $coord.Trabalho.FalharEm.Count 'entrada consumida'
+        $p = Step-Decisao -Estado $coord.Estado -Mac 'AA:00:00:00:00:02' -Acao 'tentar' -Geracao 0
+        $coord.Estado = $p.Estado
+        Invoke-AcoesCoordenador -Coord $coord -Acoes $p.Acoes
+        Assert-Verdade (Invoke-LacoTeste -Coord $coord) 'laco do tentar terminou no tempo'
+        Assert-Igual 'feita,feita,feita' ((@($coord.Estado.Cameras) | ForEach-Object { $_.Fase }) -join ',') 'fases depois do tentar'
+    } finally { Remove-CoordPool $coord }
+}
+
+T 'pool: tabela com mac-trocado na camera 2: volta a espera sem decisao e termina feita' {
+    $coord = $null
+    try {
+        $coord = New-CoordPool -N 3 -Escala 0.1
+        $coord.Trabalho.FalharEm = Get-FalharEmTrabalho @{ '2' = 'mac-trocado' }
+        Assert-Verdade (Invoke-LacoTeste -Coord $coord) 'laco terminou no tempo'
+        Assert-Igual 'feita,feita,feita' ((@($coord.Estado.Cameras) | ForEach-Object { $_.Fase }) -join ',') 'fases'
+        $portoes2 = @($script:eventos | Where-Object { $_.Mac -eq 'AA:00:00:00:00:02' -and $_.Tipo -eq 'log' -and $_.Texto -match 'port.o, at. a rede ---$' }).Count
+        Assert-Igual 2 $portoes2 'a 2 passou duas vezes pelo portao'
+        $trocados = @($script:eventos | Where-Object { $_.Tipo -eq 'log' -and $_.Texto -like '*MAC TROCADO*' } | ForEach-Object { $_.Mac })
+        Assert-Igual 'AA:00:00:00:00:02' ($trocados -join ',') 'so a 2 levou a trava de MAC'
+        Assert-Igual 0 $coord.AvisosCamera.Count 'nenhum aviso de camera'
+    } finally { Remove-CoordPool $coord }
+}
+
 # ------------------------------------------------------------------- resultado
 
 Write-Host ""

@@ -421,7 +421,11 @@ $scriptWorker = {
         Update-Vigia -Fase $fase
         $o = [ordered]@{
             senhaDefinida = (-not [string]::IsNullOrEmpty($W.Senha)); senhaGeracao = [int]$W.SenhaGeracao
-            simular = $W.Simular; falharEm = $W.FalharEm
+            # falharEm continua texto (a pagina le como etapa); o mapa por
+            # camera (S2) sai em falharEmCameras.
+            simular = $W.Simular
+            falharEm = $(if ($W.FalharEm -is [System.Collections.IDictionary]) { '' } else { [string]$W.FalharEm })
+            falharEmCameras = $(if ($W.FalharEm -is [System.Collections.IDictionary]) { $W.FalharEm } else { $null })
             fase = $fase; trabalho = $trabalho; etapa = $etapa; progresso = $progresso
             fila = $fila; atual = $atual
             camera = $camera; falha = $falha
@@ -565,10 +569,52 @@ $scriptWorker = {
         $t.Padroes = Get-SessaoOuFabrica
         $t.CaminhoRegistro = Get-CaminhoRegistroAtual
         $t.Simular = [bool]$W.Simular
-        $t.FalharEm = $(if ($W.Simular) { [string]$W.FalharEm } else { '' })
+        $t.FalharEm = ''
+        if ($W.Simular) { $t.FalharEm = Get-FalharEmTrabalho $W.FalharEm }
         $t.EsperaSimuladaMs = Get-EsperaSimuladaMs -Escala ([double]$W.SimularEscala)
         if ($null -ne $W.Fila) { $t.Local = [string]$W.Fila.Local; $t.Rack = [string]$W.Fila.Rack; $t.Andar = [string]$W.Fila.Andar }
         $W.Coord.Geracao = [int]$W.SenhaGeracao
+    }
+
+    # Esquece a falha simulada que um despacho ja levou (Use-FalharEmCoordenador
+    # desarmou o Trabalho): texto inteiro, ou por entrada do mapa por camera
+    # (S2). 'ja-inicializada' nao e de job: fica ate a simulacao ser trocada.
+    function Update-FalharEmConsumido {
+        if ($null -eq $W.Coord) { return }
+        $t = $W.Coord.Trabalho.FalharEm
+        if ($W.FalharEm -is [System.Collections.IDictionary]) {
+            if ($t -isnot [System.Collections.IDictionary]) { return }
+            foreach ($k in @($W.FalharEm.Keys)) {
+                if ([string]$W.FalharEm[$k] -eq 'ja-inicializada') { continue }
+                if (-not $t.Contains((Get-ChaveMac (Get-MacSimulado ([int]$k))))) { $W.FalharEm.Remove($k) }
+            }
+            if ($W.FalharEm.Count -eq 0) { $W.FalharEm = '' }
+        } elseif ([string]$W.FalharEm -and [string]$t -eq '') {
+            $W.FalharEm = ''
+        }
+    }
+
+    # Falha simulada da retomada manual pelo IP: o texto, ou a entrada do mapa
+    # da camera dela (sem 'ja-inicializada'). -Esquecer tira a que foi usada.
+    function Get-FalharEmManual {
+        param($Mac, [switch]$Esquecer)
+        if (-not $W.Simular -or -not $W.FalharEm) { return '' }
+        if ($W.FalharEm -isnot [System.Collections.IDictionary]) {
+            $v = [string]$W.FalharEm
+            if ($Esquecer) { $W.FalharEm = '' }
+            return $v
+        }
+        $chave = Get-ChaveMac $Mac
+        foreach ($k in @($W.FalharEm.Keys)) {
+            $v = [string]$W.FalharEm[$k]
+            if ($v -eq 'ja-inicializada' -or $chave -eq '' -or (Get-ChaveMac (Get-MacSimulado ([int]$k))) -ne $chave) { continue }
+            if ($Esquecer) {
+                $W.FalharEm.Remove($k)
+                if ($W.FalharEm.Count -eq 0) { $W.FalharEm = '' }
+            }
+            return $v
+        }
+        return ''
     }
 
     # Descarta a fila: fecha o pool (job ainda rodando e parado) e esquece o
@@ -602,14 +648,20 @@ $scriptWorker = {
     # outra). Com a chave de broadcast desligada, so o IP de fabrica conta.
     # DHIP vazio: ping no IP de fabrica e, se responder, o MAC do ARP e duas
     # leituras do vizinho (MAC trocando = duas cameras no mesmo IP).
+    # Cenario 'ja-inicializada' do mapa (S2): a camera n vem com Init 0 (so
+    # o aviso da D8, nunca presa nem despachada).
     $DescobrirAchados = {
         param($Sessao)
         $ipf = [string]$Sessao.IpFabrica
         $l = @{ Achados = @(); DhipRespondeu = $true; PingFabrica = $false; MacArp = ''; MacTrocando = $false }
         if ($W.Simular) {
+            $jaInit = @{}
+            if ($W.FalharEm -is [System.Collections.IDictionary]) {
+                foreach ($k in @($W.FalharEm.Keys)) { if ([string]$W.FalharEm[$k] -eq 'ja-inicializada') { $jaInit[[int]$k] = $true } }
+            }
             $l.Achados = @(1..([int]$W.SimularCameras) | ForEach-Object {
-                @{ Mac = ('AA:00:00:00:00:{0:X2}' -f $_); Serial = ('SIM-' + $_); Modelo = 'SIM-IPC'; Ip = $ipf
-                   HttpPort = 80; Init = 1; Marca = 'Intelbras' } })
+                @{ Mac = (Get-MacSimulado $_); Serial = ('SIM-' + $_); Modelo = 'SIM-IPC'; Ip = $ipf
+                   HttpPort = 80; Init = $(if ($jaInit.ContainsKey($_)) { 0 } else { 1 }); Marca = 'Intelbras' } })
             return $l
         }
         $todos = @(Find-CamerasNaRede -IpFabrica $ipf -GatewayDestino $Sessao.Gateway -ArquivoBlacklist $Arquivos.Blacklist `
@@ -730,8 +782,7 @@ $scriptWorker = {
         $W.TrabalhoBase = 'Configurando a câmera para ' + $m.Camera.Destino
         $W.Trabalho = $W.TrabalhoBase; $W.Progresso = $null
         Publicar
-        $falharEm = ''
-        if ($W.Simular) { $falharEm = $W.FalharEm }
+        $falharEm = Get-FalharEmManual -Mac $m.Camera.Mac
         $r = Invoke-ConfiguracaoCamera -Contexto $m.Camera -Padroes $p -Senha $W.Senha `
                                        -CaminhoRegistro (Get-CaminhoRegistroAtual) -Simular:$W.Simular -FalharEm $falharEm
         if ($r.Mac) { $m.Camera.Mac = $r.Mac }
@@ -743,7 +794,7 @@ $scriptWorker = {
             $W.Manual = $null
         } else {
             # Falha simulada e de uma vez so: o "Tentar de novo" tem que passar.
-            if ($W.Simular -and $W.FalharEm) { $W.FalharEm = '' }
+            if ($falharEm) { $null = Get-FalharEmManual -Mac $m.Camera.Mac -Esquecer }
             Set-PosicaoCoord -Numero ([int]$m.Posicao) -Estado 'falhou' -Motivo ($r.Falhou + ': ' + $r.Erro) -Mac $r.Mac
             $m.Falha = [ordered]@{ etapa = $r.Falhou; erro = $r.Erro; recusa = $r.Recusa
                                    loginRecusado = [bool]$r.LoginRecusado; bloqueada = [bool]$r.Bloqueada; geracao = [int]$W.SenhaGeracao }
@@ -1010,12 +1061,19 @@ $scriptWorker = {
                     Clear-Fila
                     $W.Ultimo = ''; $W.Ferramenta = $null
                 }
+                # falharEm: texto (o de sempre) ou mapa por camera (S2).
+                $cen = ConvertTo-FalharEmSimulado -Valor $Cmd.falharEm -Cameras ([int]$W.SimularCameras)
+                if (-not $cen.Ok) { $W.Aviso = [string]$cen.Texto; return }
                 $W.Simular = $novo
-                $W.FalharEm = [string]$Cmd.falharEm
+                $W.FalharEm = $cen.Valor
                 $E.Simular = $novo
                 Update-TrabalhoCoord
-                Write-Log ("Simulacao " + $(if ($novo) { 'LIGADA - nada e enviado para camera nem para a placa' } else { 'desligada' }) +
-                           $(if ($W.FalharEm) { '; falha forcada em ' + $W.FalharEm } else { '' })) 'Yellow'
+                $txtFalha = ''
+                if ($W.FalharEm -is [System.Collections.IDictionary]) {
+                    $txtFalha = '; cenario por camera: ' + ((@($W.FalharEm.Keys) | Sort-Object { [int]$_ } | ForEach-Object {
+                        $_ + ' (' + (Get-MacSimulado ([int]$_)) + ') ' + $W.FalharEm[$_] }) -join ', ')
+                } elseif ($W.FalharEm) { $txtFalha = '; falha forcada em ' + $W.FalharEm }
+                Write-Log ("Simulacao " + $(if ($novo) { 'LIGADA - nada e enviado para camera nem para a placa' } else { 'desligada' }) + $txtFalha) 'Yellow'
             }
             'fila' {
                 if ($null -ne $W.Manual) { $W.Aviso = 'Termine a câmera atual antes de montar outra fila.'; return }
@@ -1328,13 +1386,14 @@ $scriptWorker = {
                 if ([string]$coord.AvisoGlobal) {
                     $W.AvisoOrigem = 'vigia'
                     $W.Aviso = [string]$coord.AvisoGlobal
+                    Write-Log ('Aviso do vigia: ' + $W.Aviso) 'Yellow'
                     $coord.AvisoGlobal = ''
                     $coord.Sujo = $true
                 }
                 # Falha simulada e de uma vez so: o despacho que a levou desarmou
                 # o Trabalho (Use-FalharEmCoordenador); o worker esquece tambem,
                 # senao o proximo Update-TrabalhoCoord a armaria de novo.
-                if ($W.Simular -and $W.FalharEm -and [string]$coord.Trabalho.FalharEm -eq '') { $W.FalharEm = '' }
+                if ($W.Simular -and $W.FalharEm) { Update-FalharEmConsumido }
             } catch {
                 Write-Log ("ERRO interno no coordenador: " + $_.Exception.Message) 'Red'
             }
@@ -1729,7 +1788,7 @@ function Invoke-Rota {
         'POST /api/descobrir'  { if (Test-RecusaGuardada $Ctx 'ferramenta') { return }; Add-Comando $Ctx @{ tipo = 'descobrir' } }
         'POST /api/rede/preparar'  { if (Test-RecusaGuardada $Ctx 'preparar-placa') { return }; Add-Comando $Ctx @{ tipo = 'rede-preparar' } }
         'POST /api/rede/restaurar' { if (Test-RecusaGuardada $Ctx 'restaurar-placa') { return }; Add-Comando $Ctx @{ tipo = 'rede-restaurar' } }
-        'POST /api/simular'    { if (Test-RecusaGuardada $Ctx 'simular') { return }; $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'simular'; ligado = [bool]$b.ligado; falharEm = [string]$b.falharEm } }
+        'POST /api/simular'    { if (Test-RecusaGuardada $Ctx 'simular') { return }; $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'simular'; ligado = [bool]$b.ligado; falharEm = $b.falharEm } }
         'POST /api/internet/testar' { Add-Comando $Ctx @{ tipo = 'internet-testar' } }
         # Atualizar: so com o painel parado (nada em curso, vigia desligado),
         # com Administrador e com uma versao nova conhecida. 409 diz o motivo.

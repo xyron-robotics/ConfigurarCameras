@@ -42,7 +42,8 @@
       Pool            New-PoolCameras (o servidor cria ao montar a fila)
       Trabalho        o que todo job recebe: Senha (só memória, nunca vai
                       para o estado publicado), Padroes, CaminhoRegistro,
-                      Simular, FalharEm, EsperaSimuladaMs (tabela etapa ->
+                      Simular, FalharEm (texto ou tabela MAC -> valor,
+                      S2), EsperaSimuladaMs (tabela etapa ->
                       ms, já multiplicada pela escala; só em -Simular, S3)
                       e Local/Rack/Andar
       Progresso       último progresso por MAC { Etapa; Atual; Total;
@@ -800,7 +801,7 @@ function Start-DespachoCoordenador {
         foreach ($k in @($t.EsperaSimuladaMs.Keys)) { $espera[[string]$k] = [int]$t.EsperaSimuladaMs[$k] }
     }
 
-    $falharEm = Use-FalharEmCoordenador -Coord $Coord -AteEtapa ([string]$Acao.AteEtapa)
+    $falharEm = Use-FalharEmCoordenador -Coord $Coord -AteEtapa ([string]$Acao.AteEtapa) -Mac ([string]$Camera.Mac)
     $job = Start-JobCamera -Pool $Coord.Pool -Eventos $Coord.Eventos -Camera $Camera -Acao $Acao -Contexto $ctx `
                            -Senha ([string]$t.Senha) -Padroes $t.Padroes -CaminhoRegistro ([string]$t.CaminhoRegistro) `
                            -Simular:([bool]$t.Simular) -FalharEm $falharEm -Geracao $Geracao -EsperaSimuladaMs $espera
@@ -883,26 +884,108 @@ function Sync-PortaCanalRegistro {
 }
 
 <#
-    Falha simulada (FalharEm do Trabalho) de um despacho: é de uma vez só. O
-    primeiro despacho que alcança a etapa leva a falha e a desarma; os
-    outros vão sem. O portão (AteEtapa 'rede') alcança as etapas até a
-    rede; a conferência, só a 'conferida'. Com as conferências sobrepostas,
-    desarmar depois da falha deixaria falhar todas as câmeras já
-    despachadas.
+    Falha simulada (FalharEm do Trabalho) de um despacho: é de uma vez só.
+    FalharEm é texto ou tabela MAC (chave Get-ChaveMac) -> valor (S2):
+      - texto: o primeiro despacho que alcança o valor leva a falha e a
+        desarma; os outros vão sem;
+      - tabela: só o despacho do MAC (-Mac) olha a entrada dele; alcançou,
+        leva a falha e a entrada sai da tabela (o "Tentar de novo" passa).
+    O portão (AteEtapa 'rede') alcança as etapas até a rede e o
+    'mac-trocado' (a trava de MAC é do portão, D7); a conferência, só a
+    'conferida'. Com as conferências sobrepostas, desarmar depois da falha
+    deixaria falhar todas as câmeras já despachadas.
 #>
 function Use-FalharEmCoordenador {
-    param([Parameter(Mandatory = $true)]$Coord, [string]$AteEtapa = '')
-    $falharEm = [string]$Coord.Trabalho.FalharEm
+    param([Parameter(Mandatory = $true)]$Coord, [string]$AteEtapa = '', $Mac = '')
+    $armada = $Coord.Trabalho.FalharEm
+    $tabela = ($armada -is [System.Collections.IDictionary])
+    $chave = ''
+    if ($tabela) {
+        $chave = Get-ChaveMac $Mac
+        if ($chave -eq '' -or -not $armada.Contains($chave)) { return '' }
+        $falharEm = [string]$armada[$chave]
+    } else {
+        $falharEm = [string]$armada
+    }
     if ($falharEm -eq '') { return '' }
-    $etapas = @(Get-EtapasConfiguracao)
-    $i = [array]::IndexOf($etapas, $falharEm)
-    $iRede = [array]::IndexOf($etapas, 'rede')
+
     $alcanca = $false
-    if ($AteEtapa -eq 'rede') { $alcanca = ($i -ge 0 -and $i -le $iRede) }
-    else { $alcanca = ($i -gt $iRede) }
+    if ($falharEm -eq 'mac-trocado') {
+        $alcanca = ($AteEtapa -eq 'rede')
+    } else {
+        $etapas = @(Get-EtapasConfiguracao)
+        $i = [array]::IndexOf($etapas, $falharEm)
+        $iRede = [array]::IndexOf($etapas, 'rede')
+        if ($AteEtapa -eq 'rede') { $alcanca = ($i -ge 0 -and $i -le $iRede) }
+        else { $alcanca = ($i -gt $iRede) }
+    }
     if (-not $alcanca) { return '' }
-    $Coord.Trabalho.FalharEm = ''
+    if ($tabela) { $armada.Remove($chave) } else { $Coord.Trabalho.FalharEm = '' }
     return $falharEm
+}
+
+# ------------------------------------------- cenários de simulação por câmera
+
+# Valores do mapa por câmera do POST /api/simular (S2).
+$script:CenariosSimulados = @('inicializada', 'encoder', 'rede', 'conferida', 'mac-trocado', 'ja-inicializada')
+
+# MAC da câmera simulada n (1..16): AA:00:00:00:00:<n em hex, 2 dígitos>.
+function Get-MacSimulado {
+    param([int]$Numero)
+    return ('AA:00:00:00:00:{0:X2}' -f $Numero)
+}
+
+<#
+    O falharEm do POST /api/simular (S2), já lido do JSON: texto (o
+    comportamento de sempre, sem validação) ou mapa { "<n>": "<valor>" },
+    n de 1 a Cameras e valor de $script:CenariosSimulados. Devolve
+    @{ Ok; Texto (motivo da recusa); Valor } com Valor = texto ou tabela
+    "<n>" -> valor (chave texto: vai para o JSON do estado). Mapa vazio ou
+    nulo = '' (nada armado).
+#>
+function ConvertTo-FalharEmSimulado {
+    param($Valor, [int]$Cameras = 16)
+    if ($null -eq $Valor) { return @{ Ok = $true; Texto = ''; Valor = '' } }
+    if ($Valor -is [string]) { return @{ Ok = $true; Texto = ''; Valor = $Valor.Trim() } }
+    $pares = @()
+    if ($Valor -is [System.Collections.IDictionary]) {
+        foreach ($k in @($Valor.Keys)) { $pares += , @([string]$k, $Valor[$k]) }
+    } elseif ($Valor -is [System.Management.Automation.PSCustomObject]) {
+        foreach ($p in @($Valor.PSObject.Properties)) { $pares += , @([string]$p.Name, $p.Value) }
+    } else {
+        return @{ Ok = $true; Texto = ''; Valor = ([string]$Valor).Trim() }
+    }
+    $mapa = @{}
+    foreach ($par in $pares) {
+        $n = 0
+        if (-not [int]::TryParse(([string]$par[0]).Trim(), [ref]$n) -or $n -lt 1 -or $n -gt $Cameras) {
+            return @{ Ok = $false; Texto = ('Câmera simulada inválida: ' + $par[0] + '. Use de 1 a ' + $Cameras + '.'); Valor = '' }
+        }
+        $v = ([string]$par[1]).Trim()
+        if ($script:CenariosSimulados -notcontains $v) {
+            return @{ Ok = $false; Texto = ('Cenário inválido para a câmera ' + $n + ': ' + $v + '. Use ' + ($script:CenariosSimulados -join ', ') + '.'); Valor = '' }
+        }
+        $mapa[[string]$n] = $v
+    }
+    if ($mapa.Count -eq 0) { return @{ Ok = $true; Texto = ''; Valor = '' } }
+    return @{ Ok = $true; Texto = ''; Valor = $mapa }
+}
+
+<#
+    O FalharEm do Trabalho a partir do do servidor: texto passa como está;
+    tabela "<n>" -> valor vira tabela MAC (Get-ChaveMac) -> valor, sem o
+    'ja-inicializada' (é do DHIP simulado, não de job).
+#>
+function Get-FalharEmTrabalho {
+    param($FalharEm)
+    if ($FalharEm -isnot [System.Collections.IDictionary]) { return [string]$FalharEm }
+    $t = @{}
+    foreach ($k in @($FalharEm.Keys)) {
+        $v = [string]$FalharEm[$k]
+        if ($v -eq '' -or $v -eq 'ja-inicializada') { continue }
+        $t[(Get-ChaveMac (Get-MacSimulado ([int]$k)))] = $v
+    }
+    return $t
 }
 
 <#
