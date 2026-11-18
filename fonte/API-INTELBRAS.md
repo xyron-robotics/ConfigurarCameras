@@ -23,6 +23,13 @@ como pendente.
 `/OutsideCmd` é o endpoint que faltava. Sondar métodos de init em `/RPC2` sempre
 volta vazio, o que induz ao erro de achar que não existem.
 
+**Firmware antigo (G3, 2.800), chamada anônima:** no `/RPC2` a câmera responde
+só `{ "NotifyMethod" : "1.2" }`, sem resultado. `Security.getEncryptInfo` e
+`DevInit.getStatus` funcionam pelo `/OutsideCmd`. Por isso `Get-CamChavePublica`
+alterna `/RPC2` e `/OutsideCmd` a cada tentativa; sonda anônima nova segue a
+mesma alternância, não `/RPC2` fixo. Fonte: prova de bancada de 17/11 (três
+câmeras de fábrica num switch isolado).
+
 ## Descoberta DHIP (UDP 37810)
 
 É o protocolo da ferramenta de busca da Intelbras/Dahua (ConfigTool). Verificado
@@ -69,6 +76,38 @@ Implementação: `New-PacoteDhip`, `ConvertFrom-RespostaDhip`, `Get-InitNormaliz
 `Get-AchadosDhipUnicos`, `Invoke-DescobertaDhip` (um `UdpClient` por interface),
 `Add-IpTemporarioPlaca`; `Find-CamerasNaRede` faz o broadcast antes do atalho e da
 varredura.
+
+## Várias câmeras de fábrica no mesmo IP
+
+Fonte: prova de bancada de 17/11 (três câmeras de fábrica num switch isolado),
+câmeras A, B e C. É a base do portão do IP de fábrica (ADR 0004).
+
+- **Todas no mesmo endereço.** No DHIP, as três aparecem em `192.168.1.108`,
+  cada uma com o seu MAC e com `Init=1` (de fábrica). O MAC do DHIP é o que
+  distingue uma da outra.
+- **Sem prender, o HTTP vai para quem venceu o ARP.** Endereçar só pelo IP
+  manda tudo para a câmera que venceu o ARP na placa, e o ARP pode trocar
+  de dono no meio de uma sequência: numa rodada, parte das respostas veio de
+  uma câmera, parte de outra e parte não veio. Uma inicialização ou gravação de
+  rede nessas condições pode começar numa câmera e terminar em outra.
+- **Com vizinho estático, as chamadas vão só para aquela câmera.** Com a
+  entrada ARP fixa `192.168.1.108 -> MAC` na placa, 20 de 20 chamadas anônimas
+  de `Security.getEncryptInfo` devolveram a mesma chave pública, e a chave foi
+  distinta para A, B e C. A impressão da chave pública identifica a câmera sem
+  login.
+- **ARP antes do DHIP.** A câmera recém-ligada (ou recém-resetada) responde ARP
+  cerca de 1 min antes de responder DHIP. A ordem em que as câmeras aparecem no
+  broadcast é a do DHIP, não a do cabo.
+- **Sem saída por conflito.** Em cerca de 15 min com as três no mesmo IP,
+  nenhuma saiu sozinha de `192.168.1.108`. Se uma saísse, o DHIP a acharia pelo
+  MAC no IP novo.
+- **O DHIP depende do IP da placa.** Com a placa só em APIPA (169.254.x.x), o
+  DHIP voltou vazio; com um IP na faixa de fábrica (`192.168.1.x`), respondeu.
+
+Implementação: `Set-VizinhoEstatico` e `Remove-VizinhoEstatico` no
+`Motor-Cameras.ps1` (criam e conferem a entrada `Permanent` na placa); o
+coordenador (`Coordenador-Cameras.ps1`) prende e solta o IP de fábrica e guarda
+o vizinho no rastro da placa, para o encerrar tirar.
 
 ## Login em dois passos (MD5)
 
