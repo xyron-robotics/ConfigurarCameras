@@ -12,7 +12,8 @@ Pedido do usuário: "a próxima versão [...] consiga operar qualquer tipo de c�
 | `orquestrador` | `docs/plans/2026-11-17-frente-orquestrador-plan.md` | F3 | 0 |
 | `ui` | `docs/plans/2026-11-17-frente-ui-plan.md` | F2b, F3 e F4 do plano de UI | 0 |
 | `servidor` | `docs/plans/2026-11-18-frente-servidor-plan.md` | F4 e o mínimo da F5 (3 câmeras simuladas) | 2 |
-| F5, F6, F7 | a escrever, um plano por frente | resto da simulação, UI paralela, docs | 2 e 3 |
+| `simulacao` | `docs/plans/2026-11-18-frente-simulacao-plan.md` | F5 e os itens da herança da seção 0 marcados F5 | 2 |
+| F6, F7 | a escrever, um plano por frente | UI paralela, docs | 2 e 3 |
 | release 1.3.0 | seção 9 deste mapa | versão, tag, atualização pelo painel | 4 |
 | F8 | fora do caminho da release (seção 0) | bancada com câmeras reais | depois |
 
