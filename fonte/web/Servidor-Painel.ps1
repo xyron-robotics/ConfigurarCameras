@@ -1397,10 +1397,10 @@ $scriptWorker = {
         $coord = $W.Coord
         if ($null -ne $coord) {
             try {
-                Receive-EventosCoordenador -Coord $coord -Log $logJob
+                Receive-EventosCoordenador -Coord $coord -Log $logJob -SemDespacho:$E.Parar
                 Update-EmCurso
-                # Encerrando (S4 b): nada de tique, admissao nem despacho; o
-                # fim do laco espera os jobs em curso.
+                # Encerrando (S4 b): nada de tique, admissao nem despacho (nem
+                # o do fim de job acima); o fim do laco espera os jobs em curso.
                 if ($E.Parar) { continue }
                 if (Test-VezDoVigia) {
                     try {
@@ -1566,7 +1566,7 @@ $scriptAtualizador = {
                 $E.Parar = $true
             } catch {
                 Remove-Item -LiteralPath $exe -Force -ErrorAction SilentlyContinue
-                Write-Log ("Atualizacao FALHOU: " + $_.Exception.Message + ". Nada foi instalado.") 'Red'
+                Write-Log ("Atualizacao FALHOU: " + ([string]$_.Exception.Message).TrimEnd('.') + ". Nada foi instalado.") 'Red'
                 Publish-Atualizacao 'erro' $_.Exception.Message
             }
         }

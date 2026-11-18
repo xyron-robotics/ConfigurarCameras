@@ -842,10 +842,12 @@ function Get-PortaCanalCoordenador {
 }
 
 <#
-    Porta e canal do cartão (POST /api/camera). Editáveis até a conferência
-    terminar: câmera fora do estado, 'feita' ou 'pulada' é recusada e nada
-    muda. O valor vale para o próximo despacho; se a câmera já está na
-    conferência, o 'feita' corrige o registro (Sync-PortaCanalRegistro).
+    Porta e canal do cartão (POST /api/camera). Editáveis até a fila fechar;
+    'pulada' recusada (C2). Câmera fora do estado ou 'pulada' é recusada e
+    nada muda. Antes do 'feita', o valor vale para o próximo despacho (e, se a
+    câmera já está na conferência, o 'feita' corrige o registro). Câmera
+    'feita' grava direto no registro (Sync-PortaCanalRegistro); se a gravação
+    falha, a edição é desfeita e a recusa leva o texto do aviso da câmera.
     Devolve @{ Ok; Texto } (Texto = motivo da recusa).
 #>
 function Set-PortaCanalCoordenador {
@@ -853,17 +855,33 @@ function Set-PortaCanalCoordenador {
     $camera = Get-CameraCoordenador -Coord $Coord -Mac $Mac
     if ($null -eq $camera) { return @{ Ok = $false; Texto = ('A câmera ' + [string]$Mac + ' não está na fila.') } }
     $fase = [string]$camera.Fase
-    if ($fase -eq 'feita' -or $fase -eq 'pulada') {
+    if ($fase -eq 'pulada') {
         return @{ Ok = $false; Texto = ('A câmera ' + [string]$camera.Mac + ' já saiu da fila: porta e canal não mudam mais por aqui.') }
     }
-    $Coord.PortaCanal[(Get-ChaveMac $camera.Mac)] = @{ Porta = ([string]$Porta).Trim(); Canal = ([string]$Canal).Trim() }
+    $chave = Get-ChaveMac $camera.Mac
+    $tinha = $Coord.PortaCanal.ContainsKey($chave)
+    $anterior = $null
+    if ($tinha) { $anterior = $Coord.PortaCanal[$chave] }
+    $novo = @{ Porta = ([string]$Porta).Trim(); Canal = ([string]$Canal).Trim() }
+    $Coord.PortaCanal[$chave] = $novo
     $Coord.Sujo = $true
+    if ($fase -eq 'feita') {
+        # Gravou (ou não havia o que gravar) = o registro tem o valor do cartão,
+        # que o Sync deixa em PortaCanalDespacho.
+        $null = Sync-PortaCanalRegistro -Coord $Coord -Mac $camera.Mac
+        $gravado = @{ Porta = ''; Canal = '' }
+        if ($Coord.PortaCanalDespacho.ContainsKey($chave)) { $gravado = $Coord.PortaCanalDespacho[$chave] }
+        if ([string]$gravado.Porta -ne $novo.Porta -or [string]$gravado.Canal -ne $novo.Canal) {
+            if ($tinha) { $Coord.PortaCanal[$chave] = $anterior } else { $Coord.PortaCanal.Remove($chave) }
+            return @{ Ok = $false; Texto = [string]$Coord.AvisosCamera[$chave] }
+        }
+    }
     return @{ Ok = $true; Texto = '' }
 }
 
 <#
     Câmera 'feita' com porta/canal diferentes dos do último despacho (editados
-    durante a conferência): grava os novos na entrada dela no registro
+    durante a conferência ou depois dela): grava os novos na entrada dela no registro
     (Update-RegistroCamera, sob o Mutex). Sem edição, o registro não é
     tocado. Falha (registro sem a câmera, disco) vira aviso da câmera.
     Devolve $true se gravou.

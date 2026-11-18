@@ -1325,23 +1325,56 @@ T 'porta/canal editados e conferencia com falha: registro intacto ate o feita' {
     } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
-T 'porta/canal: camera feita, pulada ou fora da fila e recusada, sem mudar nada' {
+T 'porta/canal: camera feita aceita e grava direto no registro (C2)' {
+    $coord = New-CoordConferindo
+    try {
+        Complete-ConferenciaTeste $coord
+        Assert-Igual 'feita' (Get-Camera $coord.Estado 1).Fase 'fase'
+        $coord.Sujo = $false
+        $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '7' -Canal '8'
+        Assert-Verdade $r.Ok ('feita aceita: ' + $r.Texto)
+        Assert-Verdade $coord.Sujo 'estado sujo depois da edicao'
+        $ent = Find-CameraRegistro -Registro (Read-Registro $coord.Trabalho.CaminhoRegistro) -Mac 'AA:00:00:00:00:01'
+        Assert-Igual '7|8' ($ent.Porta + '|' + $ent.Canal) 'porta/canal no registro'
+        Assert-Igual 'Instalada|Obra exemplo|192.0.2.11' ($ent.Status + '|' + $ent.Local + '|' + $ent.Ip) 'resto da entrada intacto'
+
+        $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '9' -Canal '8'
+        Assert-Verdade $r.Ok ('segunda edicao aceita: ' + $r.Texto)
+        $ent = Find-CameraRegistro -Registro (Read-Registro $coord.Trabalho.CaminhoRegistro) -Mac 'AA:00:00:00:00:01'
+        Assert-Igual '9|8' ($ent.Porta + '|' + $ent.Canal) 'segunda edicao no registro'
+        $pub = ConvertTo-EstadoPublicadoParalelo -Coord $coord
+        Assert-Igual '9|8' ($pub.cameras[0].porta + '|' + $pub.cameras[0].canal) 'porta/canal publicados'
+    } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'porta/canal: feita fora do registro e recusada com aviso, sem estourar' {
     $coord = New-CoordConferindo -Porta '1' -Canal '1'
     try {
         Complete-ConferenciaTeste $coord
+        Remove-Item -LiteralPath $coord.Trabalho.CaminhoRegistro -Force
         $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '7' -Canal '7'
-        Assert-Falso $r.Ok 'feita recusada'
-        Assert-Verdade ([string]$r.Texto -ne '') 'texto da recusa (feita)'
-        Assert-Igual '1' $coord.PortaCanal['AA0000000001'].Porta 'porta nao mudou'
+        Assert-Falso $r.Ok 'feita fora do registro recusada'
+        Assert-Verdade ([string]$r.Texto -like '*porta*') ('texto da recusa: ' + $r.Texto)
+        Assert-Verdade ([string]$coord.AvisosCamera['AA0000000001'] -like '*porta*') ('aviso: ' + $coord.AvisosCamera['AA0000000001'])
+        Assert-Igual '1|1' ($coord.PortaCanal['AA0000000001'].Porta + '|' + $coord.PortaCanal['AA0000000001'].Canal) 'porta/canal da fila sem a edicao recusada'
+    } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'porta/canal: camera pulada ou fora da fila e recusada, sem mudar nada' {
+    $coord = New-CoordConferindo -Porta '1' -Canal '1'
+    try {
         $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:09' -Porta '7' -Canal '7'
         Assert-Falso $r.Ok 'fora da fila recusada'
         Assert-Falso $coord.PortaCanal.ContainsKey('AA0000000009') 'nada guardado para MAC fora da fila'
-    } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
 
-    $coord = New-CoordComEspera -N 1
-    $coord.Estado.Cameras[0].Fase = 'pulada'
-    $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '7' -Canal '7'
-    Assert-Falso $r.Ok 'pulada recusada'
+        $antes = [IO.File]::ReadAllText($coord.Trabalho.CaminhoRegistro)
+        (Get-Camera $coord.Estado 1).Fase = 'pulada'
+        $r = Set-PortaCanalCoordenador -Coord $coord -Mac 'AA:00:00:00:00:01' -Porta '7' -Canal '7'
+        Assert-Falso $r.Ok 'pulada recusada'
+        Assert-Verdade ([string]$r.Texto -like '*AA:00:00:00:00:01*saiu da fila: porta e canal*') ('texto da recusa (pulada): ' + $r.Texto)
+        Assert-Igual '1' $coord.PortaCanal['AA0000000001'].Porta 'porta nao mudou'
+        Assert-Igual $antes ([IO.File]::ReadAllText($coord.Trabalho.CaminhoRegistro)) 'registro intocado (pulada)'
+    } finally { Remove-Item -LiteralPath $script:pastaPc -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 T 'porta/canal: registro sem a camera vira aviso dela, sem estourar' {

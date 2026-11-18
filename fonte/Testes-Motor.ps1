@@ -194,7 +194,7 @@ T 'Servidor: encerrar espera os jobs antes de fechar o pool; atualizar confere E
     Assert-Verdade ($txt -match '(?m)^\s*EsperaJobsSeg = 180\s*$') 'teto de 180 s'
     Assert-Verdade ($txt -match '\$handleWorker\.AsyncWaitHandle\.WaitOne\(\(\[int\]\$E\.EsperaJobsSeg \+ \d+\) \* 1000\)') 'thread principal espera o teto mais a margem'
     Assert-Falso ($txt.Contains('$handleWorker.AsyncWaitHandle.WaitOne(30000)')) 'sem os 30 s fixos'
-    Assert-Verdade ($txt -match 'Receive-EventosCoordenador -Coord \$coord -Log \$logJob\s*\r?\n\s*Update-EmCurso\s*\r?\n[^\r\n]*\r?\n[^\r\n]*\r?\n\s*if \(\$E\.Parar\) \{ continue \}') 'com Parar, sem tique nem admissao'
+    Assert-Verdade ($txt -match 'Receive-EventosCoordenador -Coord \$coord -Log \$logJob -SemDespacho:\$E\.Parar\s*\r?\n\s*Update-EmCurso\s*\r?\n[^\r\n]*\r?\n[^\r\n]*\r?\n\s*if \(\$E\.Parar\) \{ continue \}') 'com Parar, sem tique nem admissao'
     # (a) EmCurso logo depois da drenagem e do despacho.
     Assert-Verdade ($txt -match 'function Update-EmCurso \{\s*if \(\$null -ne \$W\.Coord\) \{ \$E\.EmCurso = Get-EmCursoCoordenador') 'Update-EmCurso'
     Assert-Verdade ($txt -match 'Invoke-AcoesCoordenador -Coord \$coord -Acoes \$acoes\s*\r?\n\s*Update-EmCurso') 'EmCurso depois do despacho'
