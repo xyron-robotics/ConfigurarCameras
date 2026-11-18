@@ -11,7 +11,8 @@ Pedido do usuário: "a próxima versão [...] consiga operar qualquer tipo de c�
 | `motor` | `docs/plans/2026-11-17-frente-motor-plan.md` | F1 e depois F2 | 0 e 1 |
 | `orquestrador` | `docs/plans/2026-11-17-frente-orquestrador-plan.md` | F3 | 0 |
 | `ui` | `docs/plans/2026-11-17-frente-ui-plan.md` | F2b, F3 e F4 do plano de UI | 0 |
-| F4 a F8 | a escrever quando `motor`, `orquestrador` e `ui` fecharem | servidor, simulação, UI paralela, docs, bancada | 2 a 4 |
+| `servidor` | `docs/plans/2026-11-18-frente-servidor-plan.md` | F4 e o mínimo da F5 (3 câmeras simuladas) | 2 |
+| F5 a F8 | a escrever (F5 depois da `servidor`) | resto da simulação, UI paralela, docs, bancada | 2 a 4 |
 
 Se um plano de frente divergir deste mapa, vale o plano de frente. Os números de linha valem para `main` em 0d0581a e vão andar: localize pelo nome da função, não pela linha.
 
@@ -333,6 +334,7 @@ Regras para o executor:
 Os planos de frente da Onda 2 em diante se escrevem quando a Onda 0 fechar, a partir do `main` integrado.
 
 #### F4. Servidor: coordenador e pool
+- **Plano de frente:** `docs/plans/2026-11-18-frente-servidor-plan.md` (frente `servidor`). Ele manda onde divergir do texto abaixo: coordenador em arquivo próprio (`fonte/Coordenador-Cameras.ps1`, testado no CI); "câmera conectada" sem IP vira "procurar agora"; decisões R1–R8 (tentar com rede gravada retoma pela conferência sem portão; admissão percorre a espera; encerrar a fila ≠ encerrar o painel; falha ao prender e MAC trocado na conferência viram decisão; fase `ignorada`). O contrato da Task 4 abaixo ganha `aviso` por câmera, `paralelo.emCurso` e `filaItens`.
 - **Arquivos:** `fonte/web/Servidor-Painel.ps1` (UTF-8 com BOM).
 - **Depende de:** plano de UI Concluído (ponto de rebase), F1, F2, F3.
 - **Paralela com:** F7.
@@ -354,7 +356,7 @@ Os planos de frente da Onda 2 em diante se escrevem quando a Onda 0 fechar, a pa
 - **Depende de:** F4 (mesmo arquivo).
 - **Paralela com:** F7.
 - **Tasks:**
-  1. **N câmeras simuladas:** o tique do vigia em simulação "faz aparecer" N câmeras de fábrica (padrão 3), com MACs fictícios distintos (`AA:00:00:00:00:0x`), serial `SIM-x` e atrasos por etapa (escala curta configurável). Pronto: `-Simular` mostra 3 cartões avançando juntos na conferência.
+  1. **N câmeras simuladas:** o tique do vigia em simulação "faz aparecer" N câmeras de fábrica (padrão 3), com MACs fictícios distintos (`AA:00:00:00:00:0x`), serial `SIM-x` e atrasos por etapa (escala curta configurável). Pronto: `-Simular` mostra 3 cartões avançando juntos na conferência. *A frente `servidor` já entrega 3 câmeras fixas e uma espera simulada no job (portão e conferência); aqui fica o N configurável e os atrasos por etapa.*
   2. **`FalharEm` por câmera** (por exemplo, câmera 2 na rede), mais os casos `mac-trocado` e `ja-inicializada`. Pronto: com falha na câmera 2, as câmeras 1 e 3 terminam `feita`; o caso `mac-trocado` não abre decisão; o caso `ja-inicializada` só é avisado, nunca tocado.
 
 ### Onda 3: depois da F4 (contrato do estado)
