@@ -1,6 +1,8 @@
 # Frente docs: documentação do modo paralelo (F7 do mapa)
 
-**Status:** Ativo (aprovado em 18/11) · **Frente:** `docs`
+**Status:** Concluído (18/11) · **Frente:** `docs`
+
+Fechado em 18/11: os termos da seção 3 do mapa estão no glossário (`CONTEXT.md`), o ADR 0004 está escrito, os achados P0 estão no protocolo (`fonte/API-INTELBRAS.md`) e o manual (`LEIA-ME.md`) descreve o fluxo paralelo. O mapa não muda aqui: muda na raiz, depois que a frente fecha.
 
 Plano de frente da F7 de `docs/plans/2026-11-cameras-em-paralelo.md`, escrito sobre o `main` em eece536 (frentes `motor`, `orquestrador`, `ui`, `servidor` e `simulacao` fechadas). Roda em paralelo com a frente `ui-paralela` (F6, `docs/plans/2026-11-18-frente-ui-paralela-plan.md`), que só mexe em código. Os textos de tela citados aqui vêm da decisão C4 daquele plano, que vale mesmo antes de a frente fechar. Onde divergir do mapa, vale este plano.
 
