@@ -3931,6 +3931,12 @@ function New-ResultadoConfiguracao {
     -AteEtapa (vazio = tudo): para depois da etapa pedida, com Ok=$true e o
     registro em 'Em andamento'. A chamada seguinte, sem o parametro, retoma
     pelo registro (Get-PlanoRetomada) sem refazer o que ja foi feito.
+
+    -SoConferencia (conferencia despachada pelo coordenador, S1): so a etapa
+    'conferida', a partir do destino. Exige no registro a entrada do MAC do
+    contexto com Etapa 'rede' e Status diferente de 'Instalada'; nao consulta
+    a origem (Get-EstadoCamera), porque com N cameras no switch quem responde
+    no IP de fabrica e outra camera. Nao combina com -AteEtapa.
 #>
 function Invoke-ConfiguracaoCamera {
     param(
@@ -3941,13 +3947,17 @@ function Invoke-ConfiguracaoCamera {
         [switch]$Simular,
         [string]$FalharEm = '',
         [int]$EsperaBootSeg = 120,
-        [string]$AteEtapa = ''
+        [string]$AteEtapa = '',
+        [switch]$SoConferencia
     )
 
     $etapas = Get-EtapasConfiguracao
     $AteEtapa = ([string]$AteEtapa).Trim()
     if ($AteEtapa -and [array]::IndexOf($etapas, $AteEtapa) -lt 0) {
         throw ('etapa desconhecida em -AteEtapa: ' + $AteEtapa + ' (validas: ' + ($etapas -join ', ') + ')')
+    }
+    if ($SoConferencia -and $AteEtapa) {
+        throw ('-SoConferencia nao combina com -AteEtapa (' + $AteEtapa + '): a conferencia e a ultima etapa')
     }
 
     $res = New-ResultadoConfiguracao
@@ -3985,25 +3995,46 @@ function Invoke-ConfiguracaoCamera {
     if ($mac) { $ent = Find-CameraRegistro $reg $mac }
 
     # --- onde a camera esta e de onde continuar ----------------------------
-    if ($Simular) {
-        $estado = 'fabrica'
-        if ($null -ne $ent -and $ent.Status -ne 'Instalada' -and $ent.Etapa) { $estado = 'inicializada' }
-        if ($null -ne $ent -and $ent.Etapa -eq 'rede') { $estado = 'destino' }
-        if ($null -ne $ent -and $ent.Status -eq 'Instalada') { $estado = 'inicializada' }
+    if ($SoConferencia) {
+        # A camera ja saiu do IP de fabrica: o registro diz onde ela parou, e
+        # a origem nao e consultada (outra camera pode responder nela). Sem a
+        # entrada certa, falha antes de qualquer rede e sem mexer no registro.
+        $motivo = ''
+        if (-not $mac) { $motivo = 'o contexto nao traz o MAC da camera' }
+        elseif ($null -eq $ent) { $motivo = 'o MAC ' + (Format-Mac $mac) + ' nao esta no registro' }
+        elseif ($ent.Status -eq 'Instalada') { $motivo = 'a camera ja esta instalada em ' + $ent.Ip }
+        elseif ($ent.Etapa -ne 'rede') { $motivo = 'o registro diz que a camera parou na etapa ' + $(if ($ent.Etapa) { $ent.Etapa } else { '(nenhuma)' }) + ', e nao na rede' }
+        if ($motivo) {
+            $res.Falhou = 'conferida'
+            $res.Erro = 'conferencia recusada sem tocar na rede: ' + $motivo
+            Write-Log ("  FALHOU (conferida): " + $res.Erro) 'Red'
+            return $res
+        }
+        Write-Log ("  conferência a partir do destino " + $destino + "; a origem não é consultada") 'Yellow'
+        $estado = 'destino'
+        $feita = 'rede'
+        $ipCam = $destino
     } else {
-        $estado = Get-EstadoCamera -IpOrigem $origem -Destino $destino
+        if ($Simular) {
+            $estado = 'fabrica'
+            if ($null -ne $ent -and $ent.Status -ne 'Instalada' -and $ent.Etapa) { $estado = 'inicializada' }
+            if ($null -ne $ent -and $ent.Etapa -eq 'rede') { $estado = 'destino' }
+            if ($null -ne $ent -and $ent.Status -eq 'Instalada') { $estado = 'inicializada' }
+        } else {
+            $estado = Get-EstadoCamera -IpOrigem $origem -Destino $destino
+        }
+        $plano = Get-PlanoRetomada -Entrada $ent -EstadoCamera $estado -IpOrigem $origem -Destino $destino
+        if ($plano.Motivo) { Write-Log ("  " + $plano.Motivo) 'Yellow' }
+        if ($plano.Acao -eq 'recusar') {
+            $res.Falhou = (Get-ProximaEtapa ([string]$(if ($ent) { $ent.Etapa } else { '' })))
+            if (-not $res.Falhou) { $res.Falhou = 'inicializada' }
+            $res.Erro = $plano.Motivo
+            return $res
+        }
+        if ($estado -eq 'fabrica') { $ent = $null }
+        $feita = $plano.Concluida
+        $ipCam = $plano.Ip
     }
-    $plano = Get-PlanoRetomada -Entrada $ent -EstadoCamera $estado -IpOrigem $origem -Destino $destino
-    if ($plano.Motivo) { Write-Log ("  " + $plano.Motivo) 'Yellow' }
-    if ($plano.Acao -eq 'recusar') {
-        $res.Falhou = (Get-ProximaEtapa ([string]$(if ($ent) { $ent.Etapa } else { '' })))
-        if (-not $res.Falhou) { $res.Falhou = 'inicializada' }
-        $res.Erro = $plano.Motivo
-        return $res
-    }
-    if ($estado -eq 'fabrica') { $ent = $null }
-    $feita = $plano.Concluida
-    $ipCam = $plano.Ip
 
     # --- persistencia de cada etapa ----------------------------------------
     # Grava so esta camera, sob o Mutex do registro (Update-RegistroCamera

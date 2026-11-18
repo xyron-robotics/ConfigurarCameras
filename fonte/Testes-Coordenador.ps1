@@ -802,6 +802,27 @@ T 'pool: as conferencias se sobrepoem (janelas de tempo pelos eventos)' {
     Assert-Verdade ($sobrepostas -ge 1) ('pares sobrepostos: ' + $sobrepostas)
 }
 
+# S1: a conferencia vai ao motor com -SoConferencia (parte do destino, sem
+# consultar a origem); o portao nao.
+T 'pool: o log da conferencia traz a linha do modo, o do portao nao' {
+    $logs = @($script:eventosTres | Where-Object { $_.Tipo -eq 'log' })
+    $porJob = @($logs | Group-Object { $_.Job })
+    Assert-Igual 6 $porJob.Count 'jobs com log (portao + conferencia de 3)'
+    $conf = 0; $portao = 0
+    foreach ($g in $porJob) {
+        $textos = @($g.Group | ForEach-Object { [string]$_.Texto })
+        $modo = @($textos | Where-Object { $_ -match 'confer.ncia a partir do destino 192\.0\.2\.1[1-3]; a origem n.o . consultada' }).Count
+        if (@($textos | Where-Object { $_ -match '^--- C.mera .*: confer.ncia ---$' }).Count -gt 0) {
+            $conf++
+            Assert-Igual 1 $modo ('linha do modo na conferencia do job ' + $g.Name)
+        } elseif (@($textos | Where-Object { $_ -match '^--- C.mera .*: port.o, at. a rede ---$' }).Count -gt 0) {
+            $portao++
+            Assert-Igual 0 $modo ('linha do modo no portao do job ' + $g.Name)
+        }
+    }
+    Assert-Igual '3|3' ([string]$conf + '|' + $portao) 'conferencias|portoes'
+}
+
 T 'pool: eventos de log, progresso e fim por MAC, e a senha em nenhum deles' {
     $tipos = (@($script:eventosTres | ForEach-Object { $_.Tipo }) | Sort-Object -Unique) -join ','
     Assert-Igual 'fim,log,progresso' $tipos 'tipos de evento'

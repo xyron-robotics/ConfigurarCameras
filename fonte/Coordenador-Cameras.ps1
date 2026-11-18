@@ -648,6 +648,9 @@ function New-ContextoJob {
         inicialização, sem chamar o motor (o motor trataria uma câmera
         inicializada como retomada);
       - em -Simular, espera EsperaSimuladaSeg antes do motor (U1);
+      - a conferência (AteEtapa vazio) vai ao motor com -SoConferencia: parte
+        do destino e não consulta a origem, onde outra câmera pode responder
+        (S1); o portão vai sem;
       - no finally, os sinks saem e vai o evento 'fim': Resultado (só os
         campos que o Step-FimDoJob lê) ou $null com o Erro da exceção.
 #>
@@ -699,7 +702,7 @@ $script:ScriptJobCamera = {
         $falharEmJob = ''
         if ($Simular) { $falharEmJob = $FalharEm }
         $r = Invoke-ConfiguracaoCamera -Contexto $Contexto -Padroes $Padroes -Senha $Senha -CaminhoRegistro $CaminhoRegistro `
-                                       -Simular:$Simular -FalharEm $falharEmJob -AteEtapa $AteEtapa
+                                       -Simular:$Simular -FalharEm $falharEmJob -AteEtapa $AteEtapa -SoConferencia:($AteEtapa -eq '')
         $resultado = @{
             Ok = [bool]$r.Ok; Etapa = [string]$r.Etapa; Falhou = [string]$r.Falhou; Erro = [string]$r.Erro; Recusa = [bool]$r.Recusa
             LoginRecusado = [bool]$r.LoginRecusado; Bloqueada = [bool]$r.Bloqueada; MacTrocado = [bool]$r.MacTrocado

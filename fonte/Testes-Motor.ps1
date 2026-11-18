@@ -531,6 +531,149 @@ T 'Configuracao real (stubs): encoder em 2 gravacoes, conferido, segue para a re
     } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+# Conferencia despachada pelo coordenador (S1). A camera A ja saiu do IP de
+# fabrica (registro com Etapa 'rede', Ip = destino). No switch, a camera B
+# responde no IP de fabrica: de fabrica (InitOrigem 1) ou ja inicializada
+# pelo portao (InitOrigem 0). A rede e trocada por funcoes que anotam o IP de
+# cada chamada: a conferencia nao pode mandar nada para a origem.
+$script:StubsConferencia = {
+    $script:Chamadas = New-Object 'System.Collections.Generic.List[string]'
+    $script:OrigemConf = '192.168.1.108'
+    $script:DestinoConf = '10.70.20.70'
+    $script:MacA = 'AA0000000001'
+    $script:MacB = 'AA0000000002'
+    $script:InitOrigem = 1
+    $script:MacNoDestino = $script:MacA
+    $script:DestinoVivo = $true
+    function Test-IpLocal { param($Ip) return $false }
+    function Test-IpEmUso { param($Ip) $script:Chamadas.Add('Test-IpEmUso ' + $Ip); return $true }
+    function Get-CamInitStatus {
+        param($Ip, $Timeout)
+        $script:Chamadas.Add('Get-CamInitStatus ' + $Ip)
+        $i = 0
+        if ($Ip -eq $script:OrigemConf) { $i = $script:InitOrigem }
+        return [pscustomobject]@{ Ok = $true; Init = $i; Find = ''; Bruto = '' }
+    }
+    function Initialize-Cam { param($Ip, $Senha, $Email, [switch]$Simular) $script:Chamadas.Add('Initialize-Cam ' + $Ip); return $true }
+    function New-CamSessao {
+        param($Ip, $Senha, $Usuario, $Timeout)
+        $script:Chamadas.Add('New-CamSessao ' + $Ip)
+        return [pscustomobject]@{ Ip = $Ip; Ok = $true; Erro = ''; SemResposta = $false; SenhaErrada = $false; Bloqueada = $false; Session = 1 }
+    }
+    function Get-CamInfoRpc {
+        param($Sessao)
+        $script:Chamadas.Add('Get-CamInfoRpc ' + $Sessao.Ip)
+        $m = $script:MacB
+        if ($Sessao.Ip -eq $script:DestinoConf) { $m = $script:MacNoDestino }
+        return [pscustomobject]@{ Ok = $true; Modelo = 'VIP'; Serial = 'SIM-1'; Firmware = 'f'; Mac = $m
+                                  IpAtual = $Sessao.Ip; Mascara = $padroes.Mascara; Gateway = $padroes.Gateway }
+    }
+    function Wait-CamOnline { param($Ip, $Segundos) $script:Chamadas.Add('Wait-CamOnline ' + $Ip); return $script:DestinoVivo }
+    function Get-CamEncode { param($Sessao) $script:Chamadas.Add('Get-CamEncode ' + $Sessao.Ip); return [pscustomobject]@{ Ok = $false; Erro = 'sem leitura' } }
+    function Set-CamEncodeEmPassos { param($Sessao, $Padroes) $script:Chamadas.Add('Set-CamEncodeEmPassos ' + $Sessao.Ip); return [pscustomobject]@{ Ok = $false; Erro = 'stub'; Recusa = $false } }
+    function Get-CamRedeRpc { param($Sessao) $script:Chamadas.Add('Get-CamRedeRpc ' + $Sessao.Ip); return [pscustomobject]@{ Ok = $false; Erro = 'stub' } }
+    function Close-CamSessao { param($Sessao) }
+    function Start-Sleep { param($Seconds, $Milliseconds) }
+}
+
+# Registro com a camera A como o portao deixa: Etapa 'rede', 'Em andamento'.
+function New-RegistroConferencia {
+    param([string]$Caminho, [string]$Etapa = 'rede', [string]$Status = 'Em andamento')
+    $e = New-EntradaRegistro -Mac $script:MacA -Ip $script:DestinoConf
+    $e.Etapa = $Etapa; $e.Status = $Status
+    $null = Update-RegistroCamera -Caminho $Caminho -Entrada $e
+}
+
+# Contexto da conferencia como o coordenador monta (New-ContextoJob).
+function New-ContextoConferencia {
+    return [pscustomobject]@{ IpOrigem = $script:OrigemConf; HttpPort = 80; Mac = 'AA:00:00:00:00:01'; Serial = 'SIM-1'
+                              Destino = $script:DestinoConf; Local = ''; Rack = ''; Andar = ''; Porta = ''; Canal = '' }
+}
+
+function Get-ChamadasNaOrigem { return @($script:Chamadas | Where-Object { $_ -match ([regex]::Escape($script:OrigemConf) + '$') }) }
+
+T 'Conferencia (S1): parte do destino e nunca toca a origem, com B de fabrica ou ja inicializada no IP de fabrica' {
+    $d = New-Temp
+    try {
+        . $script:StubsConferencia
+        foreach ($init in @(1, 0)) {
+            $script:InitOrigem = $init
+            $script:Chamadas.Clear(); $script:Linhas.Clear()
+            $arq = Join-Path $d ('r' + $init + '.json')
+            New-RegistroConferencia -Caminho $arq
+            $r = Invoke-ConfiguracaoCamera -Contexto (New-ContextoConferencia) -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -SoConferencia
+            $naOrigem = @(Get-ChamadasNaOrigem)
+            Assert-Igual 0 $naOrigem.Count ('Init=' + $init + ' na origem; chamadas na origem: ' + ($naOrigem -join ', ') +
+                                            ' | Ok=' + $r.Ok + ' MacTrocado=' + $r.MacTrocado + ' Erro=' + $r.Erro)
+            Assert-Verdade $r.Ok ('Init=' + $init + ': ' + $r.Erro)
+            Assert-Igual 'conferida' $r.Etapa 'etapa'
+            Assert-Verdade ($script:Chamadas -contains 'New-CamSessao 10.70.20.70') ('login no destino: ' + ($script:Chamadas -join ', '))
+            Assert-Igual 0 @($script:Chamadas | Where-Object { $_ -match '^(Initialize-Cam|Set-CamEncodeEmPassos|Get-CamRedeRpc) ' }).Count 'nada regravado'
+            $e = Find-CameraRegistro (Read-Registro -Caminho $arq) $script:MacA
+            Assert-Igual 'Instalada' $e.Status 'registro'
+            Assert-Igual $script:MacA $e.Mac 'MAC no registro'
+            Assert-Verdade (($script:Linhas -join "`n") -match 'confer.ncia a partir do destino 10\.70\.20\.70; a origem n.o . consultada') 'linha do modo no log'
+        }
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Conferencia (S1): destino com o MAC de B ou mudo falha na conferida, sem cair para a origem' {
+    $d = New-Temp
+    try {
+        . $script:StubsConferencia
+        $script:MacNoDestino = $script:MacB
+        $arq = Join-Path $d 'r.json'
+        New-RegistroConferencia -Caminho $arq
+        $r = Invoke-ConfiguracaoCamera -Contexto (New-ContextoConferencia) -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -SoConferencia
+        Assert-Falso $r.Ok 'outro aparelho no destino'
+        Assert-Igual 'conferida' $r.Falhou 'etapa da falha'
+        Assert-Verdade ($r.Erro -match 'outro aparelho') $r.Erro
+        Assert-Igual 0 @(Get-ChamadasNaOrigem).Count ('chamadas na origem: ' + (@(Get-ChamadasNaOrigem) -join ', '))
+
+        $script:MacNoDestino = $script:MacA; $script:DestinoVivo = $false
+        $script:Chamadas.Clear()
+        $arq = Join-Path $d 'r2.json'
+        New-RegistroConferencia -Caminho $arq
+        $r = Invoke-ConfiguracaoCamera -Contexto (New-ContextoConferencia) -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -SoConferencia
+        Assert-Falso $r.Ok 'destino mudo'
+        Assert-Igual 'conferida' $r.Falhou 'etapa da falha (mudo)'
+        Assert-Verdade ($r.Erro -match 'nao respondeu') $r.Erro
+        Assert-Igual 0 @(Get-ChamadasNaOrigem).Count ('chamadas na origem: ' + (@(Get-ChamadasNaOrigem) -join ', '))
+        Assert-Igual 'Falhou' (Find-CameraRegistro (Read-Registro -Caminho $arq) $script:MacA).Status 'registro do mudo'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Conferencia (S1): sem a entrada certa no registro falha na conferida sem rede; com -AteEtapa estoura' {
+    $d = New-Temp
+    try {
+        . $script:StubsConferencia
+        $casos = @(
+            @{ Nome = 'sem entrada'; Etapa = '' },
+            @{ Nome = 'parou no encoder'; Etapa = 'encoder'; Status = 'Em andamento' },
+            @{ Nome = 'ja instalada'; Etapa = 'conferida'; Status = 'Instalada' }
+        )
+        $i = 0
+        foreach ($c in $casos) {
+            $i++
+            $arq = Join-Path $d ('r' + $i + '.json')
+            if ($c.Etapa) { New-RegistroConferencia -Caminho $arq -Etapa $c.Etapa -Status $c.Status }
+            $script:Chamadas.Clear()
+            $r = Invoke-ConfiguracaoCamera -Contexto (New-ContextoConferencia) -Padroes $padroes -Senha 's' -CaminhoRegistro $arq -SoConferencia
+            Assert-Falso $r.Ok $c.Nome
+            Assert-Igual 'conferida' $r.Falhou ($c.Nome + ': etapa da falha')
+            Assert-Verdade ($r.Erro -match 'sem tocar na rede') ($c.Nome + ': ' + $r.Erro)
+            Assert-Igual 0 $script:Chamadas.Count ($c.Nome + ': chamadas de rede: ' + ($script:Chamadas -join ', '))
+            if ($c.Etapa) {
+                $e = Find-CameraRegistro (Read-Registro -Caminho $arq) $script:MacA
+                Assert-Igual $c.Status $e.Status ($c.Nome + ': registro intacto')
+            }
+        }
+        Assert-Estoura { Invoke-ConfiguracaoCamera -Contexto (New-ContextoConferencia) -Padroes $padroes -Senha 's' `
+                                                   -CaminhoRegistro (Join-Path $d 'r1.json') -SoConferencia -AteEtapa 'rede' } '-SoConferencia com -AteEtapa'
+        Assert-Igual 0 $script:Chamadas.Count 'estouro sem rede'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
 # ------------------------------------------------------ rede
 
 Write-Host ""
