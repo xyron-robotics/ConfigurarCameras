@@ -87,16 +87,40 @@ Etapa obrigatória da configuração que grava resolução, quadros por segundo 
 _Avoid_: configurar vídeo, alterar qualidade
 
 **Fila**:
-Sequência de IPs de destino montada a partir de uma faixa início–fim antes de começar; cada posição recebe uma câmera. Uma faixa sem nenhuma posição livre não vira fila. A faixa montada fica na sessão e volta preenchida na próxima abertura, só como sugestão. Montar é no passo a passo ou em Opções.
+Sequência de IPs de destino montada a partir de uma faixa início–fim antes de começar; cada posição recebe uma câmera. As posições recebem câmeras em paralelo: uma câmera em falha espera a decisão no cartão dela e não para as outras. Uma faixa sem nenhuma posição livre não vira fila. A faixa montada fica na sessão e volta preenchida na próxima abertura, só como sugestão. Montar é no passo a passo ou em Opções.
 _Avoid_: plano, lote, lista
 
 **Posição**:
-Um IP de destino da fila. As que podem receber câmera são numeradas "câmera N" (câmera 1, câmera 2…), no mesmo número na fita e na bancada; as deixadas de fora na montagem (gateway, fora da rede, já no registro) não recebem número.
+Um IP de destino da fila. As que podem receber câmera são numeradas "câmera N" (câmera 1, câmera 2…), no mesmo número na fita e na bancada; as deixadas de fora na montagem (gateway, fora da rede, já no registro) não recebem número. A câmera recebe a próxima posição livre ao entrar no portão do IP de fábrica, na ordem em que apareceu no broadcast, que não é a ordem do cabo; por isso porta e canal se digitam no cartão da câmera.
 _Avoid_: slot, item, vaga
 
 **Vigia**:
-Modo da fila, desligado por padrão, em que o painel observa o IP de fábrica e configura sozinho, na próxima posição livre, cada câmera de fábrica que aparece. Com a chave "qualquer faixa" ligada, observa também pela descoberta, aceitando câmera de fábrica fora do IP de fábrica. Câmera já inicializada só gera aviso; retomar é sempre ação do operador.
+Modo da fila, desligado por padrão, em que o painel observa pelo broadcast (DHIP) na placa escolhida e admite, cada uma na próxima posição livre, quantas câmeras de fábrica houver no switch. Com a chave de qualquer faixa desligada, só conta a câmera que responde no IP de fábrica; ligada, aceita também câmera de fábrica fora dele. Câmera já inicializada só gera aviso e nunca é tocada; retomar é sempre ação do operador. Não pausa com câmera em decisão: as outras seguem. Sem resposta do broadcast, cai no modo de reserva.
 _Avoid_: automático, auto-detecção, watcher, polling
+
+**Portão do IP de fábrica**:
+Etapa, uma câmera por vez, em que a câmera de fábrica, presa pelo MAC num vizinho estático, é inicializada, recebe o encoder e grava a rede, saindo do IP de fábrica para o destino. Enquanto o portão está ocupado, as outras câmeras de fábrica ficam na espera; ao sair dele, a câmera segue para a conferência em paralelo.
+_Avoid_: trava, lock, semáforo, fila de fábrica
+
+**Vizinho estático**:
+Entrada fixa `IP de fábrica -> MAC` na tabela ARP da placa escolhida, posta quando a câmera entra no portão e tirada quando sai, para que, com várias câmeras de fábrica no mesmo IP, o tráfego vá só para a do portão. Entra no rastro do preparo e sai com ele; não sobrevive ao reboot. Sem Administrador não é posto.
+_Avoid_: ARP estático, entrada ARP, NetNeighbor
+
+**Conferência em paralelo**:
+Conferência de várias câmeras ao mesmo tempo, sem limite de quantas, cada uma no seu IP de destino. Não toca o IP de fábrica, por isso não espera o portão.
+_Avoid_: conferência simultânea, verificação em lote
+
+**Cartão da câmera**:
+Bloco da bancada de cada câmera da fila, com posição, modelo, serial, MAC, destino, estado da câmera, Porta e Canal e, em falha, os botões Tentar de novo e Pular esta posição. Porta e Canal ficam editáveis até a fila fechar, inclusive com a câmera instalada, menos em câmera pulada ou já inicializada.
+_Avoid_: linha, item, card, ficha
+
+**Estado da câmera**:
+Palavra que o cartão mostra para a fase da câmera: "Na espera", "No portão", "Conferindo", "Falhou" (espera a decisão do operador), "Instalada", "Pulada" e "Já inicializada: não tocada".
+_Avoid_: status, fase (é o nome no código), situação
+
+**Modo de reserva**:
+Sem resposta do broadcast (em geral, a porta UDP 37810 fechada no firewall) ou sem Administrador, o painel configura uma câmera por vez e avisa. Sem Administrador também não há vizinho estático.
+_Avoid_: modo serial, modo de segurança, fallback
 
 **Descoberta**:
 Busca de câmeras feita pelo painel só pela placa escolhida, em três passos: o broadcast (a câmera responde de qualquer faixa, com modelo, serial, firmware e se está de fábrica), o IP de fábrica e, só se nada foi achado, a varredura por ping das faixas da placa. O estado anunciado no broadcast é pista; o painel só age depois de confirmar pelo HTTP.
