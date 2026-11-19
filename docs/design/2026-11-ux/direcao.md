@@ -60,7 +60,7 @@ Topo fixo (56 px), em toda tela depois do passo a passo:
 ```
 
 - **Menu lateral sai.** Ele ocupava 1257 px de altura, empurrava Opções para 1304 px (`UX-12`) e dava a Ferramentas o mesmo peso de Painel (`UX-38`). Três abas no topo cabem a 1366 px e ficam sempre à vista.
-- **Opções passa a se chamar Sessão.** A tela edita a sessão (`CONTEXT.md`: Sessão); "Opções atrás da engrenagem" era nome de contêiner. O que não é da sessão (tema, versão, refazer o passo a passo) vai para o último bloco dela, "Painel" (`UX-36`). O renome vai ao usuário na Task 6 e, aprovado, a fase B atualiza o `CONTEXT.md`. Trade-off nomeado: quem já usa a 1.2 procura "Opções". Por isso a aba tem o texto escrito, sem ícone de engrenagem (`UI-16`).
+- **Opções passa a se chamar Sessão.** A tela edita a sessão (`CONTEXT.md`: Sessão); "Opções atrás da engrenagem" era nome de contêiner. O que não é da sessão (tema, versão, refazer o passo a passo) vai para o último bloco dela, "Painel" (`UX-36`). Decisão do usuário (Task 6): renome aprovado. A fase B (frente `redesenho-navegacao`) atualiza o `CONTEXT.md` e o `LEIA-ME.md`. Trade-off nomeado: quem já usa a 1.2 procura "Opções". Por isso a aba tem o texto escrito, sem ícone de engrenagem (`UI-16`).
 - **Sessão é uma tela por seção**, não uma página de 2847 px: lista de seções à esquerda (Senha, Placa, Rede, Câmera, Fila, Painel) e a seção escolhida à direita, com rota própria (`#/sessao/camera`).
 - **Encerrar o painel** fica no topo, como botão secundário: 2 cliques, 0 rolagem (`UX-12`).
 - **Chips de placa, internet e simulação** substituem a barra colorida. São neutros no estado normal e acendem só quando pedem ação. O detalhe (IPs, faixas, ifIndex) abre num popover sob demanda, com as ações Preparar a placa e Restaurar o DHCP (`UX-01`, `UI-09`).
@@ -219,7 +219,7 @@ Conferir (sessão salva ou passo 6)
 - O painel lateral reusa o formulário de Câmera de `formularios.js` (uma definição só, `UX-37`). Ele diz que muda a sessão, porque o encoder é um padrão global da sessão (`CONTEXT.md`: Sessão).
 - "Pular esta posição" abre o diálogo: título "Pular a câmera 9?", texto "A posição 192.0.2.18 fica registrada como falha e a fila segue para a próxima.", botões "Pular a câmera 9" e "Cancelar" (`UX-39`, `UX-19`).
 - Falha por senha recusada: "Tentar de novo" fica desabilitado com o motivo visível embaixo ("Repetir a senha recusada bloqueia o admin. Troque a senha em Sessão > Senha."). O motivo não fica só num `title` (`UI-14`, `UI-11`).
-- Foco: ao surgir uma falha, o foco **não** salta sozinho (o operador pode estar digitando porta e canal). Um anúncio `aria-live` avisa, e um atalho "Ir para o que pede você" fica no topo do Painel. Muda o `focarDecisao` atual, que roubava o foco.
+- Foco: ao surgir uma falha, o foco **não** salta sozinho (o operador pode estar digitando porta e canal). Um anúncio `aria-live` avisa, e um atalho "Ir para o que pede você" fica no topo do Painel. Muda o `focarDecisao` atual, que roubava o foco. Decisão do usuário (Task 6): aprovado. A falha se anuncia pelo `aria-live`, na linha da câmera e no bloco "Pede você", sem mover o foco.
 
 ### 3.4 Ferramentas
 
@@ -374,9 +374,9 @@ Um conjunto só, em traço de 1,5 px a 16 e 20 px, montado como SVG por `icones.
 
 - **Onde:** a logo inteira (`logo.png`) aparece no passo a passo e na Conferência (alto à esquerda, 168 px de largura, cerca de 86 px de altura, acima do piso de 160 px da Task 3), na tela Abrindo, na tela Encerrado e no bloco "Sobre" de Sessão > Painel. No topo fixo vai só o **símbolo** (os dois paralelogramos azuis), recortado do PNG oficial, a 28 px de altura, ao lado do texto "Configurar câmeras".
 - **Trade-off nomeado:** a logo inteira no topo, a 160 px de largura, pede 82 px de altura: 26 px a mais em toda tela de trabalho, cerca de uma linha de tabela a menos. O símbolo no topo mantém a marca à vista sem esse custo.
-- **Tema escuro:** `logo-escuro.png`, a variante derivada da Task 3 (grafite trocado por claro, azul mantido). Ela **não é oficial** e precisa do aceite da SmartSeg. Até o aceite, o tema escuro mostra a logo oficial sobre uma placa clara (`--superficie` do claro, `--raio-bloco`, `--esp-3` de respiro), sem alterar a arte. A troca é de um token de imagem só.
+- **Tema escuro:** a logo oficial sobre uma placa clara (`--superficie` do claro, `--raio-bloco`, `--esp-3` de respiro), sem alterar a arte. Decisão do usuário (Task 6): é a solução definitiva. A variante derivada da Task 3 (`marca/logo-smartseg-escuro.png`, grafite trocado por claro) fica só como registro da auditoria e **não** entra na fase B nem no `www`.
 - **Favicon:** `simbolo.png` (recorte 64×64 do símbolo, fundo transparente) via `<link rel="icon" type="image/png" href="/simbolo.png">`. A rota `GET /favicon.ico` que devolve 204 fica como está.
-- **Arquivos servidos:** derivados do PNG de 2302 px por redução (nada redesenhado, conforme a decisão do usuário): `logo.png` a 336 px de largura (2× de 168), `logo-escuro.png` igual, `simbolo.png` a 64 px. Sem SVG da marca: redesenhar o símbolo em vetor criaria uma arte não oficial.
+- **Arquivos servidos:** derivados do PNG de 2302 px por redução (nada redesenhado, conforme a decisão do usuário): `logo.png` a 336 px de largura (2× de 168) e `simbolo.png` a 64 px. Sem SVG da marca: redesenhar o símbolo em vetor criaria uma arte não oficial.
 
 ## 5. Componentes
 
@@ -520,6 +520,8 @@ Quatro `<link rel="stylesheet">` no `index.html`, nesta ordem. As camadas resolv
 | `tela-painel.js` | igual | Painel, decisão, registro |
 | `tela-sessao.js` | igual | Sessão |
 | `tela-ferramentas.js` | igual | Ferramentas e log |
+| `topo.js` | `criarTopo(ctx)` | Topo fixo: símbolo, abas, chips com popover, Encerrar o painel. Veio do protótipo (Task 5) |
+| `marca.js` | `logo()`, `simbolo()` | As duas imagens da marca, com o texto alternativo de `textos.js`. Veio do protótipo (Task 5) |
 
 Costuras e regras:
 - **Telas não fazem `fetch` e não leem o estado bruto.** Recebem o `modelo` de `estado.derivar` e um `ctx` com `api`, `rotas`, `confirmar`. O teste da deleção: apagar `estado.js` espalharia contagem, etapa e regra da placa pelas 4 telas, que é exatamente o defeito de hoje (`UX-02`, `UX-04`). O módulo paga o próprio peso.
@@ -537,7 +539,7 @@ $tipos = @{ '.html' = 'text/html; charset=utf-8'; '.js' = 'text/javascript; char
 
 A linha 1615 (`foreach ($f in @(Get-ChildItem -LiteralPath $www -File))`) não muda: ela já serve todo arquivo plano do `www`. Por isso os módulos ficam planos.
 
-**Arquivos do `www`** (23): `index.html`; `tokens.css`, `base.css`, `componentes.css`, `telas.css`; `app.js`, `api.js`, `estado.js`, `rotas.js`, `textos.js`, `formato.js`, `constantes.js`, `dom.js`, `icones.js`, `componentes.js`, `formularios.js`, `tela-inicio.js`, `tela-painel.js`, `tela-sessao.js`, `tela-ferramentas.js`; `logo.png`, `logo-escuro.png`, `simbolo.png`. Saem `app.css` e o `app.js` atual (o novo `app.js` é outro arquivo com o mesmo nome).
+**Arquivos do `www`** (24): `index.html`; `tokens.css`, `base.css`, `componentes.css`, `telas.css`; `app.js`, `api.js`, `estado.js`, `rotas.js`, `textos.js`, `formato.js`, `constantes.js`, `dom.js`, `icones.js`, `componentes.js`, `formularios.js`, `tela-inicio.js`, `tela-painel.js`, `tela-sessao.js`, `tela-ferramentas.js`, `topo.js`, `marca.js`; `logo.png`, `simbolo.png`. Ficam no protótipo e não vão ao `www`: `api-falsa.js`, `prototipo-barra.js`, `prototipo.css`, `pacote.js`, `gerar-pacote.ps1`, `modulos.html` e o `index.html` dele. Saem `app.css` e o `app.js` atual (o novo `app.js` é outro arquivo com o mesmo nome).
 
 **Instalador** (`instalador/ConfigurarCameras.iss`, linhas 58 a 60 hoje). Saem:
 
@@ -553,7 +555,7 @@ Entram, no mesmo lugar, uma linha por arquivo, sem curinga (o `Gerar-Instalador.
 Source: "{#Raiz}\fonte\web\www\<arquivo>"; DestDir: "{app}\web\www"; Flags: ignoreversion
 ```
 
-para cada um dos 23 arquivos acima, na ordem da lista. O teste da seção 7.4 garante que a lista do `.iss` e a pasta `www` são iguais. Na seção `[InstallDelete]` que já existe (linha 66 do `.iss`), entra `Type: files; Name: "{app}\web\www\app.css"`: a atualização apaga o `app.css` velho e a pasta instalada fica igual à do repo.
+para cada um dos 24 arquivos acima, na ordem da lista. O teste da seção 7.4 garante que a lista do `.iss` e a pasta `www` são iguais. Na seção `[InstallDelete]` que já existe (linha 66 do `.iss`), entra `Type: files; Name: "{app}\web\www\app.css"`: a atualização apaga o `app.css` velho e a pasta instalada fica igual à do repo.
 
 ### 7.4 Teste que guarda a regra: `fonte/Testes-Front.ps1`
 
@@ -670,11 +672,14 @@ O que **não** muda, e por quê:
 
 Nenhum achado foi recusado.
 
-### 9.3 Decisões que a Task 6 leva ao usuário
+### 9.3 Decisões do usuário na Task 6 (19/11)
 
-1. Renomear Opções para **Sessão** (2.1).
-2. Usar a `logo-escuro.png` derivada depois do aceite da SmartSeg. Até lá vale a placa clara (4.6).
-3. Tirar o foco automático da falha e trocar por anúncio e atalho (3.3).
+1. Protótipo aprovado como está: a direção segue para a fase B sem ajuste.
+2. Opções passa a se chamar **Sessão** (2.1).
+3. No tema escuro, a logo oficial sobre a placa clara, em definitivo. A variante derivada não vai para a fase B (4.6).
+4. Sem foco automático na falha: anúncio `aria-live`, a linha da câmera e o bloco "Pede você" (3.3).
+
+A fase B está em frentes, na ordem do índice `docs/plans/2026-11-20-frente-redesenho-mapa.md`.
 
 ## Skills aplicadas e descartadas
 
