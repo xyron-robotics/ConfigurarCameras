@@ -964,6 +964,37 @@ function Get-MacSimulado {
 }
 
 <#
+    O DHIP simulado: as câmeras 1..Cameras como uma câmera real responderia.
+      - De fábrica (Init 1) no IP de fábrica, por padrão.
+      - Número em JaInicializadas (cenário 'ja-inicializada', S2): Init 0
+        no IP de fábrica.
+      - MAC com Status Instalada no Registro (entradas do registro simulado):
+        Init 0 no IP de destino dela. Câmera instalada saiu do IP de
+        fábrica; sem isto, a fila seguinte a admitia de novo e o job a
+        recusava ("já instalada") com uma posição já reservada.
+#>
+function Get-AchadosSimulados {
+    param([int]$Cameras, [string]$IpFabrica, [int[]]$JaInicializadas = @(), $Registro = @())
+    $instaladas = @{}
+    foreach ($e in @($Registro)) {
+        if ($null -eq $e -or [string]$e.Status -ne 'Instalada') { continue }
+        $k = Get-ChaveMac ([string]$e.Mac)
+        if ($k -ne '') { $instaladas[$k] = [string]$e.Ip }
+    }
+    $l = @()
+    for ($n = 1; $n -le $Cameras; $n++) {
+        $mac = Get-MacSimulado $n
+        $ip = $IpFabrica
+        $init = 1
+        if ($JaInicializadas -contains $n) { $init = 0 }
+        $k = Get-ChaveMac $mac
+        if ($instaladas.ContainsKey($k) -and $instaladas[$k] -ne '') { $ip = $instaladas[$k]; $init = 0 }
+        $l += @{ Mac = $mac; Serial = ('SIM-' + $n); Modelo = 'SIM-IPC'; Ip = $ip; HttpPort = 80; Init = $init; Marca = 'Intelbras' }
+    }
+    return $l
+}
+
+<#
     O falharEm do POST /api/simular (S2), já lido do JSON: texto (o
     comportamento de sempre, sem validação) ou mapa { "<n>": "<valor>" },
     n de 1 a Cameras e valor de $script:CenariosSimulados. Devolve

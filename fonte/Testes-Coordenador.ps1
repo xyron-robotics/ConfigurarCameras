@@ -665,7 +665,7 @@ function New-PadroesTeste {
 # deps de placa falsas (contam os presos) e o despacho ligado ao pool. A
 # espera simulada e a tabela por etapa do servidor numa escala curta (S3).
 function New-CoordPool {
-    param([int]$N = 3, [double]$Escala = 0.5)
+    param([int]$N = 3, [double]$Escala = 0.5, [switch]$SemDescoberta)
     $deps = New-DepsFalsas
     $deps.Despachar = (New-DepsPool).Despachar
     $coord = New-Coordenador -Posicoes (New-PosicoesTeste $N) -Deps $deps
@@ -678,6 +678,7 @@ function New-CoordPool {
     $coord.Trabalho.Simular = $true
     $coord.Trabalho.EsperaSimuladaMs = Get-EsperaSimuladaMs -Escala $Escala
     $coord.Trabalho.Local = 'Obra exemplo'; $coord.Trabalho.Rack = 'R1'; $coord.Trabalho.Andar = '1'
+    if ($SemDescoberta) { return $coord }
     $achados = @()
     for ($i = 1; $i -le $N; $i++) { $achados += New-AchadoTeste $i }
     $coord.Estado = (Step-Descoberta -Estado $coord.Estado -Achados $achados).Estado
@@ -1459,6 +1460,39 @@ T 'Get-FalharEmTrabalho: numero vira MAC, ja-inicializada fica de fora, texto pa
     Assert-Igual 'AA0000000002=rede,AA000000000B=mac-trocado' ((@($t.Keys) | Sort-Object | ForEach-Object { $_ + '=' + $t[$_] }) -join ',') 'tabela por MAC'
     Assert-Igual 'encoder' (Get-FalharEmTrabalho 'encoder') 'texto'
     Assert-Igual 'AA:00:00:00:00:10' (Get-MacSimulado 16) 'MAC da camera 16'
+}
+
+T 'Get-AchadosSimulados: Instalada no registro sai do IP de fabrica (Init 0 no destino); ja-inicializada e o resto de fabrica' {
+    $reg = @([pscustomobject]@{ Mac = 'AA0000000001'; Ip = '192.0.2.10'; Status = 'Instalada' },
+             [pscustomobject]@{ Mac = 'AA0000000002'; Ip = '192.0.2.20'; Status = 'Falhou' })
+    $a = @(Get-AchadosSimulados -Cameras 4 -IpFabrica '192.168.1.108' -JaInicializadas @(3) -Registro $reg)
+    Assert-Igual 4 $a.Count 'as 4 cameras'
+    Assert-Igual 'AA:00:00:00:00:01=192.0.2.10/0,AA:00:00:00:00:02=192.168.1.108/1,AA:00:00:00:00:03=192.168.1.108/0,AA:00:00:00:00:04=192.168.1.108/1' `
+        (($a | ForEach-Object { $_.Mac + '=' + $_.Ip + '/' + $_.Init }) -join ',') 'MAC=IP/Init'
+    Assert-Igual 'SIM-1|SIM-IPC|80|Intelbras' ($a[0].Serial + '|' + $a[0].Modelo + '|' + $a[0].HttpPort + '|' + $a[0].Marca) 'campos do achado'
+    $a = @(Get-AchadosSimulados -Cameras 2 -IpFabrica '192.168.1.108')
+    Assert-Igual '192.168.1.108/1,192.168.1.108/1' (($a | ForEach-Object { $_.Ip + '/' + $_.Init }) -join ',') 'sem registro: todas de fabrica'
+}
+
+T 'pool: fila seguinte com a camera 1 ja Instalada: ela nao ganha posicao, as outras ocupam em sequencia' {
+    $coord = $null
+    try {
+        $coord = New-CoordPool -N 3 -Escala 0.1 -SemDescoberta
+        $reg = New-Registro
+        $ent = New-EntradaRegistro -Mac 'AA:00:00:00:00:01' -Ip '192.0.2.10'
+        $ent.Status = 'Instalada'; $ent.Etapa = 'conferida'; $ent.Data = '2026-11-19 08:17'
+        $reg.Cameras = @($ent)
+        [IO.File]::WriteAllText($coord.Trabalho.CaminhoRegistro, ($reg | ConvertTo-Json -Depth 5))
+        $cams = @((Read-Registro $coord.Trabalho.CaminhoRegistro).Cameras)
+        $achados = Get-AchadosSimulados -Cameras 3 -IpFabrica $script:ipFabrica -Registro $cams
+        $r = Invoke-TiqueParalelo -Coord $coord -Achados $achados -Registro $cams -IpFabrica $script:ipFabrica
+        Invoke-AcoesCoordenador -Coord $coord -Acoes $r.Acoes
+        Assert-Igual 0 @(@($r.Acoes) | Where-Object { [string]$_.Mac -eq 'AA:00:00:00:00:01' }).Count 'nenhuma acao para a camera 1'
+        Assert-Verdade (Invoke-LacoTeste -Coord $coord) 'laco terminou no tempo'
+        Assert-Igual $null (Get-Camera $coord.Estado 1) 'camera 1 fora do estado'
+        Assert-Igual '2=feita/1,3=feita/2' ((@($coord.Estado.Cameras) | ForEach-Object { $_.Mac.Substring(16) + '=' + $_.Fase + '/' + $_.Indice } | Sort-Object) -join ',') 'cameras 2 e 3 nas posicoes 1 e 2'
+        Assert-Igual 'feita,feita,pendente' ((@($coord.Estado.Posicoes) | ForEach-Object { $_.Estado }) -join ',') 'posicoes sem buraco'
+    } finally { Remove-CoordPool $coord }
 }
 
 T 'pool: tabela com a camera 2 na rede: so a 2 vai a decisao, e o tentar dela passa' {

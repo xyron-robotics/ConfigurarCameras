@@ -676,19 +676,20 @@ $scriptWorker = {
     # DHIP vazio: ping no IP de fabrica e, se responder, o MAC do ARP e duas
     # leituras do vizinho (MAC trocando = duas cameras no mesmo IP).
     # Cenario 'ja-inicializada' do mapa (S2): a camera n vem com Init 0 (so
-    # o aviso da D8, nunca presa nem despachada).
+    # o aviso da D8, nunca presa nem despachada). Camera Instalada no
+    # registro simulado responde no destino dela, com Init 0, como a real
+    # (Get-AchadosSimulados): a fila seguinte nao a admite de novo.
     $DescobrirAchados = {
         param($Sessao)
         $ipf = [string]$Sessao.IpFabrica
         $l = @{ Achados = @(); DhipRespondeu = $true; PingFabrica = $false; MacArp = ''; MacTrocando = $false }
         if ($W.Simular) {
-            $jaInit = @{}
+            $jaInit = @()
             if ($W.FalharEm -is [System.Collections.IDictionary]) {
-                foreach ($k in @($W.FalharEm.Keys)) { if ([string]$W.FalharEm[$k] -eq 'ja-inicializada') { $jaInit[[int]$k] = $true } }
+                foreach ($k in @($W.FalharEm.Keys)) { if ([string]$W.FalharEm[$k] -eq 'ja-inicializada') { $jaInit += [int]$k } }
             }
-            $l.Achados = @(1..([int]$W.SimularCameras) | ForEach-Object {
-                @{ Mac = (Get-MacSimulado $_); Serial = ('SIM-' + $_); Modelo = 'SIM-IPC'; Ip = $ipf
-                   HttpPort = 80; Init = $(if ($jaInit.ContainsKey($_)) { 0 } else { 1 }); Marca = 'Intelbras' } })
+            $reg = @((Read-Registro (Get-CaminhoRegistroAtual)).Cameras)
+            $l.Achados = @(Get-AchadosSimulados -Cameras ([int]$W.SimularCameras) -IpFabrica $ipf -JaInicializadas $jaInit -Registro $reg)
             return $l
         }
         $todos = @(Find-CamerasNaRede -IpFabrica $ipf -GatewayDestino $Sessao.Gateway -ArquivoBlacklist $Arquivos.Blacklist `
