@@ -20,15 +20,19 @@ Pedido do usuário: "a próxima versão [...] consiga operar qualquer tipo de c�
 
 Se um plano de frente divergir deste mapa, vale o plano de frente. Os números de linha valem para `main` em 0d0581a e vão andar: localize pelo nome da função, não pela linha.
 
-## 0. Retomada (18/11, depois da frente `servidor`)
+## 0. Retomada (19/11)
 
-Frentes `motor`, `orquestrador`, `ui` e `servidor` fechadas e integradas no `main` local (sem push). O próximo agente começa aqui.
+Frentes `motor`, `orquestrador`, `ui`, `servidor`, `simulacao`, `docs` (F7) e `ui-paralela` (F6) fechadas e integradas no `main` local (sem push). O próximo agente começa aqui.
+
+**Decisão do usuário (19/11):** o redesenho de UI e UX do painel (com a marca do Grupo SmartSeg e o front reorganizado) vem **antes** da release 1.3.0. Escopo: front livre, servidor só no mínimo para a tela, motor, orquestrador e coordenador intocados. Fase A: `docs/plans/2026-11-19-frente-ux-plan.md` (auditoria, direção, protótipo e planos da fase B). Fase B: as frentes de implementação que a fase A escreve, aprovadas uma a uma.
+
+**Ordem a partir de 19/11:** frente `ux` (fase A) → frentes do redesenho (fase B) → pré-release (testes `pool:` instáveis no `Testes-Coordenador`, comentário velho em `Servidor-Painel.ps1:1836`) → release (seção 9). O bug do `salvarCartao` (`app.js:746`) vai para a fase B.
 
 **Decisão do usuário (18/11):** as câmeras não estão mais disponíveis. A release 1.3.0 sai **sem a bancada real (F8)**, apoiada na medição P0 (seção 6.1) e na prova em simulação. O que tem de funcionar de verdade é a disponibilização: tag, `release.yml` verde, instalador publicado e "Atualizar" pelo painel nesta máquina chegando na 1.3.0. A F8 vira pendência para quando houver câmeras. O push continua precisando da confirmação do usuário no momento da release.
 
 **Decisão do usuário (18/11, depois da frente `simulacao`):** porta e canal continuam editáveis no cartão da câmera depois de ela estar instalada, enquanto a fila estiver aberta; o servidor grava direto no registro. Câmera pulada continua recusada. Isso substitui o "até a conferência terminar" da D10. Detalhe na C2 de `docs/plans/2026-11-18-frente-ui-paralela-plan.md`.
 
-**Ordem:** F5 (fechada em eece536) → F6 e F7 juntas (arquivos distintos: a F6 só em `fonte/`, a F7 só em documentação) → release (seção 9). Cada frente com plano próprio em `docs/plans/`, `/clear` depois do plano aprovado e execução pelo `/regime:maestro`.
+**Ordem até 18/11 (cumprida):** F5 (fechada em eece536) → F6 e F7 juntas (arquivos distintos: a F6 só em `fonte/`, a F7 só em documentação) → release (seção 9). Cada frente com plano próprio em `docs/plans/`, `/clear` depois do plano aprovado e execução pelo `/regime:maestro`.
 
 **Herança da frente `servidor`** (achados da revisão e dos executores; o commit `chore(plano): revisão` tem o texto completo). Cada item já tem frente dona:
 
@@ -448,7 +452,7 @@ Teste só da frente: o roteiro não junta prova de outras pendências do LEIA-ME
 
 ## 9. Release (só com aprovação explícita do usuário)
 
-Pré-condição: F5, F6 e F7 fechadas no `main`, com os itens "alto" da herança (seção 0) resolvidos. Não depende da F8.
+Pré-condição: F5, F6 e F7 fechadas no `main`, com os itens "alto" da herança (seção 0) resolvidos; desde 19/11, também o redesenho (fases A e B) e a pré-release fechados. Não depende da F8.
 
 1. Número conforme a Q6: `fonte/VERSAO.txt` para 1.3.0 (plano de UI + paralelo), num commit só.
 2. Antes do push, `git ls-files | findstr /i senha` tem que sair vazio. Nunca subir o bundle de histórico. Push pelo credential helper do `gh` (conta ativa conferida).
