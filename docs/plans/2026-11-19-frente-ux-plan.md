@@ -1,6 +1,8 @@
 # Frente ux: auditoria de UI e UX, direção visual SmartSeg, protótipo e planos do redesenho (fase A)
 
-**Status:** Ativo · **Frente:** `ux`
+**Status:** Concluído (19/11) · **Frente:** `ux`
+
+Fechamento: a fase B do redesenho está indexada em `docs/plans/2026-11-20-frente-redesenho-mapa.md` (cinco frentes sequenciais, planos em Draft).
 
 **Goal:**
 - Diagnosticar o painel como experiência do operador e como interface.
