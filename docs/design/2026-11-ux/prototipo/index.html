@@ -1,0 +1,27 @@
+<!doctype html>
+<!--
+  PROTOTIPO navegavel da direcao (docs/design/2026-11-ux/direcao.md), frente ux, Task 5.
+  Abre com dois cliques (file://). O navegador bloqueia ES modules em file:// (origem null),
+  entao esta pagina carrega pacote.js, gerado dos modulos por gerar-pacote.ps1. Os modulos
+  (app.js e vizinhos) sao a fonte e o que a fase B aproveita; modulos.html carrega os mesmos
+  modulos direto, para conferir por http. Sem estilo nem script inline (CSP da secao 7.3).
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Configurar câmeras</title>
+  <link rel="icon" href="simbolo.png">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="componentes.css">
+  <link rel="stylesheet" href="telas.css">
+  <link rel="stylesheet" href="prototipo.css">
+  <script src="pacote.js" defer></script>
+</head>
+<body>
+  <div data-raiz></div>
+  <noscript><p>O painel precisa de JavaScript ligado no navegador.</p></noscript>
+</body>
+</html>

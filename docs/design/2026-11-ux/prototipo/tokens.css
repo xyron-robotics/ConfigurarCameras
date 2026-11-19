@@ -1,0 +1,147 @@
+@layer tokens, base, componentes, telas;
+
+/* Tokens do painel (direcao.md, secao 4). Unico arquivo com cor, medida, numero e duracao.
+   quebras: 1100px 1600px */
+
+@layer tokens {
+  :root {
+    color-scheme: light dark;
+
+    /* 4.1 Primitivos da marca Grupo SmartSeg */
+    --marca-azul-700: #407A94;
+    --marca-azul-500: #5489A1;
+    --marca-grafite: #565758;
+    --marca-cinza: #848688;
+    /* Derivados, fora da paleta oficial, escolhidos por contraste */
+    --azul-800: #35687F;
+    --azul-link: #2F6A83;
+    --azul-claro: #7FB2C9;
+    --branco: #FFFFFF;
+
+    /* 4.2 Semanticos: light-dark(claro, escuro) */
+    --fundo: light-dark(#EEF0F1, #17191B);
+    --superficie: light-dark(#FFFFFF, #212427);
+    --superficie-2: light-dark(#F6F7F8, #2A2E31);
+    --linha: light-dark(#D5D9DC, #3A3F43);
+    --linha-forte: light-dark(#8A9096, #7A8187);
+    --texto: light-dark(#232526, #E6E8EA);
+    --apoio: light-dark(var(--marca-grafite), #A7ABAE);
+    --acao: var(--marca-azul-700);
+    --acao-hover: var(--azul-800);
+    --acao-rotulo: var(--branco);
+    --acao-texto: light-dark(var(--azul-link), var(--azul-claro));
+    --foco: light-dark(var(--azul-link), var(--azul-claro));
+    --acao-fraco: light-dark(#E3EEF3, #1F3440);
+    --agora: var(--marca-azul-500);
+    --sucesso: light-dark(#1E7A46, #5CC08A);
+    --falha: light-dark(#B42318, #FF8A80);
+    --falha-fundo: light-dark(#FDECEA, #3A1F1D);
+    --perigo: #B42318;
+    --perigo-hover: #8F1B12;
+    --atencao: light-dark(#8A5A00, #F2C063);
+    --atencao-fundo: light-dark(#FFF4DB, #33290F);
+    --sobreposicao: light-dark(rgb(23 25 27 / 0.32), rgb(0 0 0 / 0.56));
+    --logo-placa: light-dark(transparent, #FFFFFF);
+    --prototipo-fundo: #232526;
+    --prototipo-texto: #FFFFFF;
+    --prototipo-linha: #8A9096;
+
+    /* 4.3 Tipo */
+    --familia: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --familia-mono: "Cascadia Mono", Consolas, monospace;
+    --tipo-meta: 13px;
+    --tipo-corpo: 14px;
+    --tipo-leitura: 15px;
+    --tipo-subtitulo: 17px;
+    --tipo-titulo: 21px;
+    --tipo-numero: 28px;
+    --peso-normal: 400;
+    --peso-forte: 600;
+    --entrelinha-corpo: 1.45;
+    --entrelinha-titulo: 1.25;
+    --medida-texto: 72ch;
+
+    /* 4.4 Espaco (base 4), raio, sombra, movimento */
+    --esp-1: 4px;
+    --esp-2: 8px;
+    --esp-3: 12px;
+    --esp-4: 16px;
+    --esp-5: 24px;
+    --esp-6: 32px;
+    --esp-7: 48px;
+    --raio-controle: 6px;
+    --raio-bloco: 10px;
+    --raio-selo: 999px;
+    --sombra-sobreposta: 0 8px 24px rgb(0 0 0 / 0.18), 0 1px 3px rgb(0 0 0 / 0.12);
+    --dur-rapida: 90ms;
+    --dur-media: 150ms;
+    --dur-lenta: 240ms;
+    --curva: cubic-bezier(.2, 0, 0, 1);
+
+    /* Medidas fixas de layout */
+    --topo-altura: 56px;
+    --rodape-altura: 64px;
+    --linha-tabela: 36px;
+    --controle-altura: 36px;
+    --fita-altura: 28px;
+    --fita-falha-extra: 4px;
+    --fita-casa-min: 20px;
+    --conteudo-max: 1240px;
+    --coluna-form: 720px;
+    --lateral-largura: 440px;
+    --sessao-menu: 220px;
+    --logo-largura: 168px;
+    --simbolo-altura: 28px;
+    --icone-p: 16px;
+    --icone-m: 20px;
+    --traco: 1px;
+    --traco-icone: 1.5;
+    --foco-espessura: 2px;
+    --foco-recuo: 2px;
+    --pressionado: 1px;
+    --barra-mini: 4px;
+    --barra-mini-largura: 48px;
+    --coluna-pos: 56px;
+    --coluna-estado: 220px;
+    --coluna-campo-curto: 64px;
+    --rotulo-conferir: 120px;
+    --tabela-altura-max: 60vh;
+    --altura-tela: 100vh;
+    --recorte-oculto: inset(50%);
+    --rotulo-ferramenta: 180px;
+    --campo-ip: 200px;
+    --entrada-curta: 96px;
+
+    /* Grades (so aqui ha fr e contagem de colunas) */
+    --grade-1: minmax(0, 1fr);
+    --grade-2: repeat(2, minmax(0, 1fr));
+    --grade-marcador: auto minmax(0, 1fr);
+    --coluna-texto: 2;
+    --grade-local: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    --grade-conferir: var(--rotulo-conferir) minmax(0, 1fr) auto;
+    --grade-sessao: var(--sessao-menu) minmax(0, 1fr);
+    --grade-ferramenta: var(--rotulo-ferramenta) minmax(0, 1fr) auto;
+    --grade-topo: auto auto minmax(0, 1fr) auto auto;
+    --metade: 50%;
+    --popover-largura: 360px;
+    --dialogo-largura: 440px;
+    --barra-prototipo-altura: 44px;
+    --texto-desabilitado-opacidade: 0.7;
+
+    /* Camadas de empilhamento */
+    --z-topo: 10;
+    --z-rodape: 10;
+    --z-prototipo: 30;
+  }
+
+  :root[data-tema="claro"] { color-scheme: light; }
+  :root[data-tema="escuro"] { color-scheme: dark; }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --dur-rapida: 0ms;
+      --dur-media: 0ms;
+      --dur-lenta: 0ms;
+    }
+  }
+}

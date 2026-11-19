@@ -1,0 +1,40 @@
+/* PROTOTIPO. Barra de cenario e tema (skill prototype, ramo UI). A fase B nao leva este arquivo. */
+
+@layer telas {
+  .prototipo {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: var(--z-prototipo);
+    block-size: var(--barra-prototipo-altura);
+    display: flex;
+    align-items: center;
+    gap: var(--esp-4);
+    padding-inline: var(--esp-5);
+    background: var(--prototipo-fundo);
+    color: var(--prototipo-texto);
+    font-size: var(--tipo-meta);
+    color-scheme: dark;
+  }
+  .prototipo-marca { font-weight: var(--peso-forte); }
+  .prototipo-campo { display: inline-flex; align-items: center; gap: var(--esp-2); }
+  .prototipo select, .prototipo button {
+    min-block-size: calc(var(--barra-prototipo-altura) - var(--esp-3));
+    padding: 0 var(--esp-2);
+    background: var(--prototipo-fundo);
+    color: var(--prototipo-texto);
+    border: var(--traco) solid var(--prototipo-linha);
+    border-radius: var(--raio-controle);
+    font-size: var(--tipo-meta);
+  }
+  /* O botao da barra e texto sublinhado: a barra e do prototipo e nao entra na familia de botoes do painel */
+  .prototipo button {
+    background: transparent;
+    border-color: transparent;
+    font-weight: var(--peso-forte);
+    text-decoration: underline;
+    text-underline-offset: var(--foco-recuo);
+    cursor: pointer;
+  }
+  .prototipo-dica { margin-inline-start: auto; color: var(--prototipo-texto); }
+}
