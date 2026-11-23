@@ -1,6 +1,6 @@
 # Frente registro-trava: leitura do registro sob o Mutex (conserta o Testes-Coordenador intermitente)
 
-**Status:** Ativo · **Frente:** `registro-trava`
+**Status:** Concluído (2026-11-23) · **Frente:** `registro-trava`
 
 **Goal:** toda leitura do registro de câmeras (`registro.json`) passa pelo mesmo Mutex que a gravação. Com isso, a conferência de uma câmera não lê o registro no meio do `File.Replace` de outra. O `Testes-Coordenador` fica estável e a release 1.3.0 não cai no CI.
 
