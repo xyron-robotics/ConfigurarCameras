@@ -3666,6 +3666,43 @@ function Get-NomeMutexRegistro {
 }
 
 <#
+    Roda -Bloco com o Mutex do registro em -Caminho e devolve o que ele
+    devolver. Unico lugar que pega o Mutex: serve a gravacao
+    (Update-RegistroCamera) e a leitura (Read-RegistroTravado). Mutex preso
+    alem de -EsperaMs: estoura sem rodar o bloco, e -Complemento fecha a
+    mensagem dizendo o que nao foi feito.
+#>
+function Invoke-SobMutexRegistro {
+    param([Parameter(Mandatory)][string]$Caminho, [Parameter(Mandatory)][scriptblock]$Bloco,
+          [int]$EsperaMs = 30000, [string]$Complemento = 'Nada foi gravado; tente de novo.')
+    $mutex = New-Object Threading.Mutex($false, (Get-NomeMutexRegistro $Caminho))
+    try {
+        $pegou = $false
+        try { $pegou = $mutex.WaitOne($EsperaMs) }
+        catch [Threading.AbandonedMutexException] { $pegou = $true }   # dono anterior morreu sem soltar: o Mutex e nosso
+        if (-not $pegou) {
+            throw ('O registro de câmeras está ocupado por outra gravação há mais de ' + [math]::Round($EsperaMs / 1000, 1) +
+                   ' s (' + $Caminho + '). ' + $Complemento)
+        }
+        try { return (& $Bloco) } finally { $mutex.ReleaseMutex() }
+    } finally { $mutex.Dispose() }
+}
+
+<#
+    Leitura do registro sob o Mutex: nunca cai no meio do File.Replace de uma
+    gravacao (arquivo ausente viraria registro vazio; erro de leitura cairia
+    no .bak, a versao anterior). Toda leitura do registro em codigo de
+    producao vem por aqui; Read-Registro cru so roda dentro desta e de
+    Update-RegistroCamera (ha teste de guarda no Testes-Motor).
+#>
+function Read-RegistroTravado {
+    param([Parameter(Mandatory)][string]$Caminho, [int]$EsperaMs = 30000)
+    return (Invoke-SobMutexRegistro -Caminho $Caminho -EsperaMs $EsperaMs -Complemento 'Nada foi lido; tente de novo.' -Bloco {
+        Read-Registro -Caminho $Caminho
+    })
+}
+
+<#
     Upsert de UMA camera no registro em disco, seguro entre runspaces: sob o
     Mutex do caminho, rele o arquivo (o que outro job gravou entra), mescla
     pelo MAC (Set-CameraRegistro) e grava atomico. Sem o Mutex, dois jobs leem
@@ -3674,22 +3711,12 @@ function Get-NomeMutexRegistro {
 #>
 function Update-RegistroCamera {
     param([Parameter(Mandatory)][string]$Caminho, [Parameter(Mandatory)]$Entrada, [int]$EsperaMs = 30000)
-    $mutex = New-Object Threading.Mutex($false, (Get-NomeMutexRegistro $Caminho))
-    try {
-        $pegou = $false
-        try { $pegou = $mutex.WaitOne($EsperaMs) }
-        catch [Threading.AbandonedMutexException] { $pegou = $true }   # dono anterior morreu sem soltar: o Mutex e nosso
-        if (-not $pegou) {
-            throw ('O registro de câmeras está ocupado por outra gravação há mais de ' + [math]::Round($EsperaMs / 1000, 1) +
-                   ' s (' + $Caminho + '). Nada foi gravado; tente de novo.')
-        }
-        try {
-            $reg = Read-Registro -Caminho $Caminho
-            Set-CameraRegistro -Registro $reg -Entrada $Entrada
-            Save-JsonAtomico -Caminho $Caminho -Objeto $reg
-            return $reg
-        } finally { $mutex.ReleaseMutex() }
-    } finally { $mutex.Dispose() }
+    return (Invoke-SobMutexRegistro -Caminho $Caminho -EsperaMs $EsperaMs -Bloco {
+        $reg = Read-Registro -Caminho $Caminho
+        Set-CameraRegistro -Registro $reg -Entrada $Entrada
+        Save-JsonAtomico -Caminho $Caminho -Objeto $reg
+        $reg
+    })
 }
 
 # ------------------------------------------------------- fila e relatorio
@@ -3996,7 +4023,7 @@ function Invoke-ConfiguracaoCamera {
         $res.Falhou = 'rede'; $res.Erro = $destino + ' e um endereco DESTE PC'; return $res
     }
 
-    $reg = Read-Registro -Caminho $CaminhoRegistro
+    $reg = Read-RegistroTravado -Caminho $CaminhoRegistro
     $ent = $null
     if ($mac) { $ent = Find-CameraRegistro $reg $mac }
 
