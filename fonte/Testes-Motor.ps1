@@ -1252,6 +1252,118 @@ T 'Update-RegistroCamera com o Mutex preso estoura com erro claro, sem gravar' {
     }
 }
 
+# ------------------------------------------------------ registro sob mutex
+
+Write-Host ""
+Write-Host "Registro sob Mutex" -ForegroundColor Cyan
+
+<#
+    Corrida: um runspace grava em laco, por Update-RegistroCamera, a camera
+    AA:00:00:00:00:01 com um contador crescente em Porta (a AA:00:00:00:00:02
+    fica fixa, gravada antes), enquanto este thread le em laco com o leitor
+    sob prova. Toda leitura tem de ver as duas cameras, o contador nunca cai
+    e nada estoura. Sem o Mutex, a leitura cai no meio do File.Replace: o
+    arquivo ausente vira registro vazio, e o erro de leitura cai no .bak, que
+    e a versao anterior. O leitor e injetavel (scriptblock que recebe o
+    caminho) para dar para provar o vermelho com Read-Registro cru.
+#>
+function Test-CorridaRegistro {
+    param([Parameter(Mandatory)][scriptblock]$Leitor, [int]$DuracaoMs = 2000)
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $largada = New-Object Threading.Barrier 2
+    $ps = $null
+    $r = [pscustomobject]@{ Leituras = 0; Gravacoes = 0; SemCamera = 0; Caiu = 0; Excecoes = 0; Primeira = ''; ErrosEscritor = @() }
+    try {
+        $null = New-Item -ItemType Directory -Path $d
+        $null = Update-RegistroCamera -Caminho $arq -Entrada (New-EntradaRegistro -Mac 'AA:00:00:00:00:02' -Ip '10.0.0.2')
+        $c = New-EntradaRegistro -Mac 'AA:00:00:00:00:01' -Ip '10.0.0.1'
+        $c.Porta = '0'
+        $null = Update-RegistroCamera -Caminho $arq -Entrada $c
+        $ps = [PowerShell]::Create()
+        $null = $ps.AddScript({
+            param($Motor, $Arq, $Largada, $DuracaoMs)
+            $ErrorActionPreference = 'Stop'
+            . $Motor
+            if (-not $Largada.SignalAndWait(60000)) { throw 'largada sem o leitor' }
+            $relogio = [Diagnostics.Stopwatch]::StartNew()
+            $n = 0
+            while ($relogio.ElapsedMilliseconds -lt $DuracaoMs) {
+                $n++
+                $e = New-EntradaRegistro -Mac 'AA:00:00:00:00:01' -Ip '10.0.0.1'
+                $e.Porta = [string]$n
+                $null = Update-RegistroCamera -Caminho $Arq -Entrada $e
+            }
+            return $n
+        }).AddArgument($motor).AddArgument($arq).AddArgument($largada).AddArgument($DuracaoMs)
+        $h = $ps.BeginInvoke()
+        if (-not $largada.SignalAndWait(60000)) { throw 'largada sem o escritor' }
+        $ultimo = 0
+        while (-not $h.IsCompleted) {
+            $r.Leituras++
+            try {
+                $reg = & $Leitor $arq
+                $a = Find-CameraRegistro $reg 'AA:00:00:00:00:01'
+                $b = Find-CameraRegistro $reg 'AA:00:00:00:00:02'
+                if ($null -eq $a -or $null -eq $b) {
+                    $r.SemCamera++
+                } elseif ([int]$a.Porta -lt $ultimo) {
+                    $r.Caiu++
+                } else {
+                    $ultimo = [int]$a.Porta
+                }
+            } catch {
+                $r.Excecoes++
+                if ($r.Primeira -eq '') { $r.Primeira = $_.Exception.Message }
+            }
+        }
+        try { $r.Gravacoes = [int](@($ps.EndInvoke($h))[-1]) } catch { $r.ErrosEscritor += $_.Exception.Message }
+        foreach ($e in $ps.Streams.Error) { $r.ErrosEscritor += [string]$e }
+    } finally {
+        if ($null -ne $ps) { $ps.Dispose() }
+        $largada.Dispose()
+        Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    return $r
+}
+
+T 'Registro sob Mutex: leitura em corrida com Update-RegistroCamera ve as duas cameras, contador nao cai, sem excecao' {
+    Assert-Verdade ($null -ne (Get-Command Read-RegistroTravado -CommandType Function -ErrorAction SilentlyContinue)) 'Read-RegistroTravado existir no motor'
+    $r = Test-CorridaRegistro -Leitor { param($Caminho) Read-RegistroTravado -Caminho $Caminho }
+    $placar = ('leituras ' + $r.Leituras + ', gravacoes ' + $r.Gravacoes + ', sem camera ' + $r.SemCamera +
+               ', contador caiu ' + $r.Caiu + ', excecoes ' + $r.Excecoes)
+    Assert-Igual 0 @($r.ErrosEscritor).Count ('erros no escritor (' + (@($r.ErrosEscritor) -join ' | ') + ')')
+    Assert-Verdade ($r.Gravacoes -ge 20 -and $r.Leituras -ge 20) ('corrida de verdade, com 20 ou mais de cada (' + $placar + ')')
+    if (($r.SemCamera + $r.Caiu + $r.Excecoes) -gt 0) {
+        throw ('leitura viu o registro no meio da troca: ' + $placar + $(if ($r.Primeira) { ' (primeira excecao: ' + $r.Primeira + ')' }))
+    }
+}
+
+# Guarda: Read-Registro cru le sem o Mutex. Fora de Update-RegistroCamera e
+# de Read-RegistroTravado (as duas ja estao sob o Mutex), toda leitura do
+# registro em codigo de producao tem de ir por Read-RegistroTravado.
+T 'Registro sob Mutex: Read-Registro cru so dentro de Update-RegistroCamera e Read-RegistroTravado (producao em fonte)' {
+    $permitidas = @('Update-RegistroCamera', 'Read-RegistroTravado')
+    $arqs = @(Get-ChildItem -LiteralPath $raiz -Filter '*.ps1' -Recurse |
+              Where-Object { $_.Name -notlike 'Testes-*' -and -not $_.FullName.StartsWith($fix + '\', [StringComparison]::OrdinalIgnoreCase) })
+    Assert-Verdade (@($arqs | Where-Object { $_.Name -eq 'Servidor-Painel.ps1' }).Count -eq 1) 'varredura inclui o servidor em web'
+    $fora = @()
+    foreach ($f in $arqs) {
+        $erros = $null
+        $a = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$erros)
+        Assert-Igual 0 @($erros).Count ('erros de sintaxe em ' + $f.Name)
+        $chamadas = @($a.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Read-Registro' }, $true))
+        foreach ($cmd in $chamadas) {
+            $dono = ''
+            for ($p = $cmd.Parent; $null -ne $p; $p = $p.Parent) {
+                if ($p -is [System.Management.Automation.Language.FunctionDefinitionAst]) { $dono = $p.Name; break }
+            }
+            if ($permitidas -notcontains $dono) { $fora += ($f.FullName.Substring($raiz.Length + 1) + ':' + $cmd.Extent.StartLineNumber) }
+        }
+    }
+    Assert-Igual 0 $fora.Count ('Read-Registro sem o Mutex em ' + ($fora -join ', '))
+}
+
 # ------------------------------------------------------ relatorio
 
 Write-Host ""
