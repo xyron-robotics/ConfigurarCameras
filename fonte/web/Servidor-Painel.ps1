@@ -688,7 +688,7 @@ $scriptWorker = {
             if ($W.FalharEm -is [System.Collections.IDictionary]) {
                 foreach ($k in @($W.FalharEm.Keys)) { if ([string]$W.FalharEm[$k] -eq 'ja-inicializada') { $jaInit += [int]$k } }
             }
-            $reg = @((Read-Registro (Get-CaminhoRegistroAtual)).Cameras)
+            $reg = @((Read-RegistroTravado (Get-CaminhoRegistroAtual)).Cameras)
             $l.Achados = @(Get-AchadosSimulados -Cameras ([int]$W.SimularCameras) -IpFabrica $ipf -JaInicializadas $jaInit -Registro $reg)
             return $l
         }
@@ -783,7 +783,7 @@ $scriptWorker = {
         $semDhip = (-not [bool]$l.DhipRespondeu -and [bool]$l.PingFabrica)
         $registro = @()
         if ($semDhip -or @($achados | Where-Object { (Get-InitOrquestrador $_.Init) -ne 1 }).Count -gt 0) {
-            $registro = @((Read-Registro (Get-CaminhoRegistroAtual)).Cameras)
+            $registro = @((Read-RegistroTravado (Get-CaminhoRegistroAtual)).Cameras)
         }
         $dhipAntes = [string]$coord.Dhip
         $r = Invoke-TiqueParalelo -Coord $coord -Achados $achados -Registro $registro -DhipRespondeu ([bool]$l.DhipRespondeu) `
@@ -933,7 +933,7 @@ $scriptWorker = {
         if ($null -eq $p) { return $false }
         $Inicio = ([string]$Inicio).Trim(); $Fim = ([string]$Fim).Trim()
         try {
-            $itens = @(New-FilaDeFaixa -Inicio $Inicio -Fim $Fim -Registro (Read-Registro (Get-CaminhoRegistroAtual)) -Mascara $p.Mascara -Gateway $p.Gateway)
+            $itens = @(New-FilaDeFaixa -Inicio $Inicio -Fim $Fim -Registro (Read-RegistroTravado (Get-CaminhoRegistroAtual)) -Mascara $p.Mascara -Gateway $p.Gateway)
         } catch { $W.Aviso = $_.Exception.Message; return $false }
         $pend = @($itens | Where-Object { $_.Estado -eq 'pendente' }).Count
         if ($pend -eq 0) {
@@ -1229,7 +1229,7 @@ $scriptWorker = {
             }
             'verificar' {
                 if (Test-ComandoRecusado 'ferramenta') { return }
-                $reg = Read-Registro (Get-CaminhoRegistroAtual)
+                $reg = Read-RegistroTravado (Get-CaminhoRegistroAtual)
                 $itens = @()
                 $instaladas = @($reg.Cameras | Where-Object { $_.Status -eq 'Instalada' })
                 $W.Ferramenta = [ordered]@{ tipo = 'verificar'; emCurso = $true }
@@ -1698,14 +1698,13 @@ function Get-LogDesde {
     return @{ Linhas = $novos; Cursor = $cursor }
 }
 
-# Leitura do registro com retentativa: o worker pode estar no meio do Replace.
+# Leitura do registro pelo listener, sob o Mutex (Read-RegistroTravado): o
+# worker e os jobs gravam com File.Replace, e uma leitura sem trava no meio
+# dele veria o arquivo ausente (registro vazio) ou o .bak antigo.
 function Read-RegistroAtual {
     $arq = $arquivos.Registro
     if ($E.Simular) { $arq = $arquivos.RegistroSimul }
-    for ($i = 0; $i -lt 5; $i++) {
-        try { return (Read-Registro $arq) } catch [IO.IOException] { Start-Sleep -Milliseconds 100 }
-    }
-    return (Read-Registro $arq)
+    return (Read-RegistroTravado -Caminho $arq)
 }
 
 function Invoke-Rota {

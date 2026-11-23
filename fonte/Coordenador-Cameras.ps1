@@ -885,6 +885,10 @@ function Set-PortaCanalCoordenador {
     (Update-RegistroCamera, sob o Mutex). Sem edição, o registro não é
     tocado. Falha (registro sem a câmera, disco) vira aviso da câmera.
     Devolve $true se gravou.
+    A leitura vem por Read-RegistroTravado (sob o Mutex), então nunca pega o
+    registro no meio do File.Replace de outro job nem o .bak antigo. Entre
+    ler e gravar o Mutex é solto, e essa janela é inofensiva: a câmera já
+    está 'feita' e nenhum job dela grava a entrada ao mesmo tempo.
 #>
 function Sync-PortaCanalRegistro {
     param([Parameter(Mandatory = $true)]$Coord, $Mac)
@@ -898,7 +902,7 @@ function Sync-PortaCanalRegistro {
     $caminho = [string]$Coord.Trabalho.CaminhoRegistro
     try {
         $ent = $null
-        if ($caminho -ne '') { $ent = Find-CameraRegistro -Registro (Read-Registro -Caminho $caminho) -Mac $Mac }
+        if ($caminho -ne '') { $ent = Find-CameraRegistro -Registro (Read-RegistroTravado -Caminho $caminho) -Mac $Mac }
         if ($null -eq $ent) { throw 'a câmera não está no registro' }
         $ent.Porta = $agora.Porta
         $ent.Canal = $agora.Canal
