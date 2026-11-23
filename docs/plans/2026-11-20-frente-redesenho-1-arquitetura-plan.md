@@ -1,6 +1,6 @@
 # Frente redesenho-arquitetura: o front em módulos, tokens e textos, sem mudança visual (fase B, 1 de 5)
 
-**Status:** Draft · **Frente:** `redesenho-arquitetura`
+**Status:** Ativo · **Frente:** `redesenho-arquitetura`
 
 Frente 1 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Especificação: `docs/design/2026-11-ux/direcao.md`, seção 7 (arquitetura do front). Código de partida dos módulos de base: `docs/design/2026-11-ux/prototipo/`.
 
