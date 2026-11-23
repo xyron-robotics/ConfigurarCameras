@@ -36,3 +36,21 @@ Paralela com: nenhuma (sobreposição de arquivo em todas).
 - No tema escuro, a logo oficial sobre uma placa clara, em definitivo. A variante derivada (`marca/logo-smartseg-escuro.png`) não entra no `www`.
 - Sem foco automático na falha: anúncio `aria-live`, a linha da câmera e o bloco "Pede você".
 - Sem logo vetorial: os arquivos servidos derivam do PNG de 2302 px por redução (`prototipo/logo.png`, `prototipo/simbolo.png`).
+
+## Ajuste de 23/11: frente 2 em paralelo com a frente 1
+
+**Decisão do usuário (23/11):** acelerar a fase B abrindo a frente 2 antes de a frente 1 fechar ("paralelo agressivo"). Vale só para o par 1 e 2; as frentes 3 a 5 seguem sequenciais.
+
+- **Base:** o worktree `redesenho-marca` nasce do commit da frente 1 com `Plano: docs/plans/2026-11-20-frente-redesenho-1-arquitetura-plan.md` e `Plano-Task: 3` (CSS em quatro camadas, `Testes-Front.ps1`), com `branch.wt/redesenho-marca.frenteLinha = main`, e recebe por `cherry-pick` o commit deste ajuste (o plano da frente 2 `Ativo`).
+- **Abertura, na raiz, depois da Task 3 da frente 1:**
+  ```powershell
+  $t3 = git log wt/redesenho-arquitetura -1 --format=%H --all-match --grep "^Plano-Task: 3$" --grep "^Plano: docs/plans/2026-11-20-frente-redesenho-1-arquitetura-plan.md$"
+  $aj = git log main -1 --format=%H -- docs/plans/2026-11-20-frente-redesenho-2-marca-plan.md
+  .\scripts\frente-abrir.ps1 -Frente redesenho-marca -Base $t3
+  git config branch.wt/redesenho-marca.frenteLinha main
+  git -C .claude\worktrees\redesenho-marca cherry-pick $aj
+  ```
+  Depois, em outra sessão na raiz: `/regime:maestro docs/plans/2026-11-20-frente-redesenho-2-marca-plan.md`.
+- **Sobreposição:** a Task 1 da frente 2 só mexe nos quatro CSS; a frente 1, nas Tasks 4 a 6, mexe em JS, `index.html`, `.iss`, `Testes-Motor.ps1` e, na Task 5, no que ainda violar. Porta 8765 para a frente 1, 8766 para a frente 2.
+- **Ponto de espera:** a Task 2 da frente 2 devolve `BLOQUEADO` até a frente 1 estar `Concluído` no `main`; então `git rebase main` e a frente 2 segue sequencial.
+- **Ordem de fechar:** a frente 1 fecha primeiro, sempre. A frente 2 não fecha antes, porque a guarda da Task 2 impede.
