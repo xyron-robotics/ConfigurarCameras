@@ -1,6 +1,8 @@
 # Frente redesenho-navegacao: casca nova, passo a passo, Conferir e Sessão (fase B, 3 de 5)
 
-**Status:** Ativo · **Frente:** `redesenho-navegacao`
+**Status:** Concluído (24/11/2026) · **Frente:** `redesenho-navegacao`
+
+**Fechamento:** entraram a casca nova (`rotas.js`, `estado.js`, `componentes.js`, `topo.js`: topo com abas Painel, Sessão e Ferramentas, chips de placa, internet e simulação com popover, "Encerrar o painel" no topo, rotas por hash com o voltar do navegador, diálogo próprio no lugar do `confirm()`), o passo a passo de 6 passos com Conferir e a faixa seguinte (`tela-inicio.js`, `formularios.js`), a Sessão uma seção por tela com "Salvar alterações" (`tela-sessao.js`; a tela Opções e o `legado-formularios.js` saíram), a tradução das respostas do servidor nas telas desta frente (`traduzirServidor`), "Opções" virando "Sessão" no `CONTEXT.md` e no `LEIA-ME.md` e os rótulos trocados nos proibidos do "Front paralelo" (N4). Os herdados da frente 2 (escala dos títulos, `theme-color` do escuro, mono no Conferir, estilos de botão, contraste do texto corrido, rótulo do "Outro valor") estão resolvidos nas telas desta frente. Ficam para as frentes seguintes: o botão provisório "Montar a fila" em Sessão > Fila e o rótulo do "Outro valor" no painel lateral do encoder (frente 4); a procura de atualização sob demanda, a tela "Painel sem resposta" e o texto cru do servidor no Painel e em Ferramentas legados (frente 4 no Painel, frente 5 em Ferramentas e nos estados globais); o rótulo da resolução que trunca no select da grade do stream ("1920 x 1080 (testad...").
 
 Frente 3 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da frente 2 fechada. Especificação: `docs/design/2026-11-ux/direcao.md`, seções 2.1, 2.2, 3.1, 3.5, 5.1, 5.2, 5.6, 5.8, 5.9, 6 e 7.2. Código de partida: `docs/design/2026-11-ux/prototipo/` (`app.js`, `rotas.js`, `estado.js`, `componentes.js`, `topo.js`, `formularios.js`, `tela-inicio.js`, `tela-sessao.js`).
 
