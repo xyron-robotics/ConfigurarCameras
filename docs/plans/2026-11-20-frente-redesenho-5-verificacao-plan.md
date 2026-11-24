@@ -68,6 +68,13 @@ Frente 5 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da fr
 - **V3. Conexão perdida depois de 3 consultas sem resposta**, com o número em `constantes.js`. O resto da tela fica `inert`, e a faixa diz a hora da última resposta.
 - **V4. O roteiro de duas filas é a prova de ponta a ponta da simulação.** Cobre os cenários 1, 2b, 3 e 4a da direção 2.3 numa sessão só e roda nos dois temas.
 
+## Herdado da frente 2 (24/11)
+
+Exceção do `consistency.mjs` e achado MENOR da revisão da frente 2 (commits `9d84268` e `008110c`), ambos da Task 1:
+
+- **Mono no resultado da sondagem:** o `.resultado dd` perdeu a família mono e o JS não põe `.mono` no `dd`, então serial, MAC e rede saem em fonte proporcional. No bloco "Resultado" novo, mono só em IP, MAC, serial e log (direção 4.3).
+- **Contraste do texto corrido (`text-contrast`):** os parágrafos longos de Ferramentas em `--apoio` dão 6.74:1 no escuro e 6.33:1 no claro, abaixo dos 7:1. Texto corrido longo usa `--texto` (decisão do usuário na frente 2, opção A).
+
 ## Task 1: Ferramentas
 
 **Files:** `fonte/web/www/tela-ferramentas.js` (novo), `textos.js`, `constantes.js`, `componentes.css`, `telas.css`, `legado-*.js`, `instalador/ConfigurarCameras.iss`, `LEIA-ME.md`

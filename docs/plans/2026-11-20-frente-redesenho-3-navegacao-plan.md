@@ -1,6 +1,6 @@
 # Frente redesenho-navegacao: casca nova, passo a passo, Conferir e Sessão (fase B, 3 de 5)
 
-**Status:** Draft · **Frente:** `redesenho-navegacao`
+**Status:** Ativo · **Frente:** `redesenho-navegacao`
 
 Frente 3 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da frente 2 fechada. Especificação: `docs/design/2026-11-ux/direcao.md`, seções 2.1, 2.2, 3.1, 3.5, 5.1, 5.2, 5.6, 5.8, 5.9, 6 e 7.2. Código de partida: `docs/design/2026-11-ux/prototipo/` (`app.js`, `rotas.js`, `estado.js`, `componentes.js`, `topo.js`, `formularios.js`, `tela-inicio.js`, `tela-sessao.js`).
 
@@ -65,6 +65,17 @@ Frente 3 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da fr
 - **N3. Sem mudança de comportamento no servidor.** Mudar placa ou faixas em Sessão continua devolvendo e preparando a placa como hoje (`LEIA-ME.md`, seção da sessão); a tela só passa a dizer isso junto do botão.
 - **N4. Texto velho vira proibido.** Os rótulos da coluna "Substitui" do glossário da direção (seção 6) que esta frente troca entram nos proibidos do teste "Front paralelo" de `fonte/Testes-Motor.ps1` (mapa, ajuste 7).
 
+## Herdado da frente 2 (24/11)
+
+Exceções do `consistency.mjs` e achados MENOR da revisão da frente 2 (commits `9d84268` e `008110c`) que a casca e as telas desta frente resolvem. Cada um vale para a Task indicada:
+
+- **Task 1, escala dos títulos (`heading-scale`):** o título da tela vira o `h1` da página; o nome no topo deixa de ser `h1`. Os tamanhos continuam os da direção 4.3.
+- **Task 1, `theme-color` do escuro:** a meta do `index.html` ainda diz `#23272A` (superfície antiga); passa a acompanhar `--superficie` do escuro (`#212427`).
+- **Task 2, mono no Conferir:** IP e MAC do Conferir em mono (direção 4.3). O `.resumo-secao dd` do Resumo de hoje perdeu a família mono e o nó não tem `.mono`; o Conferir não repete isso.
+- **Task 2, estilos de botão (`button-styles`):** a trilha de número, palavra e ícone (`UI-10`) não conta como terceiro estilo de botão ao lado do primário e do secundário.
+- **Task 3, contraste do texto corrido (`text-contrast`):** em Sessão, texto corrido longo usa `--texto`, não `--apoio` (decisão do usuário na frente 2, opção A: os tokens da direção 4.2 ficam; o texto que o checker cobra passa a `--texto`).
+- **Task 3, rótulo de campo (`field-label`):** o campo "Outro valor" de quadros por segundo e bitrate tem rótulo visível, não só `aria-label`. A frente 4 herda isso no painel lateral do encoder.
+
 ## Task 1: casca nova (topo, rotas, componentes, diálogo)
 
 **Files:** `fonte/web/www/app.js`, `rotas.js`, `estado.js`, `componentes.js`, `topo.js` (novos ou trocados), `textos.js`, `constantes.js`, `componentes.css`, `telas.css`, `legado-*.js`, `instalador/ConfigurarCameras.iss`
@@ -77,7 +88,7 @@ Frente 3 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da fr
 - `app.js`: ciclo de consulta (`CONSULTA_MS`), `estado.derivar`, montagem da tela da rota. O menu lateral de hoje sai; Painel e Ferramentas do `legado-*.js` se montam nas rotas deles.
 - `.iss`: `Source:` dos módulos novos, na ordem da direção 7.3.
 
-**Validation:** a régua. Playwright: cada aba abre pela URL e pelo clique; voltar do navegador volta de tela; Encerrar o painel pede o diálogo, Esc cancela, o foco inicial fica em Cancelar; chips neutros em simulação. Console sem erro.
+**Validation:** a régua. Playwright: cada aba abre pela URL e pelo clique; voltar do navegador volta de tela; Encerrar o painel pede o diálogo, Esc cancela, o foco inicial fica em Cancelar; chips neutros em simulação. Console sem erro. `consistency.mjs` (`--profile` e `--out` no scratchpad) nos dois temas, numa tela da casca: `heading-scale` sem FAIL; a meta `theme-color` do escuro igual à `--superficie` do escuro.
 
 ## Task 2: passo a passo de 6 passos e Conferir
 
@@ -96,7 +107,7 @@ Frente 3 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da fr
 - Com sessão salva, o painel abre em Conferir, com a linha da senha no topo. Se a fila toda já está no registro, a linha da Fila diz isso e oferece "Usar a faixa seguinte (<primeiro> a <último>)" (`UX-16`, `UX-27`).
 - Saem o passo a passo de 7 passos, o Resumo e o "Usar essa sessão / Revisar" do `legado-*.js`.
 
-**Validation:** a régua. Playwright, nos dois temas: cenário 1 (primeira abertura até o Painel) e cenário 2a (sessão salva com a última fila instalada até o Painel) contados como na direção 2.3; os números de telas, cliques, campos e rolagens vão no corpo do commit, lado a lado com os da direção. Console sem erro.
+**Validation:** a régua. Playwright, nos dois temas: cenário 1 (primeira abertura até o Painel) e cenário 2a (sessão salva com a última fila instalada até o Painel) contados como na direção 2.3; os números de telas, cliques, campos e rolagens vão no corpo do commit, lado a lado com os da direção. Console sem erro. `consistency.mjs` nos dois temas, num passo e no Conferir: `button-styles`, `text-contrast`, `field-label` e `heading-scale` PASS; IP e MAC do Conferir com família mono no estilo computado.
 
 ## Task 3: Sessão
 
@@ -109,7 +120,7 @@ Frente 3 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da fr
 - Seção Painel: Tema (Sistema, Claro, Escuro), versão com "Procurar atualização", "Refazer o passo a passo" (diálogo) e o bloco "Sobre" com a logo inteira. "Encerrar o painel" fica só no topo.
 - A tela de Opções do `legado-*.js` sai.
 
-**Validation:** a régua. Playwright: cada seção abre pela rota; salvar mostra "Alterações salvas"; um campo inválido mostra o erro embaixo dele; trocar o tema vale na hora e depois de recarregar. Console sem erro.
+**Validation:** a régua. Playwright: cada seção abre pela rota; salvar mostra "Alterações salvas"; um campo inválido mostra o erro embaixo dele; trocar o tema vale na hora e depois de recarregar. Console sem erro. `consistency.mjs` nos dois temas, nas seções Câmera e Painel: `text-contrast`, `field-label`, `button-styles` e `heading-scale` PASS.
 
 ## Task 4: escrita, documentos e o teste de textos
 

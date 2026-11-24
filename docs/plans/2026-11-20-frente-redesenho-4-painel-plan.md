@@ -75,6 +75,10 @@ Frente 4 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da fr
 - **P3. Foco fica onde está** (decisão do usuário). A falha nova é anunciada em `aria-live="assertive"`, marca a linha e entra no "Pede você". O atalho "Ir para o que pede você" leva o foco ao bloco. O `focarDecisao` sai.
 - **P4. "Por broadcast" sai da tela.** A direção 6, regra 5, tira "broadcast" da tela principal. O exigido `'por broadcast'` do teste "Front paralelo" troca pelo texto do vigia paralelo da direção 3.6 ("Esperando câmeras de fábrica"), que guarda o mesmo comportamento: a tela do vigia é a do modo paralelo. É troca de texto guardado, com a mesma força; os outros exigidos e proibidos continuam.
 
+## Herdado da frente 2 (24/11)
+
+- **Escala dos títulos no Painel (`heading-scale` WARN no `consistency.mjs`, commit `9d84268`):** o "Fila concluída" (`p#fim-titulo`, `--tipo-numero` 28) fica acima do título da tela. O fim da fila redesenhado (Task 2) segue a escala da direção 4.3, e o `consistency.mjs` roda nele nos dois temas, sem `heading-scale` FAIL. A razão h3/h2 de 1,24 é a da direção 4.3 e fica.
+
 ## Task 1: tabela e linha da câmera, com o bug do `salvarCartao`
 
 **Files:** `fonte/web/www/tela-painel.js` (novo), `estado.js`, `componentes.js`, `formato.js`, `textos.js`, `constantes.js`, `componentes.css`, `telas.css`, `legado-*.js`, `instalador/ConfigurarCameras.iss`
