@@ -5,7 +5,7 @@
     Actions roda no push de uma tag v* (.github\workflows\release.yml).
 
     Antes de compilar: roda Testes-Motor.ps1, Testes-Descoberta.ps1,
-    Testes-Orquestrador.ps1 e Testes-Coordenador.ps1 (aborta se algum falhar) e confere a lista [Files] do .iss: sem coringa, sem
+    Testes-Orquestrador.ps1, Testes-Coordenador.ps1 e Testes-Front.ps1 (aborta se algum falhar) e confere a lista [Files] do .iss: sem coringa, sem
     *.local.ps1, todo arquivo existente. A saida e ignorada pelo git.
 
     A versao vem de fonte\VERSAO.txt (ou -Versao, que passa /DVersao= ao
@@ -38,7 +38,7 @@ if ([string]::IsNullOrWhiteSpace($Versao)) {
 if ($Versao -notmatch '^\d+\.\d+\.\d+$') { throw ("versao invalida: '" + $Versao + "' (use x.y.z)") }
 
 if (-not $SemTestes) {
-    foreach ($t in @('Testes-Motor.ps1', 'Testes-Descoberta.ps1', 'Testes-Orquestrador.ps1', 'Testes-Coordenador.ps1')) {
+    foreach ($t in @('Testes-Motor.ps1', 'Testes-Descoberta.ps1', 'Testes-Orquestrador.ps1', 'Testes-Coordenador.ps1', 'Testes-Front.ps1')) {
         Write-Host ("== " + $t) -ForegroundColor Cyan
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $raiz ('fonte\' + $t))
         if ($LASTEXITCODE -ne 0) { throw ($t + " falhou: instalador nao gerado.") }
