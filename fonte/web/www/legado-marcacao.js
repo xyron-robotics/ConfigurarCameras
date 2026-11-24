@@ -1,21 +1,23 @@
 // Transicao: sai nas frentes 3 a 5 do redesenho.
 // Marcacao do painel de hoje (era o <body> do index.html), montada com h()
 // e sem innerHTML. Os textos estao em textos.js, com as mesmas letras.
-import { h } from './dom.js';
+import { h, focar } from './dom.js';
 import { t } from './textos.js';
-import { logo, simbolo } from './marca.js';
+import { logo } from './marca.js';
 import { BITRATE_MAX, BITRATE_MIN, FPS_MAX, FPS_MIN, PROGRESSO_MAX } from './constantes.js';
 
-// Os nos do ponto de montagem, na ordem do <body> de antes.
-export function montarMarcacao() {
+// "Pular para o conteudo" sem mexer no hash (o hash e a rota, rotas.js).
+function pularParaConteudo(ev) {
+  ev.preventDefault();
+  focar(document.getElementById('conteudo'));
+}
+
+// Os nos do ponto de montagem, na ordem do <body> de antes. O topo (topo.js)
+// entra no lugar do cabecalho e do menu antigos.
+export function montarMarcacao(topo) {
   return [
-    h('a', { class: 'pular', href: '#conteudo' }, t('topo.pular')),
+    h('a', { class: 'pular', href: '#conteudo', onclick: pularParaConteudo }, t('topo.pular')),
     ' ',
-    h('div', { id: 'faixa-simular', class: 'faixa-simular', hidden: true }, [
-      h('span', null, t('topo.faixa-simular.texto')),
-      ' ',
-      h('span', { id: 'faixa-falha' }),
-    ]),
     h('div', { id: 'atualizacao', class: 'atualizacao', role: 'status', 'aria-live': 'polite', hidden: true }, [
       h('span', { id: 'atualizacao-texto' }),
       ' ',
@@ -23,37 +25,12 @@ export function montarMarcacao() {
       ' ',
       h('button', { type: 'button', class: 'btn', id: 'btn-atualizar' }, t('topo.btn-atualizar')),
     ]),
-    h('header', { class: 'topo' }, [
-      h('h1', { class: 'marca' }, [simbolo(), t('topo.marca')]),
-      h('div', { class: 'topo-estado' }, [
-        h('div', { id: 'placa', class: 'placa', role: 'status', 'aria-live': 'polite' }, [
-          h('span', { class: 'luz', id: 'placa-luz' }),
-          ' ',
-          h('span', { id: 'placa-texto' }, t('topo.placa-texto')),
-        ]),
-        h('div', { id: 'internet', class: 'placa', role: 'status', 'aria-live': 'polite', title: t('topo.internet.dica') }, [
-          h('span', { class: 'luz', id: 'internet-luz' }),
-          ' ',
-          h('span', { id: 'internet-texto' }, t('topo.internet-texto')),
-        ]),
-        ' ',
-        h('button', { type: 'button', class: 'btn discreto', id: 'btn-preparar', hidden: true }, t('topo.btn-preparar')),
-      ]),
-    ]),
-    h('div', { class: 'corpo' }, [
-      h('nav', { class: 'menu', id: 'menu', 'aria-label': t('menu.rotulo-leitor') }, [
-        h('a', { href: '#painel', 'data-view': 'painel' }, t('menu.painel')),
-        ' ',
-        h('a', { href: '#ferramentas', 'data-view': 'ferramentas' }, t('menu.ferramentas')),
-        ' ',
-        // So o texto, sem icone de engrenagem (direcao 2.1 e 4.5, UI-16).
-        h('a', { href: '#opcoes', 'data-view': 'opcoes', class: 'menu-opcoes' }, t('menu.opcoes')),
-      ]),
+    topo,
       h('main', { id: 'conteudo', tabindex: '-1' }, [
-        h('div', { id: 'aviso', class: 'aviso', role: 'alert', hidden: true }),
+        h('div', { id: 'aviso', class: 'aviso-legado', role: 'alert', hidden: true }),
         h('div', { id: 'anuncio', class: 'so-leitor', role: 'status', 'aria-live': 'polite' }),
         h('section', { id: 'inicio', class: 'view inicio', hidden: true, 'aria-labelledby': 'inicio-titulo' }, [
-          h('h2', { id: 'inicio-titulo', class: 'so-leitor' }, t('inicio.inicio-titulo')),
+          h('p', { id: 'inicio-titulo', class: 'so-leitor' }, t('inicio.inicio-titulo')),
           logo(),
           h('ol', { id: 'passos', class: 'passos', 'aria-label': t('inicio.passos.rotulo-leitor') }, [
             h('li', { 'data-passo': '1' }, [
@@ -79,7 +56,7 @@ export function montarMarcacao() {
             ]),
           ]),
           h('div', { class: 'passo', 'data-passo': '1', hidden: true }, [
-            h('h2', null, t('inicio.passo1.titulo')),
+            h('h1', null, t('inicio.passo1.titulo')),
             h('p', { class: 'explica' }, [
               t('inicio.passo1.explica'),
               ' ',
@@ -103,22 +80,22 @@ export function montarMarcacao() {
             h('div', { class: 'slot' }),
           ]),
           h('div', { class: 'passo', 'data-passo': '2', hidden: true }, [
-            h('h2', null, t('inicio.passo2.titulo')),
+            h('h1', null, t('inicio.passo2.titulo')),
             h('p', { class: 'explica' }, t('inicio.passo2.explica')),
             h('div', { class: 'slot' }),
           ]),
           h('div', { class: 'passo', 'data-passo': '3', hidden: true }, [
-            h('h2', null, t('inicio.passo3.titulo')),
+            h('h1', null, t('inicio.passo3.titulo')),
             h('p', { class: 'explica' }, t('inicio.passo3.explica')),
             h('div', { class: 'slot' }),
           ]),
           h('div', { class: 'passo', 'data-passo': '4', hidden: true }, [
-            h('h2', null, t('inicio.passo4.titulo')),
+            h('h1', null, t('inicio.passo4.titulo')),
             h('p', { class: 'explica' }, t('inicio.passo4.explica')),
             h('div', { class: 'slot' }),
           ]),
           h('div', { class: 'passo', 'data-passo': '5', hidden: true }, [
-            h('h2', null, t('inicio.passo5.titulo')),
+            h('h1', null, t('inicio.passo5.titulo')),
             h('p', { class: 'explica' }, [
               t('inicio.passo5.explica'),
               ' ',
@@ -139,12 +116,12 @@ export function montarMarcacao() {
             h('div', { class: 'slot' }),
           ]),
           h('div', { class: 'passo', 'data-passo': '6', hidden: true }, [
-            h('h2', null, t('inicio.passo6.titulo')),
+            h('h1', null, t('inicio.passo6.titulo')),
             h('p', { class: 'explica' }, t('inicio.passo6.explica')),
             h('div', { class: 'slot' }),
           ]),
           h('div', { class: 'passo', 'data-passo': '7', hidden: true }, [
-            h('h2', null, t('inicio.passo7.titulo')),
+            h('h1', null, t('inicio.passo7.titulo')),
             h('p', { class: 'explica' }, t('inicio.passo7.explica')),
             h('div', { id: 'resumo', class: 'resumo' }),
             ' ',
@@ -154,7 +131,7 @@ export function montarMarcacao() {
               t('inicio.resumo-montar'),
             ]),
             ' ',
-            h('p', { class: 'aviso', 'data-aviso-de': 'concluir', role: 'alert', hidden: true }),
+            h('p', { class: 'aviso-legado', 'data-aviso-de': 'concluir', role: 'alert', hidden: true }),
           ]),
           h('div', { class: 'passo-acoes' }, [
             h('button', { type: 'button', class: 'btn discreto', id: 'btn-voltar' }, t('inicio.btn-voltar')),
@@ -172,16 +149,16 @@ export function montarMarcacao() {
         ]),
         h('section', { id: 'view-painel', class: 'view', hidden: true }, [
           h('div', { id: 'painel-sem-fila', class: 'painel-sem-fila', hidden: true }, [
-            h('h2', null, t('painel.painel-sem-fila.titulo')),
+            h('h1', null, t('painel.painel-sem-fila.titulo')),
             h('p', { class: 'apoio' }, [
               t('painel.painel-sem-fila.apoio'),
               ' ',
-              h('a', { href: '#opcoes/fila' }, t('painel.painel-sem-fila.link')),
+              h('a', { href: '#/sessao/fila' }, t('painel.painel-sem-fila.link')),
             ]),
           ]),
           h('div', { id: 'fita-bloco', hidden: true }, [
             h('div', { class: 'fita-cabeca' }, [
-              h('h2', { id: 'fita-titulo' }, t('painel.fita-titulo')),
+              h('h1', { id: 'fita-titulo' }, t('painel.fita-titulo')),
               h('div', { class: 'fita-cabeca-fim' }, [
                 h('span', { id: 'fita-resumo', class: 'apoio' }),
                 ' ',
@@ -195,7 +172,7 @@ export function montarMarcacao() {
               h('div', { class: 'vigia-cabeca' }, [
                 h('span', { class: 'luz', id: 'vigia-luz' }),
                 ' ',
-                h('h3', null, t('painel.vigia.titulo')),
+                h('h2', null, t('painel.vigia.titulo')),
                 ' ',
                 h('span', { class: 'apoio', id: 'vigia-estado', role: 'status', 'aria-live': 'polite' }, t('painel.vigia-estado')),
               ]),
@@ -210,7 +187,7 @@ export function montarMarcacao() {
                 ' ',
                 h('button', { class: 'btn', type: 'submit', id: 'btn-vigia' }, t('painel.btn-vigia')),
               ]),
-              h('p', { class: 'aviso', 'data-aviso-de': 'vigia', role: 'alert', hidden: true }),
+              h('p', { class: 'aviso-legado', 'data-aviso-de': 'vigia', role: 'alert', hidden: true }),
             ]),
             h('ol', { id: 'cartoes', class: 'cartoes', 'aria-label': t('painel.cartoes.rotulo-leitor'), hidden: true }),
             h('div', { id: 'bancada-pronta' }, [
@@ -272,9 +249,9 @@ export function montarMarcacao() {
               h('p', { class: 'bancada-pos', id: 'fim-titulo' }),
               h('p', { class: 'apoio', id: 'fim-texto' }),
               ' ',
-              h('a', { class: 'btn', href: '#opcoes/fila' }, t('painel.bancada-fim.link')),
+              h('a', { class: 'btn', href: '#/sessao/fila' }, t('painel.bancada-fim.link')),
             ]),
-            h('p', { class: 'aviso', 'data-aviso-de': 'conectada', role: 'alert', hidden: true }),
+            h('p', { class: 'aviso-legado', 'data-aviso-de': 'conectada', role: 'alert', hidden: true }),
           ]),
           h('p', { id: 'ultimo', class: 'ultimo', hidden: true }),
           h('div', { id: 'registro-bloco', class: 'registro-bloco' }, [
@@ -307,11 +284,11 @@ export function montarMarcacao() {
           ]),
         ]),
         h('section', { id: 'view-ferramentas', class: 'view', hidden: true }, [
-          h('h2', null, t('ferramentas.titulo')),
+          h('h1', null, t('ferramentas.titulo')),
           h('p', { class: 'apoio' }, t('ferramentas.apoio')),
           h('div', { class: 'ferramentas' }, [
             h('form', { id: 'form-sondar', class: 'ferramenta' }, [
-              h('h3', null, t('ferramentas.form-sondar.titulo')),
+              h('h2', null, t('ferramentas.form-sondar.titulo')),
               h('p', { class: 'apoio' }, t('ferramentas.form-sondar.apoio')),
               h('div', { class: 'linha-campos' }, [
                 h('label', null, [
@@ -322,10 +299,10 @@ export function montarMarcacao() {
                 h('button', { class: 'btn', type: 'submit', 'data-so-real': true }, t('ferramentas.form-sondar.botao')),
               ]),
               h('p', { class: 'nota', 'data-nota-simular': true, hidden: true }, t('ferramentas.form-sondar.nota')),
-              h('p', { class: 'aviso', 'data-aviso-de': 'sondar', role: 'alert', hidden: true }),
+              h('p', { class: 'aviso-legado', 'data-aviso-de': 'sondar', role: 'alert', hidden: true }),
             ]),
             h('div', { class: 'ferramenta' }, [
-              h('h3', null, t('ferramentas.descobrir.titulo')),
+              h('h2', null, t('ferramentas.descobrir.titulo')),
               h('p', { class: 'apoio' }, [
                 t('ferramentas.descobrir.apoio'),
                 ' ',
@@ -337,24 +314,24 @@ export function montarMarcacao() {
               h('button', { type: 'button', class: 'btn', id: 'btn-descobrir', 'data-so-real': true }, t('ferramentas.btn-descobrir')),
               ' ',
               h('p', { class: 'nota', 'data-nota-simular': true, hidden: true }, t('ferramentas.descobrir.nota')),
-              h('p', { class: 'aviso', 'data-aviso-de': 'descobrir', role: 'alert', hidden: true }),
+              h('p', { class: 'aviso-legado', 'data-aviso-de': 'descobrir', role: 'alert', hidden: true }),
             ]),
             h('div', { class: 'ferramenta' }, [
-              h('h3', null, t('ferramentas.verificar.titulo')),
+              h('h2', null, t('ferramentas.verificar.titulo')),
               h('p', { class: 'apoio' }, t('ferramentas.verificar.apoio')),
               ' ',
               h('button', { type: 'button', class: 'btn', id: 'btn-verificar' }, t('ferramentas.btn-verificar')),
               ' ',
-              h('p', { class: 'aviso', 'data-aviso-de': 'verificar', role: 'alert', hidden: true }),
+              h('p', { class: 'aviso-legado', 'data-aviso-de': 'verificar', role: 'alert', hidden: true }),
             ]),
           ]),
           h('div', { id: 'resultado-ferramenta', class: 'resultado', 'aria-live': 'polite', hidden: true }),
         ]),
         h('section', { id: 'view-opcoes', class: 'view opcoes', hidden: true }, [
-          h('h2', null, t('opcoes.titulo')),
+          h('h1', null, t('opcoes.titulo')),
           h('p', { class: 'apoio' }, t('opcoes.apoio')),
           h('div', { class: 'secao', 'data-secao': 'senha' }, [
-            h('h3', null, t('opcoes.secao-senha.titulo')),
+            h('h2', null, t('opcoes.secao-senha.titulo')),
             h('p', { class: 'apoio' }, t('opcoes.secao-senha.apoio')),
             h('p', { id: 'senha-instaladas', class: 'nota', hidden: true }),
             h('div', { class: 'slot' }, [
@@ -372,7 +349,7 @@ export function montarMarcacao() {
                   ' ',
                   h('button', { class: 'btn discreto', type: 'button', id: 'btn-senha-mostrar', 'aria-pressed': 'false' }, t('opcoes.btn-senha-mostrar')),
                 ]),
-                h('p', { id: 'senha-erro', class: 'aviso', role: 'alert', hidden: true }, t('opcoes.senha-erro')),
+                h('p', { id: 'senha-erro', class: 'aviso-legado', role: 'alert', hidden: true }, t('opcoes.senha-erro')),
                 h('ul', { class: 'erros', role: 'alert', hidden: true }),
                 h('div', { class: 'acoes so-opcoes' }, [
                   h('button', { class: 'btn', type: 'submit' }, t('opcoes.form-senha.botao')),
@@ -383,7 +360,7 @@ export function montarMarcacao() {
             ]),
           ]),
           h('div', { class: 'secao', 'data-secao': 'placa' }, [
-            h('h3', null, t('opcoes.secao-placa.titulo')),
+            h('h2', null, t('opcoes.secao-placa.titulo')),
             h('p', { class: 'apoio' }, t('opcoes.secao-placa.apoio')),
             h('div', { class: 'slot' }, [
               h('form', { id: 'form-placa', class: 'secao-form' }, [
@@ -401,7 +378,7 @@ export function montarMarcacao() {
             ]),
           ]),
           h('div', { class: 'secao', 'data-secao': 'rede' }, [
-            h('h3', null, t('opcoes.secao-rede.titulo')),
+            h('h2', null, t('opcoes.secao-rede.titulo')),
             h('p', { class: 'apoio' }, t('opcoes.secao-rede.apoio')),
             h('div', { class: 'slot' }, [
               h('form', { id: 'form-rede', class: 'secao-form' }, [
@@ -441,7 +418,7 @@ export function montarMarcacao() {
             ]),
           ]),
           h('div', { class: 'secao', 'data-secao': 'fabrica' }, [
-            h('h3', null, t('opcoes.secao-fabrica.titulo')),
+            h('h2', null, t('opcoes.secao-fabrica.titulo')),
             h('p', { class: 'apoio' }, t('opcoes.secao-fabrica.apoio')),
             h('div', { class: 'slot' }, [
               h('form', { id: 'form-fabrica', class: 'secao-form' }, [
@@ -466,7 +443,7 @@ export function montarMarcacao() {
             ]),
           ]),
           h('div', { class: 'secao', 'data-secao': 'camera' }, [
-            h('h3', null, t('opcoes.secao-camera.titulo')),
+            h('h2', null, t('opcoes.secao-camera.titulo')),
             h('p', { class: 'apoio' }, t('opcoes.secao-camera.apoio')),
             h('div', { class: 'slot' }, [
               h('form', { id: 'form-camera', class: 'secao-form' }, [
@@ -542,7 +519,7 @@ export function montarMarcacao() {
             ]),
           ]),
           h('div', { class: 'secao', 'data-secao': 'fila' }, [
-            h('h3', null, t('opcoes.secao-fila.titulo')),
+            h('h2', null, t('opcoes.secao-fila.titulo')),
             h('p', { class: 'apoio' }, t('opcoes.secao-fila.apoio')),
             h('div', { class: 'slot' }, [
               h('form', { id: 'form-fila', class: 'secao-form' }, [
@@ -580,12 +557,12 @@ export function montarMarcacao() {
                   ' ',
                   h('span', { class: 'apoio', 'data-ok': true, role: 'status', hidden: true }),
                 ]),
-                h('p', { class: 'aviso', 'data-aviso-de': 'fila', role: 'alert', hidden: true }),
+                h('p', { class: 'aviso-legado', 'data-aviso-de': 'fila', role: 'alert', hidden: true }),
               ]),
             ]),
           ]),
           h('div', { class: 'secao', 'data-secao': 'painel' }, [
-            h('h3', null, t('opcoes.secao-painel.titulo')),
+            h('h2', null, t('opcoes.secao-painel.titulo')),
             h('p', { class: 'apoio' }, t('opcoes.secao-painel.apoio')),
             h('div', { class: 'acoes' }, [
               h('button', { type: 'button', class: 'btn', id: 'btn-restaurar' }, t('opcoes.btn-restaurar')),
@@ -615,7 +592,7 @@ export function montarMarcacao() {
                 ]),
               ]),
             ]),
-            h('p', { class: 'aviso', 'data-aviso-de': 'painel', role: 'alert', hidden: true }),
+            h('p', { class: 'aviso-legado', 'data-aviso-de': 'painel', role: 'alert', hidden: true }),
           ]),
         ]),
         h('details', { class: 'log', id: 'log-bloco', open: true }, [
@@ -623,7 +600,6 @@ export function montarMarcacao() {
           h('div', { id: 'log', class: 'log-linhas mono', translate: 'no', 'aria-live': 'off' }),
         ]),
       ]),
-    ]),
     h('div', { id: 'encerrado', class: 'encerrado', tabindex: '-1', hidden: true }, [
       h('div', { class: 'fim-marca' }, [
         logo(),

@@ -1,12 +1,14 @@
 // Transicao: sai nas frentes 3 a 5 do redesenho.
-// Navegacao (passo a passo, Painel, Ferramentas, Opcoes), consulta do estado,
-// desenho geral e o ciclo de consulta. iniciar() registra os ganchos que os
-// modulos de baixo usam para chamar buscarEstado e montarPasso.
-import { t, nomeEtapa } from './textos.js';
+// Navegacao (passo a passo, Painel, Ferramentas, Sessao) e o desenho geral a
+// cada estado recebido. A consulta e o ciclo moram no app.js; o formato do
+// hash, no rotas.js. iniciar() registra o gancho montarPasso.
+import { t } from './textos.js';
 import {
   SECOES_ORDEM, PASSO_SENHA, PASSO_PLACA, PASSO_FILA, PASSO_RESUMO, TOTAL_PASSOS,
-  CONSULTA_MS, CONSULTA_RAPIDA_MS, ESPERA_SESSAO_MS, ESPERA_COMECAR_MS, HTTP, BASE_DECIMAL,
+  ESPERA_SESSAO_MS, ESPERA_COMECAR_MS, HTTP, BASE_DECIMAL,
 } from './constantes.js';
+import { lerRota, hashDe, corrigir, rotaDoPasso, ir, ROTA_INICIAL } from './rotas.js';
+import { derivar } from './estado.js';
 import {
   S, ganchos, $, exigir, senhaOk, passoDe, irPara, esperarEstado, ORIGEM_DO_COMANDO, naTela,
   mostrarAviso, aplicarOcupado, anunciar, mostrarTelaFim, temFocoEmCampo,
@@ -15,27 +17,16 @@ import {
   carregarSessao, carregarPlacas, desenharResumo, enviarSenha, salvarSecao, textoDaEscolha,
 } from './legado-formularios.js';
 import {
-  anexarLog, desenharPlaca, desenharAtualizacao, desenharInternet, desenharFila, desenharFerramenta,
-  carregarRegistro,
+  anexarLog, desenharAtualizacao, desenharFila, desenharFerramenta, carregarRegistro,
 } from './legado-painel.js';
 
-// Hash: #inicio/N (passo a passo), #painel, #ferramentas, #opcoes[/secao].
-// Os antigos #fila e #registro caem no painel; #padroes em opcoes.
-const VIEWS = ['painel', 'ferramentas', 'opcoes'];
-
-export function rota() {
-  const partes = (location.hash || '').slice(1).split('/');
-  const mapa = { fila: 'painel', registro: 'painel', padroes: 'opcoes', '': 'painel' };
-  const v = mapa[partes[0]] !== undefined ? mapa[partes[0]] : partes[0];
-  return { view: v, sub: partes[1] || '' };
-}
+// Aba do topo -> view da marcacao de hoje (a Sessao ainda e a view de Opcoes).
+const VIEW_DA_TELA = Object.freeze({ painel: 'painel', sessao: 'opcoes', ferramentas: 'ferramentas' });
 
 // O passo a passo fica na tela enquanto faltar senha, sessao completa ou o
-// "comecar" (iniciada).
+// "comecar" (iniciada): a regra mora no estado.js, a mesma que esconde o topo.
 function precisaInicio() {
-  if (!S.estado || !S.estado.fase) return false;
-  const s = S.estado.sessao || {};
-  return !senhaOk() || !s.completa || !s.iniciada;
+  return derivar({ estado: S.estado }).inicio;
 }
 
 // Ate onde o passo a passo deixa ir: a primeira coisa que falta.
@@ -52,34 +43,35 @@ export function trocarView() {
   if (!S.estado || !S.estado.fase) return;
   const inicio = precisaInicio();
   document.body.classList.toggle('no-inicio', inicio);
-  let r = rota();
+  let r = lerRota();
   if (inicio) {
     const sug = passoSugerido();
-    let n = parseInt(r.sub, BASE_DECIMAL);
-    if (r.view !== 'inicio' || !(n >= 1)) n = sug;
+    let n = r.tela === 'conferir' ? PASSO_RESUMO : parseInt(r.parte, BASE_DECIMAL);
+    if ((r.tela !== 'inicio' && r.tela !== 'conferir') || !(n >= 1)) n = sug;
     n = Math.min(Math.max(1, n), sug);
-    if (r.view !== 'inicio' || String(n) !== r.sub) history.replaceState(null, '', '#inicio/' + n);
+    corrigir(rotaDoPasso(n));
     for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== 'inicio';
     montarPasso(n);
     $('log-bloco').open = false;
     return;
   }
-  if (!VIEWS.includes(r.view)) { history.replaceState(null, '', '#painel'); r = { view: 'painel', sub: '' }; }
+  if (!VIEW_DA_TELA[r.tela]) r = { tela: 'painel', parte: '' };
+  // Apelido antigo (#opcoes/fila) ou tela desconhecida: a URL mostra a rota de hoje.
+  corrigir(hashDe(r));
+  const view = VIEW_DA_TELA[r.tela];
   montarOpcoes();
-  for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== 'view-' + r.view;
-  for (const a of document.querySelectorAll('.menu a')) {
-    const ativo = a.dataset.view === r.view;
-    a.classList.toggle('ativo', ativo);
-    if (ativo) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
-  }
+  for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== 'view-' + view;
   // O log so interessa no painel; nas outras abas ele empurra o conteudo.
-  $('log-bloco').open = r.view === 'painel';
-  if (r.view === 'painel') carregarRegistro();
-  if (r.view === 'opcoes') {
+  $('log-bloco').open = view === 'painel';
+  if (view === 'painel') {
+    carregarRegistro();
+    if (r.parte === 'registro') $('registro-bloco').scrollIntoView({ block: 'start' });
+  }
+  if (view === 'opcoes') {
     carregarSessao();
     carregarPlacas();
-    if (r.sub) {
-      const sec = document.querySelector('#view-opcoes .secao[data-secao="' + r.sub + '"]');
+    if (r.parte) {
+      const sec = document.querySelector('#view-opcoes .secao[data-secao="' + r.parte + '"]');
       if (sec) { sec.scrollIntoView({ block: 'start' }); const c = sec.querySelector('input, select, button'); if (c) c.focus({ preventScroll: true }); }
     }
   }
@@ -158,48 +150,34 @@ function montarOpcoes() {
 }
 
 // ------------------------------------------------------------------ estado
-export function buscarEstado() {
-  if (S.buscando) return S.buscando;
-  S.buscando = (async () => {
-    let dados;
-    try {
-      dados = await exigir(S.api.estado(S.cursorLog));
-    } catch (e) {
-      if (S.atualizando) { mostrarTelaFim('atualizando'); return; }
-      $('placa-texto').textContent = t('barra.sem-resposta');
-      $('placa-luz').className = 'luz falha';
-      return;
-    }
-    S.estado = dados.estado;
-    // Comando na fila do worker ainda nao virou "ocupado": trata como ocupado.
-    if (S.estado && dados.comandos > 0) S.estado.ocupado = true;
-    if (dados.versao) $('versao-painel').textContent = t('topo.versao', { versao: dados.versao });
-    desenharAtualizacao(dados.atualizacao || {}, S.estado || {});
-    anexarLog(dados.log || []);
-    S.cursorLog = dados.cursor;
-    desenhar();
-  })().finally(() => { S.buscando = null; });
-  return S.buscando;
+// O app.js consulta (GET /api/estado) e entrega a resposta aqui.
+export function receberEstado(dados) {
+  S.estado = dados.estado;
+  // Comando na fila do worker ainda nao virou "ocupado": trata como ocupado.
+  if (S.estado && dados.comandos > 0) S.estado.ocupado = true;
+  if (dados.versao) $('versao-painel').textContent = t('topo.versao', { versao: dados.versao });
+  desenharAtualizacao(dados.atualizacao || {}, S.estado || {});
+  anexarLog(dados.log || []);
+  S.cursorLog = dados.cursor;
+  desenhar();
+}
+
+// Sem resposta no meio da atualizacao: o painel esta reabrindo.
+export function semResposta() {
+  if (S.atualizando) mostrarTelaFim('atualizando');
 }
 
 function desenhar() {
   const e = S.estado;
   if (!e || !e.fase) return;
 
-  // topo
-  $('faixa-simular').hidden = !e.simular;
-  document.title = (e.simular ? t('topo.prefixo-simulacao') : '') + t('topo.marca');
   for (const n of document.querySelectorAll('[data-nota-simular]')) n.hidden = !e.simular;
-  $('faixa-falha').textContent = e.simular && e.falharEm ? t('topo.falha-forcada', { etapa: nomeEtapa(e.falharEm) }) : '';
-  desenharPlaca(e.rede || {});
-  desenharInternet(e.internet || {}, e.rede || {});
 
   // Sessao regravada (secao salva, fila montada): os formularios recarregam.
   const g = (e.sessao && e.sessao.geracao) || 0;
   if (g !== S.geracaoVista) { const primeira = S.geracaoVista < 0; S.geracaoVista = g; if (!primeira) carregarSessao(true); }
 
   desenharModo();
-  $('btn-preparar').hidden = S.modoAtual !== 'normal' || !!(e.rede && (e.rede.ok || e.rede.semSessao));
 
   desenharFila(e);
   desenharFerramenta(e.ferramenta, e);
@@ -209,7 +187,7 @@ function desenhar() {
   if (S.ultimoVisto !== null && e.ultimo && e.ultimo !== S.ultimoVisto) falas.push(e.ultimo);
   S.ultimoVisto = e.ultimo || '';
   if (S.ultimaFase && S.ultimaFase !== e.fase) {
-    if (rota().view === 'painel' && S.modoAtual === 'normal') carregarRegistro();
+    if (lerRota().tela === 'painel' && S.modoAtual === 'normal') carregarRegistro();
     // Falha de camera do cartao: quem anuncia e a linha de estado do cartao.
     if (e.fase === 'decisao' && e.falha && !$('bancada-decisao').hidden) {
       falas.push($('decisao-titulo').textContent + '. ' + e.falha.erro);
@@ -281,22 +259,16 @@ export async function comecar() {
     await exigir(S.api.comando('/api/sessao/concluir', { montarFila: montar }));
     mostrarAviso('');
     await esperarEstado((e) => e.sessao && e.sessao.iniciada && !e.ocupado, ESPERA_COMECAR_MS);
-    history.replaceState(null, '', '#painel');
+    // O passo a passo sai do historico: voltar nao reabre o Conferir.
+    corrigir(ROTA_INICIAL);
     desenharModo();
-    trocarView();
+    ir(ROTA_INICIAL);
   } catch (e) {
     mostrarAviso(e.message, 'concluir', { neutro: e.status === HTTP.CONFLITO });
     aplicarOcupado(!!(S.estado && S.estado.ocupado));
   }
 }
 
-export async function ciclo() {
-  await buscarEstado();
-  const rapido = S.estado && (S.estado.ocupado || S.estado.fase === 'configurando');
-  setTimeout(ciclo, rapido ? CONSULTA_RAPIDA_MS : CONSULTA_MS);
-}
-
 export function iniciar() {
-  ganchos.buscarEstado = buscarEstado;
   ganchos.montarPasso = montarPasso;
 }

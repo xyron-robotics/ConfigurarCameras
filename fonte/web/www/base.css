@@ -18,10 +18,12 @@
   /* Texto de ajuda: linha de leitura curta. */
   .apoio { color: var(--apoio); margin: var(--esp-1) 0; max-width: var(--medida-texto); }
   .nota { color: var(--apoio); font-size: var(--tipo-meta); margin: var(--esp-2) 0 0; max-width: var(--medida-texto); }
-  /* Um tamanho por nivel, h1 > h2 > h3 (h1 e o nome no topo). */
+  /* Um tamanho por nivel, h1 > h2 > h3: h1 e o titulo da tela, h2 a secao,
+     h3 o bloco. O nome no topo nao e titulo. */
   h1, h2, h3 { font-weight: var(--peso-forte); line-height: var(--entrelinha-titulo); margin: 0; }
-  h2 { font-size: var(--tipo-titulo); margin-bottom: var(--esp-2); }
-  h3 { font-size: var(--tipo-subtitulo); margin-bottom: var(--esp-1); }
+  h1 { font-size: var(--tipo-titulo); margin-bottom: var(--esp-2); }
+  h2 { font-size: var(--tipo-subtitulo); margin-bottom: var(--esp-1); }
+  h3 { font-size: var(--tipo-leitura); margin-bottom: var(--esp-1); }
   /* Link em texto: na cor de acao, o sublinhado engrossa no hover. */
   a { color: var(--acao-texto); text-underline-offset: var(--foco-recuo); }
   a:hover { text-decoration-thickness: var(--foco-espessura); }
@@ -51,11 +53,11 @@
   html { -webkit-tap-highlight-color: var(--acao-fraco); }
 
   /* Numero que muda ou se compara em coluna: digitos de largura igual. */
-  .mono, .tabela, .fita, .resumo-secao dd, .resultado dd, .bancada-pos, .placa, .passo-botao, .etapas { font-variant-numeric: tabular-nums; }
+  .mono, .tabela, .fita, .resumo-secao dd, .resultado dd, .bancada-pos, .passo-botao, .etapas { font-variant-numeric: tabular-nums; }
   h1, h2, h3, legend { text-wrap: balance; }
 
-  /* Ancoras abaixo da faixa de simulacao (sticky). */
-  .secao, .passo, .bancada, input, select, button, a, summary { scroll-margin-top: calc(var(--esp-7) + var(--esp-5)); }
+  /* Ancora e foco por teclado param abaixo do topo fixo (sticky). */
+  html { scroll-padding-block-start: calc(var(--topo-altura) + var(--esp-4)); }
 
   /* Fora da tela, lido pelo leitor de tela. */
   .so-leitor {

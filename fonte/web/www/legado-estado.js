@@ -5,6 +5,7 @@
 import { h } from './dom.js';
 import { t } from './textos.js';
 import { numero } from './formato.js';
+import { ir, rotaDoPasso } from './rotas.js';
 import {
   HTTP, NBSP, RE_IP, SECOES_ORDEM, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS,
   AVISO_NEUTRO_MS, ANUNCIO_ATRASO_MS, CONSULTA_APOS_COMANDO_MS,
@@ -78,7 +79,7 @@ export function senhaOk() { return !!(S.estado && (S.estado.senhaDefinida || S.e
 export function passoDe(secao) { return SECOES_ORDEM.indexOf(secao) + 1; }
 
 export function irPara(n) {
-  location.hash = '#inicio/' + n;
+  ir(rotaDoPasso(n));
 }
 
 // Espera o estado publicado satisfazer a condicao (ate -ms); devolve true se deu.
@@ -152,7 +153,7 @@ export async function comando(caminho, corpo, opcoes) {
 // servidor aceita decisao com o worker ocupado, e cada cartao trava os seus.
 export function aplicarOcupado(ocupado) {
   const simular = !!(S.estado && S.estado.simular);
-  const sel = '#view-ferramentas .btn, #btn-preparar, #btn-restaurar, #btn-refazer, #form-conectada .btn, ' +
+  const sel = '#view-ferramentas .btn, #btn-restaurar, #btn-refazer, #form-conectada .btn, ' +
               '[data-decisao], #btn-avancar, #btn-comecar, #btn-montar-depois, ' +
               '#btn-usar-sessao, #btn-revisar-sessao, .secao-form .btn[type="submit"]';
   for (const b of document.querySelectorAll(sel)) {

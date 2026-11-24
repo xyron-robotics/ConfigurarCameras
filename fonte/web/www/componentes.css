@@ -1,20 +1,140 @@
-/* Componentes do painel: faixa, luz, icone, marca, campo, botao, aviso, trilha de passos,
-   selo, fita, etapas, tabela, controle segmentado e log. Uma classe por peca;
-   a tela so posiciona (telas.css). Cores pelo significado (direcao 4.2):
-   --acao acao, --agora em curso, --sucesso concluido, --falha pede voce,
-   --atencao atencao, cinza o resto. Medida que a direcao nao tem (layout de
-   hoje) sai de calc() de token; a frente 3 refaz o layout. */
+/* Componentes do painel: os da casca (botao, chip, popover, aviso, detalhe,
+   dialogo e campo, de componentes.js) e os de transicao dos legado-*.js
+   (luz, icone, marca, campo, botao, aviso, trilha de passos, selo, fita,
+   etapas, tabela, controle segmentado e log). Uma classe por peca; a tela so
+   posiciona (telas.css). Cores pelo significado (direcao 4.2): --acao acao,
+   --agora em curso, --sucesso concluido, --falha pede voce, --atencao
+   atencao, cinza o resto. */
 
 @layer componentes {
-  /* ---------------------------------------------------------------- faixa de simulacao */
-  /* Simulacao e cinza, nao alarme (direcao 4.2); a frente 3 a leva para o chip do topo. */
-  .faixa-simular {
-    position: sticky; top: 0; z-index: var(--z-topo);
-    display: flex; gap: var(--esp-5); flex-wrap: wrap;
-    padding: var(--esp-2) var(--esp-5);
-    font-weight: var(--peso-forte); color: var(--texto);
-    background: var(--superficie-2); border-bottom: var(--traco) solid var(--linha-forte);
+  /* ---------------------------------------------------------------- botao (5.1, casca) */
+  /* Primario e um por area; secundario e contorno; discreto e o link de acao;
+     perigo so no dialogo que confirma. Hover nao levanta; o press desce 1 px. */
+  .botao {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--esp-2);
+    min-block-size: var(--controle-altura); padding: 0 var(--esp-4);
+    font: inherit; font-size: var(--tipo-corpo); font-weight: var(--peso-forte); white-space: nowrap;
+    border: var(--traco) solid transparent; border-radius: var(--raio-controle);
+    cursor: pointer;
+    transition:
+      background-color var(--dur-rapida) var(--curva),
+      border-color var(--dur-rapida) var(--curva),
+      color var(--dur-rapida) var(--curva);
   }
+  .botao:active:not(:disabled) { transform: translateY(var(--pressionado)); }
+  .botao-primario { background: var(--acao); color: var(--acao-rotulo); }
+  .botao-primario:hover:not(:disabled) { background: var(--acao-hover); }
+  .botao-secundario { background: var(--superficie); border-color: var(--linha-forte); color: var(--acao-texto); }
+  .botao-secundario:hover:not(:disabled) { background: var(--acao-fraco); }
+  .botao-discreto { background: transparent; color: var(--acao-texto); padding-inline: var(--esp-2); }
+  .botao-discreto:hover:not(:disabled) { text-decoration: underline; text-underline-offset: var(--foco-recuo); }
+  .botao-perigo { background: var(--perigo); color: var(--acao-rotulo); }
+  .botao-perigo:hover:not(:disabled) { background: var(--perigo-hover); }
+  /* Desabilitado legivel: cor de apoio, sem opacidade. */
+  .botao:disabled { background: var(--superficie-2); border-color: var(--linha); color: var(--apoio); cursor: not-allowed; }
+  .botao-discreto:disabled { background: transparent; border-color: transparent; }
+  .botao[aria-busy="true"] { cursor: progress; }
+
+  /* ---------------------------------------------------------------- chip (5.9, casca) */
+  /* Sempre icone e palavra; a cor so reforca. Neutro sem fundo no topo. */
+  .chip {
+    display: inline-flex; align-items: center; gap: var(--esp-1);
+    padding: 0 var(--esp-2); min-block-size: var(--icone-m);
+    border-radius: var(--raio-selo);
+    background: var(--superficie-2); color: var(--texto);
+    font-size: var(--tipo-corpo); font-weight: var(--peso-normal); white-space: nowrap;
+  }
+  .chip-pronta { color: var(--sucesso); }
+  .chip-alarme { background: var(--falha-fundo); color: var(--falha); font-weight: var(--peso-forte); }
+  .chip-atencao { background: var(--atencao-fundo); color: var(--atencao); }
+  .chip-agora { background: var(--acao-fraco); color: var(--acao-texto); }
+  .chip-agora .icone { color: var(--agora); }
+  .chip-botao {
+    padding: 0; font: inherit; cursor: pointer;
+    border: var(--traco) solid transparent; border-radius: var(--raio-selo);
+    background: transparent;
+  }
+  .chip-botao .chip { min-block-size: calc(var(--controle-altura) - var(--esp-2)); padding-inline: var(--esp-3); }
+  /* No topo o estado normal e so icone e palavra: fundo so quando pede atencao,
+     para o chip nao virar um terceiro botao. */
+  .chip-botao .chip:not(.chip-alarme, .chip-atencao) { background: transparent; }
+  .chip-botao:hover .chip { box-shadow: inset 0 0 0 var(--traco) var(--linha-forte); }
+
+  /* ---------------------------------------------------------------- popover (5.9, casca) */
+  /* Sob o topo, alinhado a direita; fecha com Esc e clique fora (popover=auto). */
+  .popover {
+    position: fixed;
+    inset: auto;
+    inset-block-start: calc(var(--topo-altura) + var(--esp-1));
+    inset-inline-end: var(--esp-5);
+    margin: 0;
+    inline-size: var(--popover-largura);
+    padding: var(--esp-4);
+    border: var(--traco) solid var(--linha);
+    border-radius: var(--raio-bloco);
+    background: var(--superficie);
+    color: var(--texto);
+    box-shadow: var(--sombra-sobreposta);
+  }
+  .popover:popover-open { display: grid; gap: var(--esp-3); }
+  .popover-titulo { margin: 0; font-size: var(--tipo-leitura); }
+  .popover-corpo { display: grid; gap: var(--esp-3); }
+  .popover-corpo > p { margin: 0; }
+  .popover-listas { display: grid; gap: var(--esp-2); }
+  .popover-listas:empty { display: none; }
+  .popover-lista { display: grid; gap: var(--esp-1); overflow-wrap: anywhere; font-size: var(--tipo-corpo); }
+  .popover-rotulo { font-size: var(--tipo-meta); font-weight: var(--peso-forte); color: var(--apoio); }
+  .popover-nota { color: var(--apoio); font-size: var(--tipo-meta); }
+  .popover-nota:empty { display: none; }
+  .popover-acoes { display: flex; gap: var(--esp-2); flex-wrap: wrap; }
+
+  /* ---------------------------------------------------------------- aviso (5.6, casca) */
+  .lugar-aviso:empty { display: none; }
+  .aviso {
+    display: flex; gap: var(--esp-2); align-items: flex-start;
+    padding: var(--esp-2) var(--esp-3);
+    border-radius: var(--raio-controle);
+    border-inline-start: var(--barra-mini) solid currentColor;
+    overflow-wrap: anywhere;
+  }
+  .aviso > .icone { margin-block-start: var(--traco); }
+  .aviso-corpo { display: grid; gap: var(--esp-1); color: var(--texto); }
+  .aviso-sucesso { color: var(--sucesso); }
+  .aviso-erro { color: var(--falha); background: var(--falha-fundo); }
+  .aviso-atencao { color: var(--atencao); background: var(--atencao-fundo); }
+  .aviso-info { color: var(--acao-texto); }
+
+  /* Detalhe tecnico: fechado por padrao, o cru em mono. */
+  .detalhe > summary { cursor: pointer; color: var(--acao-texto); font-size: var(--tipo-meta); }
+  .detalhe-cru {
+    margin: var(--esp-2) 0 0; padding: var(--esp-2) var(--esp-3);
+    background: var(--superficie-2); border-radius: var(--raio-controle);
+    white-space: pre-wrap; overflow-wrap: anywhere; color: var(--texto); font-size: var(--tipo-meta);
+  }
+
+  /* ---------------------------------------------------------------- dialogo (5.8, casca) */
+  /* Modal nativo: Esc cancela, o foco abre em Cancelar. */
+  .dialogo {
+    inline-size: var(--dialogo-largura); max-inline-size: calc(100% - var(--esp-6));
+    padding: var(--esp-5);
+    border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
+    background: var(--superficie); color: var(--texto);
+    box-shadow: var(--sombra-sobreposta);
+  }
+  .dialogo::backdrop { background: var(--sobreposicao); }
+  .dialogo[open] { display: grid; gap: var(--esp-3); }
+  .dialogo-titulo { margin: 0; font-size: var(--tipo-subtitulo); }
+  .dialogo-texto { margin: 0; max-inline-size: var(--medida-texto); }
+  .dialogo-acoes { display: flex; justify-content: flex-end; gap: var(--esp-2); margin-block-start: var(--esp-3); }
+
+  /* ---------------------------------------------------------------- campo (5.2, casca) */
+  .campo { display: grid; gap: var(--esp-1); align-content: start; }
+  .campo-rotulo { font-size: var(--tipo-meta); font-weight: var(--peso-forte); color: var(--texto); }
+  .campo-entrada { inline-size: 100%; }
+  .campo-entrada::placeholder { color: var(--apoio); }
+  .campo-curto .campo-entrada { inline-size: var(--entrada-curta); }
+  .campo-ajuda { margin: 0; color: var(--apoio); font-size: var(--tipo-meta); }
+  .campo-erro { margin: 0; color: var(--falha); font-size: var(--tipo-meta); font-weight: var(--peso-forte); }
 
   /* ---------------------------------------------------------------- luz */
   /* Cinza (--linha-forte, 3:1 nos dois temas) quando nao ha estado a dizer. */
@@ -49,11 +169,8 @@
     background: var(--logo-placa);
     border-radius: var(--raio-bloco);
   }
-  /* Simbolo no topo, ao lado do nome do painel (o h1 do layout de hoje e bloco). */
-  .simbolo {
-    block-size: var(--simbolo-altura); inline-size: auto;
-    vertical-align: middle; margin-inline-end: var(--esp-2);
-  }
+  /* Simbolo no topo, ao lado do nome do painel (o vao vem do gap da marca). */
+  .simbolo { block-size: var(--simbolo-altura); inline-size: auto; }
   /* Logo acima do texto, centrada (tela de encerrado). */
   .fim-marca { display: grid; justify-items: center; gap: var(--esp-5); }
   .fim-marca .logo { margin-inline-start: 0; }
@@ -111,7 +228,7 @@
     font-weight: var(--peso-forte); font-size: var(--tipo-corpo);
     padding: 0 var(--esp-1);
   }
-  .erros, .avisos-leves, .aviso { overflow-wrap: anywhere; }
+  .erros, .avisos-leves, .aviso-legado { overflow-wrap: anywhere; }
   .erros {
     margin: 0; padding: var(--esp-2) var(--esp-4) var(--esp-2) var(--esp-6);
     background: var(--falha-fundo); border-radius: var(--raio-controle);
@@ -157,13 +274,13 @@
   }
   .acoes { display: flex; gap: var(--esp-3); align-items: center; flex-wrap: wrap; }
 
-  /* ---------------------------------------------------------------- aviso */
-  .aviso {
+  /* ---------------------------------------------------------------- aviso de transicao */
+  .aviso-legado {
     padding: var(--esp-2) var(--esp-4); border-radius: var(--raio-controle);
     background: var(--falha-fundo); color: var(--texto); border-left: var(--barra-mini) solid var(--falha);
   }
   /* "Aguarde": nao e erro, some sozinho. */
-  .aviso.neutro { background: var(--superficie-2); border-left-color: var(--apoio); }
+  .aviso-legado.neutro { background: var(--superficie-2); border-left-color: var(--apoio); }
   /* Aviso junto do formulario que o causou. */
   [data-aviso-de] { margin: var(--esp-3) 0 0; align-self: stretch; }
 

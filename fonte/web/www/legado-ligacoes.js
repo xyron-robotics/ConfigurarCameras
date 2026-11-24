@@ -4,7 +4,7 @@
 import { t } from './textos.js';
 import { SECOES_ORDEM, PASSO_SENHA, PASSO_PLACA, PASSO_RESUMO, HTTP, CONSULTA_APOS_ATUALIZAR_MS } from './constantes.js';
 import {
-  S, $, exigir, irPara, comando, mostrarAviso, mostrarTelaFim, conferirCampoIp,
+  S, ganchos, $, exigir, irPara, comando, mostrarAviso, mostrarTelaFim, conferirCampoIp,
 } from './legado-estado.js';
 import {
   atualizarPlaceholdersPc, escolherListaValor, desenharAvisosCamera, desenharEncoder, desenharPrevia,
@@ -12,7 +12,7 @@ import {
 } from './legado-formularios.js';
 import { carregarRegistro } from './legado-painel.js';
 import {
-  trocarView, avancar, montarDepois, comecar, montarPasso, passoSugerido, buscarEstado,
+  avancar, montarDepois, comecar, montarPasso, passoSugerido,
 } from './legado-navegacao.js';
 
 // Fechar ou recarregar a aba com secao editada e nao salva pede confirmacao.
@@ -29,7 +29,6 @@ function temFila() {
 }
 
 export function ligar() {
-  window.addEventListener('hashchange', trocarView);
   window.addEventListener('beforeunload', sairComSujo);
 
   // Passo a passo.
@@ -118,8 +117,7 @@ export function ligar() {
   $('btn-descobrir').addEventListener('click', () => comando('/api/descobrir'));
   $('btn-verificar').addEventListener('click', () => comando('/api/verificar'));
 
-  // Topo e Opcoes > Painel.
-  $('btn-preparar').addEventListener('click', () => comando('/api/rede/preparar'));
+  // Sessao > Painel.
   $('btn-restaurar').addEventListener('click', () => {
     if (confirm(t('confirmar.restaurar'))) comando('/api/rede/restaurar');
   });
@@ -132,7 +130,7 @@ export function ligar() {
   $('btn-atualizar').addEventListener('click', async () => {
     if (!confirm(t('confirmar.atualizar', { temFila: temFila() }))) return;
     try { await exigir(S.api.comando('/api/atualizar', {})); mostrarAviso(''); } catch (e) { mostrarAviso(e.message, null, { neutro: e.status === HTTP.CONFLITO }); }
-    setTimeout(buscarEstado, CONSULTA_APOS_ATUALIZAR_MS);
+    setTimeout(ganchos.buscarEstado, CONSULTA_APOS_ATUALIZAR_MS);
   });
 
   $('btn-encerrar').addEventListener('click', async () => {
@@ -144,9 +142,14 @@ export function ligar() {
     if (!confirm(texto)) return;
     let r = {};
     try { r = await exigir(S.api.comando('/api/encerrar', {})); } catch (_) { /* o servidor fecha junto */ }
-    if (r.restaurando) $('encerrado-texto').textContent = t('fim.encerrado-restaurando');
-    mostrarTelaFim('encerrado');
+    telaEncerrado(!!r.restaurando);
   });
+}
+
+// Tela de fim do "Encerrar o painel" (topo e Sessao > Painel).
+export function telaEncerrado(restaurando) {
+  if (restaurando) $('encerrado-texto').textContent = t('fim.encerrado-restaurando');
+  mostrarTelaFim('encerrado');
 }
 
 // ------------------------------------------------------------------ tema

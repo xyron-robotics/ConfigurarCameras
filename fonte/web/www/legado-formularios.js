@@ -5,6 +5,7 @@
 import { h } from './dom.js';
 import { t } from './textos.js';
 import { numero, dataCurta, hora, ipParaNumero, resolucao } from './formato.js';
+import { rotaDoPasso } from './rotas.js';
 import {
   HTTP, SECOES_ORDEM, SESSAO_PADRAO, ESPERA_SESSAO_MS, CONSULTA_APOS_COMANDO_MS,
   FILA_MAX_ENDERECOS, PASSO_SENHA, PASSO_RESUMO,
@@ -387,7 +388,7 @@ export function desenharResumo() {
   const es = (estado && estado.sessao) || {};
   if (!s) { box.replaceChildren(h('p', { class: 'apoio' }, t('resumo.carregando'))); return; }
   const cartao = (n, titulo, linhas) => h('div', { class: 'resumo-secao' }, [
-    h('div', { class: 'resumo-cabeca' }, [h('h3', null, titulo), n ? h('a', { href: '#inicio/' + n }, t('resumo.alterar')) : null]),
+    h('div', { class: 'resumo-cabeca' }, [h('h2', null, titulo), n ? h('a', { href: rotaDoPasso(n) }, t('resumo.alterar')) : null]),
     h('dl', null, linhas.filter(([, v]) => v !== undefined && v !== null && v !== '').flatMap(([k, v]) => [h('dt', null, k), h('dd', null, String(v))]))]);
   const placa = s.Placa
     ? t('resumo.placa-valor', { nome: s.Placa.Nome, tipo: s.Placa.Tipo === 'wifi' ? t('placas.wifi') : t('placas.ethernet'), ifIndex: s.Placa.IfIndex })

@@ -1,5 +1,5 @@
 // Transicao: sai nas frentes 3 a 5 do redesenho.
-// Painel: log, barras de placa, internet e atualizacao, fita da fila, cartoes
+// Painel: log, faixa de atualizacao, fita da fila, cartoes
 // das cameras, vigia, resultado das ferramentas e registro.
 import { h } from './dom.js';
 import { icone } from './icones.js';
@@ -33,15 +33,6 @@ const ICONE_DO_SIGNIFICADO = Object.freeze({
 // Situacao gravada no registro (coluna Status do CSV).
 const SIGNIFICADO_DA_SITUACAO = Object.freeze({ Instalada: 'sucesso', Falhou: 'falha', Resetada: 'neutro' });
 
-// Luz da placa (direcao 5.9): cinza na simulacao ou sem sessao; vermelha quando
-// pede acao (faixas faltando, placa ausente, sem cabo); verde so preparada e ok.
-function significadoDaPlaca(rede) {
-  if (rede.semSessao || (S.estado && S.estado.simular)) return '';
-  const placa = rede.placa || {};
-  if (!rede.ok || placa.presente === false || placa.cabo === false) return 'falha';
-  return rede.preparada ? 'sucesso' : '';
-}
-
 function classeLuz(significado) { return significado ? 'luz ' + significado : 'luz'; }
 
 // ------------------------------------------------------------------ log
@@ -63,31 +54,6 @@ export function anexarLog(entrada) {
   }
   while (caixa.childElementCount > LOG_MAX_LINHAS) caixa.firstElementChild.remove();
   if (noFim) caixa.scrollTop = caixa.scrollHeight;
-}
-
-// ------------------------------------------------------------------ barras do topo
-// Barra da placa: so a placa escolhida conta.
-export function desenharPlaca(rede) {
-  const luz = $('placa-luz');
-  const txt = $('placa-texto');
-  luz.className = classeLuz(significadoDaPlaca(rede));
-  if (rede.semSessao) { txt.textContent = t('barra.placa-sem-sessao'); return; }
-  const nome = rede.placa && rede.placa.nome ? rede.placa.nome : t('barra.placa-generica');
-  if (rede.placa && rede.placa.presente === false) {
-    txt.textContent = t('barra.placa-ausente', { nome });
-    return;
-  }
-  txt.textContent = rede.ok
-    ? t('barra.placa-pronta', { nome, ips: (rede.ips || []).join(', ') })
-    : t('barra.placa-sem-faixas', { nome, faltando: (rede.faltando || []).join('; ') });
-  if (rede.placa && rede.placa.cabo === false) txt.textContent += t('barra.sem-cabo');
-  // Preparada pelo painel: volta ao DHCP ao encerrar (ou em Restaurar DHCP).
-  if (rede.preparada) txt.textContent += t('barra.preparada');
-  if (rede.temporarios && rede.temporarios.length) {
-    txt.textContent += t('barra.temporarios', { lista: rede.temporarios.map((x) => (x.camera ? t('barra.temporario-camera', { ip: x.ip, camera: x.camera }) : x.ip)).join(', ') });
-  }
-  if (rede.rotas && rede.rotas.length) txt.textContent += t('barra.rotas', { lista: rede.rotas.map((r) => r.destino).join(', ') });
-  if (S.estado && S.estado.pastaDadosAlternativa) txt.textContent += t('barra.pasta-alternativa', { pasta: S.estado.pastaDados });
 }
 
 // Faixa de atualizacao: aparece com versao nova conhecida; o botao so ativa
@@ -129,27 +95,6 @@ export function desenharAtualizacao(a, e) {
   }
   btn.disabled = !!motivo;
   btn.title = motivo;
-}
-
-// Luz da internet (direcao 5.9): vermelha so em "caiu depois do preparo"
-// (culpa do painel, pede Restaurar DHCP); cinza no resto, inclusive "ok" (a
-// palavra diz o estado).
-export function desenharInternet(net, rede) {
-  const luz = $('internet-luz');
-  const txt = $('internet-texto');
-  if (net.agora === 'ok') { luz.className = 'luz'; txt.textContent = t('barra.internet-ok'); return; }
-  if (net.agora === 'sem') {
-    if (net.antes === 'ok' && rede.preparada) {
-      luz.className = classeLuz('falha');
-      txt.textContent = t('barra.internet-caiu');
-    } else {
-      luz.className = 'luz';
-      txt.textContent = net.antes === 'sem' ? t('barra.internet-ja-sem') : t('barra.internet-sem');
-    }
-    return;
-  }
-  luz.className = 'luz';
-  txt.textContent = t('topo.internet-texto');
 }
 
 // ------------------------------------------------------------------ painel (fila)

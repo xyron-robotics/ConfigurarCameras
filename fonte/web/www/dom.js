@@ -37,3 +37,20 @@ function anexar(el, filhos) {
   }
   return el;
 }
+
+// Leva o foco a qualquer elemento: o que nao e controle ganha tabindex -1
+// (titulo da tela ao trocar de rota, conteudo no "Pular para o conteudo").
+export function focar(el) {
+  if (!el) return;
+  if (!el.hasAttribute('tabindex') && !/^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) {
+    el.setAttribute('tabindex', '-1');
+  }
+  el.focus({ preventScroll: true });
+}
+
+// Id unico para ligar rotulo, ajuda e erro (aria-labelledby, aria-describedby).
+let contadorId = 0;
+export function novoId(prefixo) {
+  contadorId += 1;
+  return prefixo + '-' + contadorId;
+}
