@@ -77,24 +77,6 @@
   .conferir-senha { display: grid; gap: var(--esp-3); justify-self: stretch; }
   .conferir-pede { margin: 0; }
 
-  /* Placas da Sessao (legado, Opcoes): lista de radios, a sugerida em primeiro. */
-  .placas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
-  .placa-item {
-    flex-direction: row; align-items: flex-start; gap: var(--esp-3); cursor: pointer;
-    padding: var(--esp-3) var(--esp-4); border: var(--traco) solid var(--linha);
-    border-radius: var(--raio-bloco); background: var(--superficie);
-    color: var(--texto); font-size: var(--tipo-leitura); font-weight: var(--peso-normal);
-  }
-  .placa-item input { margin-top: var(--esp-1); accent-color: var(--acao); }
-  /* Selecionada: fundo de selecao e borda dupla em --acao, alem do radio marcado. */
-  .placa-item:has(input:checked) {
-    border-color: var(--acao); background: var(--acao-fraco);
-    box-shadow: inset 0 0 0 var(--traco) var(--acao);
-  }
-  .placa-corpo { display: flex; flex-direction: column; gap: var(--esp-1); }
-  .placa-nome { font-weight: var(--peso-forte); display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap; }
-  .placa-detalhe { font-size: var(--tipo-meta); color: var(--apoio); }
-
   /* ---------------------------------------------------------------- painel */
   /* Azul-500 = agora: sem fila nada esta em curso, a barra lateral fica em --linha. */
   .painel-sem-fila {
@@ -225,14 +207,35 @@
   .resultado dt { color: var(--apoio); }
   .resultado dd { margin: 0; overflow-wrap: anywhere; }
 
-  /* ---------------------------------------------------------------- opcoes */
-  .opcoes { gap: var(--esp-4); }
-  .secao {
-    background: var(--superficie); border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
-    padding: var(--esp-4) var(--esp-5) var(--esp-5); display: flex; flex-direction: column; gap: var(--esp-3);
+  /* ---------------------------------------------------------------- sessao */
+  /* Direcao 3.5: menu das secoes a esquerda, a secao escolhida a direita. */
+  .sessao-tela { display: grid; gap: var(--esp-5); }
+  .sessao-cabeca, .sessao-secao-cabeca { display: grid; gap: var(--esp-2); }
+  .sessao-cabeca h1, .sessao-secao-cabeca h2, .sessao-cabeca .lead, .sessao-secao-cabeca .lead { margin: 0; }
+  .sessao-grade { display: grid; grid-template-columns: var(--grade-sessao); gap: var(--esp-6); align-items: start; }
+  .sessao-menu {
+    display: grid; gap: var(--esp-1);
+    position: sticky; inset-block-start: calc(var(--topo-altura) + var(--esp-5));
   }
-  .secao > .apoio { margin-top: calc(-1 * var(--esp-1)); }
-  .secao .slot { display: contents; }
+  .sessao-item {
+    display: block; padding: var(--esp-2) var(--esp-3); border-radius: var(--raio-controle);
+    border-inline-start: var(--foco-espessura) solid transparent;
+    color: var(--texto); text-decoration: none;
+  }
+  .sessao-item:hover { background: var(--superficie-2); }
+  /* Secao aberta: traco em --acao e peso, nao so a cor. */
+  .sessao-item[aria-current="page"] { border-inline-start-color: var(--acao); font-weight: var(--peso-forte); }
+  .sessao-separador { block-size: var(--traco); background: var(--linha); margin-block: var(--esp-2); }
+  .sessao-secao { display: grid; gap: var(--esp-5); max-inline-size: var(--coluna-form); min-inline-size: 0; }
+  .sessao-acoes { display: flex; gap: var(--esp-3); align-items: center; flex-wrap: wrap; }
+  .sessao-nota { margin: 0; color: var(--texto); max-inline-size: var(--medida-texto); }
+  /* Blocos da secao Painel: separados por um traco, sem caixa. */
+  .sessao-bloco {
+    display: grid; gap: var(--esp-3); justify-items: start;
+    padding-block-start: var(--esp-4); border-block-start: var(--traco) solid var(--linha);
+  }
+  .sessao-bloco h3 { margin: 0; }
+  .sessao-bloco .tema { margin: 0; }
 
   /* ---------------------------------------------------------------- log */
   .log { margin-top: var(--esp-5); }

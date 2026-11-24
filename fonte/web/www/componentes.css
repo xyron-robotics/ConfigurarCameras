@@ -133,7 +133,8 @@
   .campo-entrada { inline-size: 100%; }
   .campo-entrada::placeholder { color: var(--apoio); }
   .campo-curto .campo-entrada { inline-size: var(--entrada-curta); }
-  .campo-ajuda { margin: 0; color: var(--apoio); font-size: var(--tipo-meta); }
+  /* A ajuda e frase corrida: le em --texto (7:1 nos dois temas); o peso a separa do rotulo. */
+  .campo-ajuda { margin: 0; color: var(--texto); font-size: var(--tipo-meta); }
   .campo-erro { margin: 0; color: var(--falha); font-size: var(--tipo-meta); font-weight: var(--peso-forte); }
 
   /* ---------------------------------------------------------------- luz */
@@ -208,16 +209,6 @@
     flex-direction: row; align-items: center; gap: var(--esp-2); color: var(--texto);
     font-size: var(--tipo-leitura); font-weight: var(--peso-normal);
   }
-  /* Grade dos formularios de secao: 2 a 3 colunas conforme a largura. */
-  .campos {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--campo-ip) + var(--esp-2)), 1fr));
-    gap: var(--esp-3) var(--esp-4); align-items: end;
-  }
-  .campos label.largo { grid-column: 1 / -1; }
-  .campos label.duplo { grid-column: span var(--coluna-texto); }
-  /* Botao dentro da grade fica do tamanho do texto, nao da coluna. */
-  .campos > .btn { justify-self: start; }
-  .secao-form { display: flex; flex-direction: column; gap: var(--esp-3); }
   /* Sem fundo proprio: no maximo dois niveis de caixa (pagina e cartao). */
   /* min-width 0: sem isso o fieldset cresce ate o min-content e vaza do cartao. */
   fieldset {

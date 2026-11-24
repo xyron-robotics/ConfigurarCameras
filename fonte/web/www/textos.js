@@ -11,7 +11,7 @@ const TEXTOS = {
   'marca.alt': 'Grupo SmartSeg',
   'painel.painel-sem-fila.titulo': 'Sem fila montada',
   'painel.painel-sem-fila.apoio': 'A fila é a sequência de IPs que as câmeras vão receber.',
-  'painel.painel-sem-fila.link': 'Monte uma em Opções, seção Fila.',
+  'painel.painel-sem-fila.link': 'Monte uma em Sessão, seção Fila.',
   'painel.fita-titulo': 'Fila',
   'painel.btn-encerrar-fila': 'Encerrar a fila',
   'painel.fita.rotulo-leitor': 'Posições da fila',
@@ -66,76 +66,6 @@ const TEXTOS = {
   'ferramentas.verificar.titulo': 'Verificar câmeras instaladas',
   'ferramentas.verificar.apoio': 'Faz login em cada câmera do registro e confere IP e MAC. Para na primeira senha recusada.',
   'ferramentas.btn-verificar': 'Verificar câmeras',
-  'opcoes.titulo': 'Sessão',
-  'opcoes.apoio': 'As mesmas seções do passo a passo, para mudar no meio da sessão. O que for salvo vale a partir da próxima câmera. Trocar a placa ou as faixas de rede devolve a placa e a prepara de novo.',
-  'opcoes.secao-senha.titulo': 'Senha das câmeras',
-  'opcoes.secao-senha.apoio': 'Trocar a senha vale só para as próximas câmeras: as já instaladas ficam com a anterior.',
-  'opcoes.campo-senha': 'Senha',
-  'opcoes.campo-senha2': 'Repita a senha',
-  'opcoes.btn-senha-mostrar': 'Mostrar senhas',
-  'opcoes.senha-erro': 'As duas senhas não conferem. Digite a repetição de novo.',
-  'opcoes.form-senha.botao': 'Usar esta senha',
-  'opcoes.secao-placa.titulo': 'Placa de rede',
-  'opcoes.secao-placa.apoio': 'Só a placa escolhida é usada para chegar às câmeras. A sugerida vem em primeiro.',
-  'opcoes.placas.rotulo-leitor': 'Placas de rede deste PC',
-  'opcoes.btn-placas-atualizar': 'Atualizar lista',
-  'opcoes.form-placa.botao': 'Salvar placa',
-  'opcoes.secao-rede.titulo': 'Rede das câmeras',
-  'opcoes.secao-rede.apoio': 'A rede do NVR: máscara, gateway e DNS gravados em cada câmera, e o IP do PC nela.',
-  'opcoes.campo-Mascara': 'Máscara',
-  'opcoes.campo-Gateway': 'Gateway',
-  'opcoes.campo-Dns1': 'DNS 1',
-  'opcoes.campo-Dns2': 'DNS 2',
-  'opcoes.campo-IpPcCameras': 'IP do PC nessa rede (opcional)',
-  'opcoes.campo-IpPcCameras.exemplo': 'vazio = .200 a .249, pelo MAC',
-  'opcoes.form-rede.botao': 'Salvar rede',
-  'opcoes.secao-fabrica.titulo': 'Faixa de fábrica',
-  'opcoes.secao-fabrica.apoio': 'Onde a câmera nova aparece, e o IP do PC nessa faixa.',
-  'opcoes.campo-IpFabrica': 'IP de fábrica',
-  'opcoes.campo-IpPcFabrica': 'IP do PC nessa faixa (opcional)',
-  'opcoes.campo-IpPcFabrica.exemplo': 'vazio = 192.168.1.220',
-  'opcoes.form-fabrica.botao': 'Salvar faixa',
-  'opcoes.secao-camera.titulo': 'Câmera',
-  'opcoes.secao-camera.apoio': 'E-mail de recuperação e encoder dos dois streams, gravados em toda câmera.',
-  'opcoes.campo-EmailRecuperacao': 'E-mail de recuperação gravado na câmera',
-  'opcoes.form-camera.legenda': 'Stream principal',
-  'opcoes.campo-Resolucao': 'Resolução',
-  'opcoes.campo-FpsPrincipal': 'Quadros por segundo',
-  'opcoes.campo-FpsPrincipal.rotulo-leitor': 'Quadros por segundo do stream principal, outro valor',
-  'opcoes.campo-BitRate': 'Bitrate (kbps)',
-  'opcoes.campo-BitRate.rotulo-leitor': 'Bitrate do stream principal em kbps, outro valor',
-  'opcoes.campo-CodecPrincipal': 'Codec',
-  'opcoes.form-camera.legenda.2': 'Stream secundário',
-  'opcoes.campo-ResolucaoSecundario': 'Resolução',
-  'opcoes.campo-FpsSecundario': 'Quadros por segundo',
-  'opcoes.campo-FpsSecundario.rotulo-leitor': 'Quadros por segundo do stream secundário, outro valor',
-  'opcoes.campo-BitRateSecundario': 'Bitrate (kbps)',
-  'opcoes.campo-BitRateSecundario.rotulo-leitor': 'Bitrate do stream secundário em kbps, outro valor',
-  'opcoes.campo-CodecSecundario': 'Codec',
-  'opcoes.form-camera.nota': 'Em quadros e bitrate, escolha da lista ou “Outro valor…” para digitar. O intervalo de quadro-chave (GOP) é gravado como o dobro dos quadros por segundo. A câmera recebe o encoder em duas gravações: primeiro resolução, quadros e codec; depois bitrate e GOP.',
-  'opcoes.form-camera.botao': 'Salvar câmera',
-  'opcoes.secao-fila.titulo': 'Fila',
-  'opcoes.secao-fila.apoio': 'Faixa de IPs de destino, um por câmera. Montar substitui a fila atual; IP com câmera instalada, o gateway e endereços fora da rede ficam de fora.',
-  'opcoes.campo-inicio': 'Primeiro IP',
-  'opcoes.campo-inicio.exemplo': 'ex. 10.70.20.50…',
-  'opcoes.campo-fim': 'Último IP',
-  'opcoes.campo-fim.exemplo': 'ex. 10.70.20.99…',
-  'opcoes.campo-local': 'Local',
-  'opcoes.campo-local.exemplo': 'ex. Obra Centro…',
-  'opcoes.campo-rack': 'Rack',
-  'opcoes.campo-rack.exemplo': 'ex. Rack 03…',
-  'opcoes.campo-andar': 'Andar',
-  'opcoes.campo-andar.exemplo': 'ex. Térreo…',
-  'opcoes.form-fila.botao': 'Montar fila',
-  'opcoes.secao-painel.titulo': 'Painel',
-  'opcoes.secao-painel.apoio': 'A placa de rede volta ao estado de antes ao encerrar; Restaurar DHCP faz o mesmo agora. Refazer o passo a passo volta às telas iniciais com tudo preenchido.',
-  'opcoes.btn-restaurar': 'Restaurar DHCP',
-  'opcoes.btn-refazer': 'Refazer o passo a passo',
-  'opcoes.btn-encerrar': 'Encerrar o painel',
-  'opcoes.tema.legenda': 'Tema',
-  'opcoes.tema-sistema': 'Sistema',
-  'opcoes.tema-claro': 'Claro',
-  'opcoes.tema-escuro': 'Escuro',
   'log.abrir': 'Log',
   // Nome acessivel do icone da linha do log (a mensagem nem sempre traz a palavra do estado).
   'log.falha': 'Falha',
@@ -158,7 +88,6 @@ const TEXTOS = {
   'app.titulo': 'Configurar câmeras',
   'app.tituloTela': ({ tela }) => tela + ' - Configurar câmeras',
   'topo.prefixo-simulacao': '[Simulação] ',
-  'topo.versao': ({ versao }) => 'Painel v' + versao,
   'nav.rotulo': 'Seções do painel',
   'nav.painel': 'Painel',
   'nav.sessao': 'Sessão',
@@ -258,7 +187,7 @@ const TEXTOS = {
   'inicio.comecar.demorou': 'O painel ainda está preparando a placa. Espere um instante e clique em Começar de novo.',
   'inicio.carregando': 'Carregando a sessão…',
   'inicio.demorou': 'O painel ainda não confirmou. Espere um instante e tente de novo.',
-  'secao.nome': ({ secao }) => ({ senha: 'Senha', placa: 'Placa', rede: 'Rede', camera: 'Câmera', fila: 'Fila', conferir: 'Conferir' })[secao] || secao,
+  'secao.nome': ({ secao }) => ({ senha: 'Senha', placa: 'Placa', rede: 'Rede', camera: 'Câmera', fila: 'Fila', conferir: 'Conferir', painel: 'Painel' })[secao] || secao,
   'secao.alterar': ({ secao }) => ({ senha: 'Alterar a senha', placa: 'Alterar a placa', rede: 'Alterar a rede', camera: 'Alterar a câmera', fila: 'Alterar a fila' })[secao] || 'Alterar',
 
   'senha.titulo': 'Senha das câmeras',
@@ -352,73 +281,32 @@ const TEXTOS = {
   'conferir.andar': ({ v }) => 'andar ' + v,
   'conferir.streams': ({ principal, secundario }) => 'Stream principal: ' + principal + '; secundário: ' + secundario,
 
-  // ---------------------------------------------------------------- passo a passo (legado: Opcoes)
-  'senha.ocultar': 'Ocultar senhas',
-  'senha.digite': 'Digite a senha.',
-  'senha.definida': 'Senha definida',
-  'senha.instaladas': ({ feitas }) => (feitas === 1 ? 'A câmera já instalada nesta fila continua'
-    : 'As ' + feitas + ' câmeras já instaladas nesta fila continuam') + ' com a senha atual. Só as próximas recebem a nova.',
-
   // ---------------------------------------------------------------- formularios
+  'senha.digite': 'Digite a senha.',
   'form.nada-salvo': ({ marcados }) => 'Nada foi salvo: corrija ' +
     (marcados === 1 ? 'o campo marcado' : 'os ' + marcados + ' campos marcados') + '.',
-  'form.salvo': 'Salvo',
-  'form.salvo-as': ({ texto, hora }) => texto + ' às ' + hora + '.',
-  'opcoes.exemplo-pc-fabrica': ({ ip }) => 'vazio = ' + (ip || '.220 da faixa de fábrica'),
-  'opcoes.exemplo-pc-cameras': ({ inicio }) => 'vazio = ' + (inicio ? inicio + ' a .249' : '.200 a .249') + ', pelo MAC',
-  'opcoes.tema-erro': ({ erro }) => 'Não deu para guardar o tema: ' + erro,
 
   'encoder.gop': ({ gop }) => 'GOP ' + gop,
-  'encoder.stream-principal': 'principal',
-  'encoder.stream-secundario': 'secundário',
   'encoder.recusado-na': ({ modelo }) => ' (recusado na ' + modelo + ')',
   'encoder.testado': ' (testado)',
   'encoder.nao-testado': ' (não testado em câmera)',
   'encoder.recomendado': ({ v }) => v + ' (recomendado)',
-  'encoder.faixa': ({ res, codec, min, max, rec }) => 'Bitrate usual para ' + res + ' em ' + codec + ': ' + min + ' a ' + max +
-    NBSP + 'kbps; recomendado ' + rec + '.',
   'encoder.outro-valor': 'Outro valor…',
-  'encoder.aviso-fora-da-faixa': ({ stream, br, res, codec, min, max }) => 'O bitrate do stream ' + stream + ' (' + br + NBSP +
-    'kbps) fica fora da faixa usual para ' + res + ' em ' + codec + ' (' + min + ' a ' + max + NBSP + 'kbps). Confira se é isso mesmo.',
-  'encoder.aviso-recusado': ({ modelo, valor, stream }) => 'A ' + modelo + ' recusou ' + valor + ' no stream ' + stream +
-    '. Outra câmera pode aceitar; se recusar, a fila para nessa câmera.',
-  'encoder.aviso-bitrate-secundario': 'O bitrate do stream secundário passa o do principal. Confira se é isso mesmo.',
-  'encoder.aviso-fps-secundario': 'O stream secundário tem mais quadros por segundo que o principal. Confira se é isso mesmo.',
 
   'placas.escolha': 'Escolha uma placa de rede da lista.',
-  'placas.confirmar-internet': ({ nome }) => 'A placa ' + nome + ' é a que leva este PC à internet.\n\n' +
-    'O painel acrescenta dois endereços nela e copia o que o DHCP deu como estático: a rede pisca por alguns segundos e a ' +
-    'internet é testada depois. Ao encerrar, ela volta ao DHCP.\n\nUsar essa placa mesmo assim?',
-  'placas.lendo': 'Lendo as placas de rede…',
-  'placas.nenhuma': 'Nenhuma placa de rede física encontrada. Conecte um adaptador (USB-Ethernet serve) e clique em Atualizar lista.',
   'placas.wifi': 'Wi-Fi',
   'placas.ethernet': 'Ethernet',
-  'placas.conectada': 'conectada',
-  'placas.cabo-conectado': 'cabo conectado',
   'placas.desconectada': 'desconectada',
   'placas.sem-cabo': 'sem cabo',
   'placas.sem-ip': 'sem IP',
   'placas.dhcp': 'DHCP',
   'placas.ip-fixo': 'IP fixo',
   'placas.selo-sugerida': 'sugerida',
-  'placas.selo-internet': 'leva à internet',
-  'placas.selo-sessao': 'na sessão',
   'placas.so-wifi': 'Só há Wi-Fi neste PC. Dá para usar, mas a bancada precisa estar na mesma rede do Wi-Fi; um adaptador ' +
     'USB-Ethernet é mais simples.',
 
-  'fila.faixa-guardada': 'Faixa guardada',
-  'fila.ultima': ({ inicio, fim, quando }) => 'Última fila: ' + inicio + ' a ' + fim + (quando ? ' em ' + quando : '') +
-    '. Confira antes de montar; posições com câmera instalada ficam de fora.',
   'fila.previa-invertida': 'O primeiro IP vem depois do último: troque os dois.',
   'fila.previa-acima': ({ n }) => n + ' endereços: acima do máximo de 254. Divida em faixas menores.',
-  'fila.previa': ({ n, quantos, inicio, fim }) => (n === 1 ? '1 endereço: ' + inicio : quantos + ' endereços, de ' + inicio + ' a ' + fim) + '.',
-  'fila.confirmar-troca': ({ inicio, fim, total, pend }) => {
-    const um = total === 1;
-    const tot = um ? '1 posição' : total + ' posições';
-    const resto = pend === 0 ? '' : (um ? ', pendente' : (pend === 1 ? ', 1 delas pendente' : ', ' + pend + ' delas pendentes'));
-    return 'Montar uma fila nova? A fila atual (' + inicio + ' a ' + fim + ') sai da memória com ' + tot + resto +
-      '.\n\nAs câmeras já instaladas continuam no registro.';
-  },
 
   // ---------------------------------------------------------------- painel
   'fita.instalada': 'instalada',
@@ -497,24 +385,55 @@ const TEXTOS = {
   'registro.principal': ({ texto }) => 'Principal: ' + texto,
   'registro.secundario': ({ texto }) => 'Secundário: ' + texto,
 
+  // ---------------------------------------------------------------- sessao (tela-sessao.js)
+  'sessao.titulo': 'Sessão',
+  'sessao.lead': 'Os valores que valem para as câmeras desta obra. O que for salvo vale a partir da próxima câmera.',
+  'sessao.menu': 'Seções da sessão',
+  'sessao.salvar': 'Salvar alterações',
+  'sessao.salvando': 'Salvando…',
+  'sessao.salvas': 'Alterações salvas.',
+  'sessao.senhaContinua': 'Nada mudou: a senha atual continua.',
+  'sessao.fila.nota': 'Salvar alterações só guarda a faixa. Montar a fila troca agora a fila da bancada e também guarda a faixa.',
+  'sessao.fila.montar': 'Montar a fila',
+  'sessao.fila.montando': 'Montando a fila…',
+  'sessao.fila.montada': ({ n, inicio, fim }) => 'Fila montada: ' + (n === 1 ? '1 posição, ' + inicio : n + ' posições, de ' + inicio + ' a ' + fim) + '.',
+  'sessao.fila.trocar.titulo': 'Trocar a fila?',
+  'sessao.fila.trocar.texto': ({ inicio, fim, total, pend }) => 'A fila atual (' + inicio + ' a ' + fim + ') sai da memória com ' +
+    (total === 1 ? '1 posição' : total + ' posições') + ', ' + (pend === 1 ? '1 pendente' : pend + ' pendentes') +
+    '. As câmeras já instaladas continuam no registro.',
+  'sessao.fila.trocar.botao': 'Trocar a fila',
+  'sessao.painel.lead': 'O que é do painel, não da obra.',
+  'sessao.painel.tema': 'Tema',
+  'sessao.painel.tema.sistema': 'Sistema',
+  'sessao.painel.tema.claro': 'Claro',
+  'sessao.painel.tema.escuro': 'Escuro',
+  'sessao.painel.temaErro': ({ erro }) => 'O tema não foi guardado: ' + erro + '. Escolha de novo.',
+  'sessao.painel.versao': ({ v }) => 'Versão ' + v,
+  'sessao.painel.procura.nenhuma': ({ quando }) => 'Última procura automática em ' + quando + ': nenhuma versão nova.',
+  'sessao.painel.procura.nunca': 'O painel procura versão nova sozinho uma vez por dia. A primeira procura desta abertura ainda não terminou.',
+  'sessao.painel.procura.desligada': 'A procura automática de versão nova está desligada nesta abertura do painel.',
+  'sessao.painel.procura.disponivel': ({ versao, quando }) => 'Versão ' + versao + ' disponível' +
+    (quando ? ', vista na procura automática em ' + quando : '') + '. Para instalar, use “Atualizar o painel” na faixa do topo.',
+  'sessao.painel.procura.andamento': ({ versao }) => 'A atualização para a versão ' + versao + ' está em andamento: acompanhe na faixa do topo.',
+  'sessao.painel.procura.erro': ({ versao }) => 'A atualização para a versão ' + versao + ' falhou. O motivo e o “Tentar de novo” estão na faixa do topo.',
+  'sessao.painel.passo': 'Passo a passo',
+  'sessao.painel.passo.apoio': 'Volta às telas iniciais com tudo preenchido, para conferir a sessão passo a passo.',
+  'sessao.painel.refazer': 'Refazer o passo a passo',
+  'sessao.painel.refazendo': 'Abrindo o passo a passo…',
+  'sessao.refazer.titulo': 'Refazer o passo a passo?',
+  'sessao.refazer.texto': ({ temFila }) => 'As telas iniciais voltam com tudo preenchido; a senha continua na memória.' +
+    (temFila ? ' A fila atual fica na memória e volta ao terminar.' : ''),
+  'sessao.painel.sobre': 'Sobre',
+  'sessao.painel.sobre.texto': 'Painel de bancada do Grupo SmartSeg que leva câmeras Intelbras e Dahua de fábrica a câmeras instaladas: senha, rede, encoder e registro, uma fila por vez.',
+
   // ---------------------------------------------------------------- confirmacoes
   'decisao.confirmar-pular': 'Pular esta posição? A câmera fica como está agora, registrada como Falhou e fora das ' +
     'instaladas. A fila segue para a próxima posição.',
   'confirmar.encerrar-fila': ({ pend }) => 'Encerrar a fila? As câmeras em curso terminam antes; as pendentes ficam sem câmera.' +
     (pend === 0 ? ' Não há posições pendentes.' : (pend === 1 ? ' Há 1 posição pendente.' : ' Há ' + pend + ' posições pendentes.')),
-  'confirmar.restaurar': 'Devolver a placa de rede ao estado de antes do painel? Os endereços das faixas de câmera e as rotas ' +
-    'de host saem da placa e o DHCP volta.',
-  'confirmar.refazer': ({ temFila }) => 'Refazer o passo a passo? As telas iniciais voltam com tudo preenchido; a senha ' +
-    'continua na memória.' + (temFila ? '\n\nA fila atual fica em memória e volta ao terminar.' : ''),
   'confirmar.atualizar': ({ temFila }) => 'Atualizar o painel agora? Ele baixa o instalador do GitHub, confere o SHA-256, ' +
     'fecha e reabre sozinho na versão nova.' +
     (temFila ? '\n\nA fila em memória se perde; o registro e a sessão ficam.' : '\n\nO registro e a sessão ficam.'),
-  'confirmar.encerrar': 'Encerrar o painel? A fila em memória se perde; o registro e a sessão ficam salvos.',
-  'confirmar.encerrar-configurando': 'Há uma câmera sendo configurada agora. Encerrar no meio pode deixá-la sem o IP ' +
-    'definitivo, e ela vai precisar ser retomada depois.\n\nEncerrar o painel mesmo assim?',
-  'confirmar.encerrar-ocupado': 'Há uma operação em andamento e ela será interrompida. A fila em memória se perde; o ' +
-    'registro fica salvo.\n\nEncerrar o painel mesmo assim?',
-  'confirmar.encerrar-dhcp': '\n\nA placa de rede volta ao DHCP sozinha.',
   'fim.encerrado-restaurando': 'Painel encerrado. A placa de rede está voltando ao DHCP (leva alguns segundos). Pode fechar ' +
     'esta janela.',
 

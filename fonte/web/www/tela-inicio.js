@@ -69,7 +69,7 @@ function corpo(modelo, atual, classe, filhos) {
 
 // Falha de salvar: erro por campo no campo (400), "aguarde" em atencao (409),
 // sem resposta com o conserto. Devolve nada; quem chama so para.
-function mostrarFalha(res, resposta, form) {
+export function mostrarFalha(res, resposta, form) {
   if (res.semResposta) { resposta.mostrar('erro', t('erro.semResposta')); return; }
   const d = res.detalhe || {};
   if (res.codigo === HTTP.REQUISICAO_INVALIDA && form && Array.isArray(d.campos) && d.campos.length) {
@@ -84,7 +84,7 @@ function mostrarFalha(res, resposta, form) {
 }
 
 // Senha nova: comando e espera o estado dizer que ela chegou ao worker.
-async function salvarSenha(ctx, senha, resposta, form) {
+export async function salvarSenha(ctx, senha, resposta, form) {
   const res = await ctx.api.comando('/api/senha', { senha });
   if (!res.ok) { mostrarFalha(res, resposta, form); return false; }
   if (await ctx.esperar((m) => m.senhaDefinida, ESPERA_ESTADO_MS)) return true;
@@ -94,7 +94,7 @@ async function salvarSenha(ctx, senha, resposta, form) {
 
 // PUT /api/sessao e a espera da gravacao (a geracao sobe). Rede trocada com fila
 // na memoria volta 409 pedindo confirmacao: o dialogo pergunta e reenvia.
-async function salvarParcial(ctx, parcial, resposta, form) {
+export async function salvarParcial(ctx, parcial, resposta, form) {
   const g = ctx.modelo().geracao;
   let res = await ctx.api.salvarSessao(parcial);
   if (!res.ok && res.codigo === HTTP.CONFLITO && res.detalhe && res.detalhe.precisaConfirmar) {

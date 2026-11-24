@@ -8,13 +8,12 @@ import { derivar } from './estado.js';
 import {
   S, $, ORIGEM_DO_COMANDO, naTela, mostrarAviso, aplicarOcupado, anunciar, mostrarTelaFim,
 } from './legado-estado.js';
-import { carregarSessao, carregarPlacas } from './legado-formularios.js';
 import {
   anexarLog, desenharAtualizacao, desenharFila, desenharFerramenta, carregarRegistro,
 } from './legado-painel.js';
 
-// Aba do topo -> view da marcacao de hoje (a Sessao ainda e a view de Opcoes).
-const VIEW_DA_TELA = Object.freeze({ painel: 'painel', sessao: 'opcoes', ferramentas: 'ferramentas' });
+// Aba do topo -> secao da marcacao (a Sessao e a secao #sessao, desenhada pelo app.js).
+const VIEW_DA_TELA = Object.freeze({ painel: 'view-painel', sessao: 'sessao', ferramentas: 'view-ferramentas' });
 
 // O passo a passo fica na tela enquanto faltar senha, sessao completa ou o
 // "comecar" (iniciada): a regra mora no estado.js, a mesma que esconde o topo.
@@ -40,20 +39,12 @@ export function trocarView() {
   // Apelido antigo (#opcoes/fila) ou tela desconhecida: a URL mostra a rota de hoje.
   corrigir(hashDe(r));
   const view = VIEW_DA_TELA[r.tela];
-  for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== 'view-' + view;
+  for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== view;
   // O log so interessa no painel; nas outras abas ele empurra o conteudo.
-  $('log-bloco').open = view === 'painel';
-  if (view === 'painel') {
+  $('log-bloco').open = r.tela === 'painel';
+  if (r.tela === 'painel') {
     carregarRegistro();
     if (r.parte === 'registro') $('registro-bloco').scrollIntoView({ block: 'start' });
-  }
-  if (view === 'opcoes') {
-    carregarSessao();
-    carregarPlacas();
-    if (r.parte) {
-      const sec = document.querySelector('#view-opcoes .secao[data-secao="' + r.parte + '"]');
-      if (sec) { sec.scrollIntoView({ block: 'start' }); const c = sec.querySelector('input, select, button'); if (c) c.focus({ preventScroll: true }); }
-    }
   }
 }
 
@@ -72,7 +63,6 @@ export function receberEstado(dados) {
   S.estado = dados.estado;
   // Comando na fila do worker ainda nao virou "ocupado": trata como ocupado.
   if (S.estado && dados.comandos > 0) S.estado.ocupado = true;
-  if (dados.versao) $('versao-painel').textContent = t('topo.versao', { versao: dados.versao });
   desenharAtualizacao(dados.atualizacao || {}, S.estado || {});
   anexarLog(dados.log || []);
   S.cursorLog = dados.cursor;
@@ -89,10 +79,6 @@ function desenhar() {
   if (!e || !e.fase) return;
 
   for (const n of document.querySelectorAll('[data-nota-simular]')) n.hidden = !e.simular;
-
-  // Sessao regravada (secao salva, fila montada): os formularios recarregam.
-  const g = (e.sessao && e.sessao.geracao) || 0;
-  if (g !== S.geracaoVista) { const primeira = S.geracaoVista < 0; S.geracaoVista = g; if (!primeira) carregarSessao(true); }
 
   desenharModo();
 
@@ -127,7 +113,9 @@ function desenhar() {
   // O slot do aviso depende de qual bloco esta na tela.
   if (e.avisoN !== S.avisoN) {
     S.avisoN = e.avisoN;
-    if (e.aviso) mostrarAviso(e.aviso, ORIGEM_DO_COMANDO[e.avisoOrigem], { servidor: true });
+    // Fila montada pela Sessao: o resultado aparece junto do botao dela (tela-sessao.js).
+    const daSessao = e.avisoOrigem === 'fila' && lerRota().tela === 'sessao';
+    if (e.aviso && !daSessao) mostrarAviso(e.aviso, ORIGEM_DO_COMANDO[e.avisoOrigem], { servidor: true });
     // Aviso que manda retomar: abre o bloco que ele cita.
     if (e.aviso && e.aviso.includes(t('painel.retomar.abrir'))) $('retomar').open = true;
   } else if (!e.aviso && S.avisoDoServidor) {

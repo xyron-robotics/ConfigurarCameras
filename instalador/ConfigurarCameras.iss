@@ -73,8 +73,8 @@ Source: "{#Raiz}\fonte\web\www\componentes.js"; DestDir: "{app}\web\www"; Flags:
 Source: "{#Raiz}\fonte\web\www\topo.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\formularios.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\tela-inicio.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\tela-sessao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-estado.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
-Source: "{#Raiz}\fonte\web\www\legado-formularios.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-ligacoes.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-marcacao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-navegacao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
@@ -90,6 +90,7 @@ Source: "{#Raiz}\fonte\API-INTELBRAS.md"; DestDir: "{app}"; Flags: ignoreversion
 [InstallDelete]
 Type: files; Name: "{app}\INICIAR-PAINEL.bat"
 Type: files; Name: "{app}\web\www\app.css"
+Type: files; Name: "{app}\web\www\legado-formularios.js"
 
 [Icons]
 Name: "{group}\{#Nome}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\INICIAR-PAINEL.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icone.ico"; Comment: "Abre o painel (pede Administrador)"

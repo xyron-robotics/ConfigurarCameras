@@ -46,15 +46,15 @@ export const BASE_DECIMAL = 10;
 export const COLUNAS_MONO_DESCOBRIR = [0, 1, 2, 4];
 export const COLUNAS_MONO_VERIFICAR = [0, 1];
 
-// Limites dos campos do encoder e a barra de progresso antes do primeiro dado.
-export const FPS_MIN = 1;
-export const FPS_MAX = 60;
+// Limites do bitrate digitado e a barra de progresso antes do primeiro dado.
 export const BITRATE_MIN = 64;
 export const BITRATE_MAX = 16384;
 export const PROGRESSO_MAX = 120;
 
-// Secoes da tela de Opcoes de hoje (legado), na ordem.
-export const SECOES_ORDEM = ['senha', 'placa', 'rede', 'fabrica', 'camera', 'fila'];
+// Secoes da Sessao (direcao.md, secao 3.5), na ordem do menu; Painel vem separado.
+export const SECOES_SESSAO = Object.freeze(['senha', 'placa', 'rede', 'camera', 'fila', 'painel']);
+// Temas do painel (PUT /api/tema guarda a escolha para a proxima abertura).
+export const TEMAS = Object.freeze(['sistema', 'claro', 'escuro']);
 
 // Passo a passo (direcao.md, secao 2.2): seis passos, o ultimo e o Conferir.
 export const PASSOS = Object.freeze(['senha', 'placa', 'rede', 'camera', 'fila', 'conferir']);

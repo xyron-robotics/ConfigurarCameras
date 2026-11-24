@@ -1,4 +1,4 @@
-// Transicao: sai nas frentes 3 a 5 do redesenho.
+// Transicao: sai nas frentes 4 e 5 do redesenho.
 // Base dos modulos legado-*: o estado mutavel compartilhado (so aqui, no
 // objeto S), a ponte com a api.js e os ajudantes que todos usam. Nao importa
 // nenhum outro legado-*: o que precisa de modulo de cima passa por ganchos.
@@ -15,6 +15,7 @@ export const S = {
   cursorLog: 0,
   estado: null,
   ultimaFase: '',
+  // IP de fabrica da sessao gravada (o app.js copia ao ler a sessao): texto do vigia.
   ipFabrica: '',
   // Leitor de tela: so as transicoes (instalada, falhou, fim).
   ultimoVisto: null,
@@ -26,19 +27,7 @@ export const S = {
   // Atualizacao em curso: o servidor some no meio (fecha para instalar) e isso
   // nao e erro; a tela de "atualizando" fica.
   atualizando: false,
-  geracaoVista: -1,
   buscando: null,
-  // Valores prontos do encoder (GET /api/sessao): fps, degraus de bitrate,
-  // faixa por resolucao e o que a camera de referencia aceitou ou recusou.
-  catalogo: null,
-  // sessaoCache = o que esta em sessao.json; sujo[secao] = o operador mexeu e
-  // ainda nao salvou (o polling nao escreve por cima).
-  sessaoCache: null,
-  listasCarregadas: false,
-  carregandoSessao: null,
-  sujo: {},
-  placasCache: null,
-  placasPedido: null,
   ferramentaChave: '',
   // Um cartao por camera de cameras[], chave no MAC.
   cartoes: new Map(),
@@ -84,12 +73,12 @@ export async function esperarEstado(cond, ms) {
 const ORIGEM_DA_ROTA = {
   '/api/fila': 'fila', '/api/fila/conectada': 'conectada',
   '/api/decisao': 'conectada', '/api/vigia': 'vigia', '/api/sondar': 'sondar', '/api/descobrir': 'descobrir',
-  '/api/verificar': 'verificar', '/api/rede/restaurar': 'painel', '/api/sessao/refazer': 'painel',
+  '/api/verificar': 'verificar',
 };
 export const ORIGEM_DO_COMANDO = {
   fila: 'fila', conectada: 'conectada', decisao: 'conectada',
   vigia: 'vigia', sondar: 'sondar', descobrir: 'descobrir', verificar: 'verificar',
-  'rede-restaurar': 'painel', 'sessao-refazer': 'painel', 'sessao-concluir': 'concluir',
+  'sessao-concluir': 'concluir',
 };
 // Rotas que o servidor aceita mesmo ocupado: nao travam os botoes.
 const ROTA_SEMPRE = ['/api/senha', '/api/vigia', '/api/camera'];
@@ -138,8 +127,7 @@ export async function comando(caminho, corpo, opcoes) {
 // servidor aceita decisao com o worker ocupado, e cada cartao trava os seus.
 export function aplicarOcupado(ocupado) {
   const simular = !!(S.estado && S.estado.simular);
-  const sel = '#view-ferramentas .btn, #btn-restaurar, #btn-refazer, #form-conectada .btn, ' +
-              '[data-decisao], .secao-form .btn[type="submit"]';
+  const sel = '#view-ferramentas .btn, #form-conectada .btn, [data-decisao]';
   for (const b of document.querySelectorAll(sel)) {
     b.disabled = ocupado || (simular && b.hasAttribute('data-so-real'));
   }

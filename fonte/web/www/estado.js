@@ -58,7 +58,29 @@ export function derivar(bruto, extras) {
     pastaAlternativa: e.pastaDadosAlternativa ? (e.pastaDados || '') : '',
     placa: derivarPlaca(e),
     internet: derivarInternet(e),
+    // Fila na memoria do servidor (null sem fila): a Sessao pergunta antes de troca-la.
+    fila: derivarFila(e.fila),
+    // Ultimo aviso do servidor; n sobe a cada aviso novo (quem mandou o comando compara).
+    aviso: { texto: e.aviso || '', n: Number(e.avisoN) || 0, origem: e.avisoOrigem || '' },
+    atualizacao: derivarAtualizacao(bruto && bruto.atualizacao),
   };
+}
+
+function derivarFila(f) {
+  const itens = (f && f.itens) || [];
+  if (!itens.length) return null;
+  return {
+    total: itens.length,
+    pendentes: itens.filter((i) => i.Estado === 'pendente').length,
+    inicio: f.inicio || '',
+    fim: f.fim || '',
+  };
+}
+
+// Procura automatica de versao nova (o servidor procura uma vez por dia).
+function derivarAtualizacao(a) {
+  const x = a || {};
+  return { estado: x.estado || 'nenhuma', versao: x.versao || '', ultimaChecagem: x.ultimaChecagem || '' };
 }
 
 // Sessao completa: o Conferir (a senha que faltar entra na linha dele). Sem
