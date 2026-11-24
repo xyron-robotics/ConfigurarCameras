@@ -3,7 +3,7 @@
 // (estado.js); fala com o servidor so pelo ctx.api.
 // ctx: { api, recarregar(), encerrado(restaurando) }
 import { h } from './dom.js';
-import { t, nomeEtapa } from './textos.js';
+import { t, nomeEtapa, traduzirServidor } from './textos.js';
 import { ABAS } from './rotas.js';
 import { botao, chip, popover, detalhe, lugarAviso, ocupar, confirmar } from './componentes.js';
 import { simbolo } from './marca.js';
@@ -105,7 +105,10 @@ async function acaoRede(ctx, btn, rotuloOcupado, rota, aviso) {
   aviso.limpar();
   const r = await ctx.api.comando(rota, {});
   restaurar();
-  if (!r.ok) aviso.mostrar('erro', r.mensagem || t('erro.semResposta'), typeof r.detalhe === 'string' ? r.detalhe : '');
+  if (!r.ok) {
+    const falha = traduzirServidor(r);
+    aviso.mostrar('erro', falha.texto, falha.cru);
+  }
   await ctx.recarregar();
 }
 

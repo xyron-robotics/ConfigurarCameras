@@ -4,7 +4,7 @@
 // "Salvar alteracoes" confirma com "Alteracoes salvas" junto do botao, no
 // aria-live. A tela recebe o modelo e o contexto do app.js (decisao N1).
 import { h, novoId } from './dom.js';
-import { t } from './textos.js';
+import { t, traduzirServidor } from './textos.js';
 import { logo } from './marca.js';
 import { botao, ocupar, lugarAviso } from './componentes.js';
 import { montarFormulario } from './formularios.js';
@@ -160,8 +160,8 @@ function blocoTema(ctx) {
     const res = await ctx.api.tema(novo);
     if (res.ok) return;
     aplicarTema(anterior);
-    if (res.semResposta) avisoTema.mostrar('erro', t('erro.semResposta'));
-    else avisoTema.mostrar('erro', t('sessao.painel.temaErro', { erro: res.mensagem || t('erro.http', { codigo: res.codigo }) }));
+    const falha = traduzirServidor(res);
+    avisoTema.mostrar('erro', t('sessao.painel.temaErro', { motivo: falha.texto }), falha.cru);
   }
   const opcoes = TEMAS.map((tema) => h('label', null, [
     h('input', { type: 'radio', id: 'tema-' + tema, name: NOME_TEMA, value: tema, checked: tema === atual }),

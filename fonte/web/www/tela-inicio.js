@@ -5,7 +5,7 @@
 // vem do formularios.js; aqui so o salvar, a navegacao e o Conferir.
 import { h } from './dom.js';
 import { icone } from './icones.js';
-import { t } from './textos.js';
+import { t, traduzirServidor } from './textos.js';
 import { logo } from './marca.js';
 import { botao, ocupar, lugarAviso, chip, aviso } from './componentes.js';
 import { montarFormulario, mostrarErrosServidor, pcNaFabrica } from './formularios.js';
@@ -67,20 +67,19 @@ function corpo(modelo, atual, classe, filhos) {
   ]);
 }
 
-// Falha de salvar: erro por campo no campo (400), "aguarde" em atencao (409),
-// sem resposta com o conserto. Devolve nada; quem chama so para.
+// Falha de salvar: erro por campo no campo (400), recusa conhecida em atencao
+// (409) e o resto por traduzirServidor. Devolve nada; quem chama so para.
 export function mostrarFalha(res, resposta, form) {
-  if (res.semResposta) { resposta.mostrar('erro', t('erro.semResposta')); return; }
-  const d = res.detalhe || {};
-  if (res.codigo === HTTP.REQUISICAO_INVALIDA && form && Array.isArray(d.campos) && d.campos.length) {
-    const resto = mostrarErrosServidor(form, d.campos);
+  const d = (!res.semResposta && res.detalhe) || {};
+  if (res.codigo === HTTP.REQUISICAO_INVALIDA && Array.isArray(d.campos) && d.campos.length) {
+    // Validacao por campo do servidor: frases do painel, uma por campo.
+    const resto = form ? mostrarErrosServidor(form, d.campos) : d.campos.map((c) => c.msg);
     const marcados = d.campos.length - resto.length;
-    const texto = resto.length ? resto.join(' ') : t('form.nada-salvo', { marcados });
-    resposta.mostrar('erro', texto);
+    resposta.mostrar('erro', resto.length ? resto.join(' ') : t('form.nada-salvo', { marcados }));
     return;
   }
-  const texto = res.mensagem || (Array.isArray(d.erros) ? d.erros.join(' ') : '') || t('erro.http', { codigo: res.codigo });
-  resposta.mostrar(res.codigo === HTTP.CONFLITO ? 'atencao' : 'erro', texto);
+  const falha = traduzirServidor(res);
+  resposta.mostrar(res.codigo === HTTP.CONFLITO && !falha.cru ? 'atencao' : 'erro', falha.texto, falha.cru);
 }
 
 // Senha nova: comando e espera o estado dizer que ela chegou ao worker.
@@ -98,7 +97,7 @@ export async function salvarParcial(ctx, parcial, resposta, form) {
   const g = ctx.modelo().geracao;
   let res = await ctx.api.salvarSessao(parcial);
   if (!res.ok && res.codigo === HTTP.CONFLITO && res.detalhe && res.detalhe.precisaConfirmar) {
-    const sim = await ctx.confirmar({ titulo: t('rede.confirmar.titulo'), texto: res.mensagem, confirmar: t('rede.confirmar.botao') });
+    const sim = await ctx.confirmar({ titulo: t('rede.confirmar.titulo'), texto: traduzirServidor(res).texto, confirmar: t('rede.confirmar.botao') });
     if (!sim) return false;
     res = await ctx.api.salvarSessao({ ...parcial, confirmar: true });
   }

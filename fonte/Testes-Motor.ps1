@@ -2970,7 +2970,7 @@ T 'Tema: data-tema entra so no <html> do index.html real, e o servidor tem as ro
     foreach ($rota in @("'GET /api/tema'", "'PUT /api/tema'", 'Add-TemaNoHtml')) { Assert-Verdade ($txt.Contains($rota)) ('servidor tem ' + $rota) }
 }
 
-T 'Front paralelo: .js e .html reais do www sem textos do modo serial nem a fase escolher; cartao manda /api/camera' {
+T 'Front paralelo: .js e .html reais do www sem textos do modo serial, da fase escolher nem os rotulos trocados pela navegacao; cartao manda /api/camera' {
     # Todos os modulos do www (app.js, textos.js, legado-*.js...) e o index.html, juntos.
     $www = Join-Path $raiz 'web\www'
     $lerTodos = { param($filtro) (@(Get-ChildItem -LiteralPath $www -File -Filter $filtro | Sort-Object Name |
@@ -2981,6 +2981,13 @@ T 'Front paralelo: .js e .html reais do www sem textos do modo serial nem a fase
     # Acentos por [char]: este arquivo e ASCII e o PowerShell 5.1 o le como ANSI.
     $proibidos = @(('Tire a c' + [char]0xE2 + 'mera anterior'), ('Em pausa at' + [char]0xE9 + ' voc' + [char]0xEA + ' resolver'),
                    'somam 1', '/api/escolher', 'bancada-escolha')
+    # Rotulos da coluna "Substitui" do glossario da direcao (secao 6) que a frente
+    # redesenho-navegacao trocou: passo a passo, Sessao (antes Opcoes), placa e fila.
+    $cedilha = [string][char]0xE7
+    $proibidos += @(('Op' + $cedilha + [char]0xF5 + 'es'), 'Usar esta senha', ('Montar a fila e avan' + $cedilha + 'ar'),
+                    ('Preparar placa e come' + $cedilha + 'ar'), 'Salvar placa', 'Salvar rede', 'Salvar faixa',
+                    ('Salvar c' + [char]0xE2 + 'mera'), 'Montar fila', 'Montar depois', ('Montar a fila ao come' + $cedilha + 'ar'),
+                    'Atualizar lista', 'Senha definida.', ('Usar essa sess' + [char]0xE3 + 'o'))
     foreach ($p in $proibidos) {
         Assert-Falso ($js.Contains($p)) ('.js do www sem ' + $p)
         Assert-Falso ($html.Contains($p)) ('.html do www sem ' + $p)

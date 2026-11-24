@@ -135,13 +135,27 @@ const TEXTOS = {
   'popover.internet.testando': 'Testando a internet…',
 
   'popover.simulacao.titulo': 'Simulação',
-  'popover.simulacao.texto': 'Nada é enviado para câmera nem para a placa de rede: as câmeras são de mentira.',
+  'popover.simulacao.texto': 'Nada é enviado para câmera nem para a placa de rede: as câmeras são simuladas.',
   'popover.simulacao.falha': ({ etapa }) => 'Falha forçada na etapa ' + etapa + '.',
 
   'detalhe.tecnico': 'Detalhe técnico',
   'detalhe.ifIndex': ({ n }) => 'ifIndex ' + n,
   'campo.exemplo': ({ v }) => 'ex.: ' + v,
   'erro.semResposta': 'O painel não respondeu. Confira se ele ainda está aberto e tente de novo.',
+
+  // Resposta de erro do servidor, por traduzirServidor (direcao.md, secao 6, regra 6).
+  'servidor.recusou': 'O painel recusou a ação.',
+  'servidor.ocupado': 'O painel está terminando a operação atual. Espere um instante e tente de novo.',
+  'servidor.emCurso': ({ n, acao }) => (n === 1 ? 'Há 1 câmera no portão ou conferindo. Espere ela terminar para '
+    : 'Há ' + n + ' câmeras no portão ou conferindo. Espere todas terminarem para ') + acao + '.',
+  'servidor.trocarRede': 'Há uma câmera em configuração ou esperando a sua decisão. Termine essa câmera, ou encerre a fila, ' +
+    'antes de trocar a placa ou a rede.',
+  'servidor.refazer': 'Há uma câmera em configuração ou esperando a sua decisão. Termine essa câmera antes de refazer o passo a passo.',
+  'servidor.sessaoIncompleta': 'A sessão ainda não está completa. Preencha as linhas marcadas com “Falta preencher.” e clique ' +
+    'em Começar de novo.',
+  'servidor.temaInvalido': 'Esse tema não existe. Escolha Sistema, Claro ou Escuro.',
+  'servidor.trocarRedeConfirmar': ({ campos }) => 'Trocar ' + campos + ' devolve a placa de rede e a prepara de novo. A fila ' +
+    'atual continua se couber na rede nova; senão, ela é descartada.',
 
   'dialogo.cancelar': 'Cancelar',
   'dialogo.encerrarPainel.titulo': 'Encerrar o painel?',
@@ -316,7 +330,8 @@ const TEXTOS = {
   'fita.proxima': 'próxima',
   'fita.camera': ({ n }) => 'câmera ' + n,
   'fita.titulo': ({ inicio, fim }) => 'Fila ' + inicio + ' a ' + fim,
-  'fita.resumo': ({ feitas, pendentes }) => feitas + ' instalada(s), ' + pendentes + ' pendente(s)',
+  'fita.resumo': ({ feitas, pendentes }) => feitas + (feitas === 1 ? ' instalada, ' : ' instaladas, ') +
+    pendentes + (pendentes === 1 ? ' pendente' : ' pendentes'),
   'bancada.ordinal': ({ n, total }) => 'Câmera ' + n + ' de ' + total,
   'bancada.trabalho-titulo': ({ ordinal, ip }) => ordinal + ' → ' + ip,
   'bancada.decisao-titulo': ({ etapa, ip }) => 'Falhou na etapa ' + etapa + (ip ? ' (' + ip + ')' : ''),
@@ -351,11 +366,11 @@ const TEXTOS = {
   'cartao.etapa-desconhecida': 'desconhecida',
   'cartao.salvo': 'Salvo',
 
-  'falha.bloqueada': 'A câmera bloqueou o admin por senhas erradas. Espere alguns minutos, confirme a senha certa em Opções e só ' +
-    'então tente de novo.',
-  'falha.senha-recusada': 'A câmera recusou a senha da sessão. Troque a senha (Opções, seção Senha) antes de tentar de novo: ' +
+  'falha.bloqueada': 'A câmera bloqueou o admin por senhas erradas. Espere alguns minutos, confirme a senha certa em Sessão, ' +
+    'seção Senha, e só então tente de novo.',
+  'falha.senha-recusada': 'A câmera recusou a senha da sessão. Troque a senha em Sessão, seção Senha, antes de tentar de novo: ' +
     'cada tentativa com a senha errada conta para o bloqueio da câmera.',
-  'falha.recusa': 'A câmera recusou um valor. Confira a seção Câmera em Opções antes de tentar de novo; o que já foi concluído ' +
+  'falha.recusa': 'A câmera recusou um valor. Confira a seção Câmera em Sessão antes de tentar de novo; o que já foi concluído ' +
     'fica registrado.',
   'falha.o-destino': 'o destino',
   'falha.inicializada': 'A câmera pode ter ficado com o admin já criado. Tentar de novo confere o estado dela: se continuar de ' +
@@ -365,7 +380,7 @@ const TEXTOS = {
   'falha.rede': ({ destino }) => 'A câmera já tem a senha e o encoder. Tentar de novo grava a rede; se ela já tiver mudado para ' +
     destino + ', só confere.',
   'falha.conferida': ({ destino }) => 'A rede já foi gravada: a câmera deve estar reiniciando em ' + destino + '. Tentar de novo ' +
-    'espera ela responder lá e confere. Se ela não voltar, confira o cabo e a máscara e o gateway da sessão (Opções).',
+    'espera ela responder lá e confere. Se ela não voltar, confira o cabo e a máscara e o gateway em Sessão, seção Rede.',
   'falha.outra': 'O que foi concluído fica registrado. Tentar de novo continua da etapa que falhou.',
 
   'vigia.ip-generico': 'o IP de fábrica',
@@ -407,7 +422,7 @@ const TEXTOS = {
   'sessao.painel.tema.sistema': 'Sistema',
   'sessao.painel.tema.claro': 'Claro',
   'sessao.painel.tema.escuro': 'Escuro',
-  'sessao.painel.temaErro': ({ erro }) => 'O tema não foi guardado: ' + erro + '. Escolha de novo.',
+  'sessao.painel.temaErro': ({ motivo }) => 'O tema não foi guardado. ' + motivo,
   'sessao.painel.versao': ({ v }) => 'Versão ' + v,
   'sessao.painel.procura.nenhuma': ({ quando }) => 'Última procura automática em ' + quando + ': nenhuma versão nova.',
   'sessao.painel.procura.nunca': 'O painel procura versão nova sozinho uma vez por dia. A primeira procura desta abertura ainda não terminou.',
@@ -490,6 +505,47 @@ const MOTIVO_VIGIA = {
   'rede da sessao alterada': 'a rede da sessão mudou', 'sessao incompleta': 'sessão incompleta',
   'passo a passo reaberto': 'passo a passo reaberto',
 };
+
+// Mensagens do servidor que o painel conhece, pelo texto exato que ele manda.
+const SERVIDOR_EXATO = {
+  'Aguarde: o painel está terminando a operação atual.': 'servidor.ocupado',
+  'Termine a câmera atual (ou encerre a fila) antes de trocar a placa ou as faixas de rede.': 'servidor.trocarRede',
+  'Termine a câmera atual antes de refazer o passo a passo.': 'servidor.refazer',
+  'A sessão ainda não está completa: escolha a placa de rede e corrija os campos marcados.': 'servidor.sessaoIncompleta',
+};
+// Recusa com câmera em curso (Get-TextoRecusaComando do orquestrador) e tema fora da lista (Save-Tema).
+const RE_EM_CURSO = /^Há (\d+) câmeras? em configuração \(portão ou conferência\)\. Espere .+? para (.+)\.$/;
+const RE_TEMA_INVALIDO = /^Tema inválido/;
+// Ação da recusa no nome que a tela usa; as outras já vêm em pt-BR do orquestrador.
+const ACAO_RECUSADA = { 'refazer a sessão': 'refazer o passo a passo', 'restaurar a placa de rede': 'restaurar o DHCP' };
+// Campos da sessão que devolvem a placa ao mudar (Get-CamposRedeAlterados), no meio de uma frase.
+const CAMPO_REDE = {
+  Placa: 'a placa', Mascara: 'a máscara', Gateway: 'o gateway', IpFabrica: 'o IP de fábrica',
+  IpPcFabrica: 'o IP do PC na faixa de fábrica', IpPcCameras: 'o IP do PC na rede das câmeras',
+};
+
+function juntar(itens) {
+  if (itens.length < 2) return itens.join('');
+  return itens.slice(0, -1).join(t('conferir.virgula')) + t('conferir.e') + itens[itens.length - 1];
+}
+
+// Erro normalizado da api.js -> { texto, cru }. Mensagem conhecida do servidor
+// (por código ou padrão) vira frase do painel; a desconhecida vira "O painel
+// recusou a ação." com o original em cru, para o "Detalhe técnico" (direcao.md, secao 6).
+export function traduzirServidor(res) {
+  const textoCru = typeof res.detalhe === 'string' ? res.detalhe : '';
+  if (res.semResposta) return { texto: t('erro.semResposta'), cru: textoCru };
+  const d = res.detalhe && typeof res.detalhe === 'object' ? res.detalhe : {};
+  if (d.precisaConfirmar && Array.isArray(d.campos) && d.campos.length) {
+    return { texto: t('servidor.trocarRedeConfirmar', { campos: juntar(d.campos.map((c) => CAMPO_REDE[c] || c)) }), cru: '' };
+  }
+  const msg = String(res.mensagem || '').trim();
+  if (SERVIDOR_EXATO[msg]) return { texto: t(SERVIDOR_EXATO[msg]), cru: '' };
+  const m = RE_EM_CURSO.exec(msg);
+  if (m) return { texto: t('servidor.emCurso', { n: Number(m[1]), acao: ACAO_RECUSADA[m[2]] || m[2] }), cru: '' };
+  if (RE_TEMA_INVALIDO.test(msg)) return { texto: t('servidor.temaInvalido'), cru: '' };
+  return { texto: t('servidor.recusou'), cru: msg || textoCru || t('erro.http', { codigo: res.codigo }) };
+}
 
 export function t(chave, dados) {
   const v = TEXTOS[chave];

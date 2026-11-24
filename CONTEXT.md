@@ -27,23 +27,27 @@ Passada única que leva uma câmera de fábrica a câmera instalada. Nunca é re
 _Avoid_: reconfiguração, ajuste posterior
 
 **Sessão**:
-Conjunto montado no passo a passo ao abrir o painel e editado em Opções: a placa escolhida, a rede das câmeras (máscara, gateway, DNS, IP do PC), a faixa de fábrica (IP de fábrica, IP do PC), a câmera (e-mail de recuperação, encoder dos dois streams) e a última fila. A última sessão fica guardada e volta como sugestão na próxima abertura. A senha nunca faz parte dela.
+Conjunto montado no passo a passo ao abrir o painel e editado na tela Sessão: a placa escolhida, a rede das câmeras (máscara, gateway, DNS, IP do PC), a faixa de fábrica (IP de fábrica, IP do PC), a câmera (e-mail de recuperação, encoder dos dois streams) e a última fila. A última sessão fica guardada e volta como sugestão na próxima abertura. A senha nunca faz parte dela.
 _Avoid_: padrões, padrões da instalação, perfil, template, configuração do painel
 
 **Passo a passo**:
-Sequência de telas, uma depois da outra, que o painel mostra ao abrir até a sessão estar completa e o operador mandar começar: senha, placa de rede, rede das câmeras, faixa de fábrica, câmera, fila (opcional) e resumo. Com uma sessão guardada, oferece usá-la ou revisá-la tela a tela.
+Sequência de seis passos, um depois do outro, que o painel mostra ao abrir até a sessão estar completa e o operador mandar começar: senha, placa de rede, rede das câmeras (com a faixa de fábrica recolhida), câmera, fila e Conferir. Com uma sessão guardada, abre direto em Conferir, com a senha no topo.
 _Avoid_: onboarding, wizard, assistente, setup inicial
 
-**Opções**:
-Tela, atrás da engrenagem, com as mesmas seções do passo a passo para mudar qualquer coisa no meio da sessão, mais Restaurar DHCP, Refazer o passo a passo e Encerrar.
-_Avoid_: configurações, padrões, ajustes, engrenagem (é só o ícone)
+**Conferir**:
+Último passo do passo a passo: uma linha por seção da sessão, cada uma com "Alterar", e o botão Começar. Confere a fila contra o registro e, se todas as posições já estão instaladas, oferece a faixa seguinte.
+_Avoid_: resumo, revisão
+
+**Sessão (tela)**:
+Aba do topo, antes chamada Opções, que edita a sessão uma seção por vez (senha, placa, rede, câmera, fila), cada uma com "Salvar alterações", mais a seção Painel, que não é da sessão: tema, versão e Refazer o passo a passo. Encerrar o painel fica no topo, não nela.
+_Avoid_: configurações, padrões, ajustes, engrenagem
 
 **Placa escolhida**:
 A placa de rede do PC, Ethernet ou Wi-Fi, escolhida no passo a passo. É a única via do painel até as câmeras: só ela conta como placa pronta, só ela define o que é alcançável, só por ela sai o broadcast e só ela recebe IP temporário. Endereço igual noutra placa do PC não vale.
 _Avoid_: placa das câmeras, placa de rede do PC (há mais de uma), NomePlaca
 
 **Preparo da placa**:
-Ação do painel que acrescenta à placa escolhida um endereço na faixa de fábrica e um na rede das câmeras, sem tirar nenhum, para alcançar a câmera antes e depois da troca de IP. O painel guarda o rastro do que fez e desfaz tudo ao encerrar ou em Restaurar DHCP, devolvendo a placa ao estado de antes; a internet do PC é testada antes e depois.
+Ação do painel que acrescenta à placa escolhida um endereço na faixa de fábrica e um na rede das câmeras, sem tirar nenhum, para alcançar a câmera antes e depois da troca de IP. O painel guarda o rastro do que fez e desfaz tudo ao encerrar ou em Restaurar o DHCP (no chip da placa), devolvendo a placa ao estado de antes; a internet do PC é testada antes e depois.
 _Avoid_: configurar a rede do PC, mexer na placa, setup de rede
 
 **IP do PC**:
@@ -87,7 +91,7 @@ Etapa obrigatória da configuração que grava resolução, quadros por segundo 
 _Avoid_: configurar vídeo, alterar qualidade
 
 **Fila**:
-Sequência de IPs de destino montada a partir de uma faixa início–fim antes de começar; cada posição recebe uma câmera. As posições recebem câmeras em paralelo: uma câmera em falha espera a decisão no cartão dela e não para as outras. Uma faixa sem nenhuma posição livre não vira fila. A faixa montada fica na sessão e volta preenchida na próxima abertura, só como sugestão. Montar é no passo a passo ou em Opções.
+Sequência de IPs de destino montada a partir de uma faixa início–fim antes de começar; cada posição recebe uma câmera. As posições recebem câmeras em paralelo: uma câmera em falha espera a decisão no cartão dela e não para as outras. Uma faixa sem nenhuma posição livre não vira fila. A faixa montada fica na sessão e volta preenchida na próxima abertura, só como sugestão. Montar é no passo a passo ou na tela Sessão, seção Fila.
 _Avoid_: plano, lote, lista
 
 **Posição**:

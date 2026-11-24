@@ -45,54 +45,67 @@ do painel aparecem: nenhuma janela preta. Com o painel já aberto, o atalho só
 reabre a janela dele. Aceite o pedido do Windows (preparar a placa de rede
 exige Administrador).
 
-Toda abertura começa pelo **passo a passo**, uma tela depois da outra, que
-monta a **sessão** de trabalho. Com uma sessão guardada da última vez, depois
-da senha o painel oferece **Usar essa sessão** (vai direto ao resumo) ou
-**Revisar passo a passo** (cada tela já preenchida).
+Toda abertura começa pelo **passo a passo**, seis passos, um depois do
+outro, que montam a **sessão** de trabalho. A trilha no alto mostra os seis;
+o rodapé tem **Voltar** e **Avançar** (no último, **Começar**). Com uma
+sessão guardada da última vez, o painel abre direto em **Conferir**, com a
+senha na primeira linha.
 
-1. **Senha**: digitada duas vezes. Vira a senha do `admin` de cada câmera
-   configurada nesta sessão. Fica só na memória do painel: nunca vai para
-   disco, log, registro ou relatório, e é pedida de novo a cada abertura.
-2. **Placa de rede**: a placa deste PC ligada à bancada ou ao switch das
-   câmeras (Ethernet ou Wi-Fi; a Ethernet com cabo vem sugerida em primeiro).
+1. **Senha**: digitada duas vezes, **Salvar a senha**. Vira a senha do
+   `admin` de cada câmera configurada nesta sessão. Fica só na memória do
+   painel: nunca vai para disco, log, registro ou relatório, e é pedida de
+   novo a cada abertura. Em simulação o passo diz "Senha não usada em
+   simulação".
+2. **Placa**: a placa deste PC ligada à bancada ou ao switch das
+   câmeras (Ethernet ou Wi-Fi; a sugerida já vem marcada).
    **Só ela é usada**: é por ela que o painel procura a câmera, dá os
    endereços ao PC e confere a câmera no IP novo. Um endereço igual noutra
-   placa do PC não conta. Escolher a placa que leva à internet pede
-   confirmação: a rede pisca por alguns segundos e a internet é testada
-   depois.
-3. **Rede das câmeras**: máscara, gateway e DNS gravados em cada câmera (a
-   rede do NVR; o gateway vem vazio, é da obra) e, opcional, o IP do PC nessa rede (vazio = `.200` a `.249`,
-   derivado do MAC da placa).
-4. **Faixa de fábrica**: onde a câmera nova aparece (`192.168.1.108`) e,
-   opcional, o IP do PC nessa faixa (vazio = `.220`). Precisa ser diferente da
-   rede das câmeras.
-5. **Câmera**: e-mail de recuperação (única forma de recuperar a senha do
+   placa do PC não conta. A placa que leva à internet ganha uma nota na
+   própria linha: ao começar, a rede pisca por alguns segundos e a internet
+   é testada depois. Se a leitura das placas falhar, **Ler as placas de
+   novo**.
+3. **Rede**: máscara, gateway e DNS gravados em cada câmera (a rede do NVR;
+   o gateway vem vazio, é da obra) e, opcional, o IP do PC nessa rede
+   (vazio = `.200` a `.249`, derivado do MAC da placa). A **faixa de
+   fábrica** fica recolhida embaixo, com o resumo e **Alterar**: onde a
+   câmera nova aparece (`192.168.1.108`) e, opcional, o IP do PC nessa
+   faixa (vazio = `.220`). Precisa ser diferente da rede das câmeras.
+4. **Câmera**: e-mail de recuperação (única forma de recuperar a senha do
    admin: use um e-mail da empresa; vem vazio) e encoder dos dois streams (resolução,
    fps, bitrate, codec; o GOP é gravado como o dobro do fps). Fps e bitrate
-   são listas de valores prontos, com **Outro valor…** no fim para digitar
-   um número fora dela; a lista de bitrate segue a
-   resolução e o codec do stream, com o recomendado marcado e a faixa usual
-   embaixo. Resolução e codec dizem se já foram testados em câmera real.
-   A câmera recebe o encoder em duas gravações: primeiro resolução, fps e
-   codec; depois bitrate e GOP.
-6. **Fila**: primeiro e último IP, local, rack e andar. Opcional (**Montar
-   depois**); a última fila volta preenchida como sugestão.
-7. **Resumo**: um cartão por seção, com **Alterar**. **Preparar placa e
-   começar** acrescenta à placa escolhida dois endereços (um na faixa de
-   fábrica, um na rede das câmeras), sem tirar nenhum, testa a internet e
-   monta a fila se houver. **Ao encerrar o painel a placa volta ao DHCP
-   sozinha**.
+   são listas de valores prontos, com **Outro valor…** para abrir o campo e
+   digitar um número fora dela; a de bitrate segue a resolução e o codec do
+   stream e vem com o recomendado selecionado. Resolução e codec dizem se já foram testados em câmera
+   real. **Por que isso importa** explica o GOP e o H.265. A câmera recebe
+   o encoder em duas gravações: primeiro resolução, fps e codec; depois
+   bitrate e GOP.
+5. **Fila**: primeiro e último IP, local, rack e andar. A prévia diz quantas
+   posições a faixa tem e quantas já estão no registro; a última fila volta
+   preenchida como sugestão.
+6. **Conferir**: uma linha por seção, cada uma com **Alterar a senha**,
+   **Alterar a placa** e assim por diante. Se todas as posições da fila já
+   estão no registro como instaladas, a linha da Fila diz isso e oferece
+   **Usar a faixa seguinte**. **Começar** acrescenta à placa escolhida dois
+   endereços (um na faixa de fábrica, um na rede das câmeras), sem tirar
+   nenhum, testa a internet, monta a fila e abre o Painel. **Ao encerrar o
+   painel a placa volta ao DHCP sozinha**.
 
-Depois disso o painel tem três telas: **Painel** (fila, bancada, vigia e o
-registro), **Ferramentas** e **Opções** (engrenagem), com as mesmas seções do
-passo a passo para mudar qualquer coisa no meio da sessão. Trocar a placa ou
-as faixas em Opções devolve a placa e a prepara de novo; se há fila montada,
-pede confirmação e a fila continua se a faixa ainda cabe na rede nova.
+Depois disso o painel tem um topo fixo com três abas, **Painel** (fila,
+bancada, vigia e o registro), **Sessão** e **Ferramentas**, os chips da
+placa e da internet (e o de simulação, quando é o caso) e **Encerrar o
+painel**. Cada chip abre um quadro com o detalhe; o da placa tem **Preparar
+a placa** e **Restaurar o DHCP**. A aba **Sessão** (antes chamada Opções)
+mostra uma seção por vez (Senha, Placa, Rede, Câmera, Fila e, separada,
+Painel), cada uma com **Salvar alterações**, que confirma com "Alterações
+salvas.". Trocar a placa ou as faixas em Sessão devolve a placa e a prepara
+de novo; se há fila montada, pede confirmação e a fila continua se a faixa
+ainda cabe na rede nova. A seção Painel tem o tema (Sistema, Claro, Escuro),
+a versão e **Refazer o passo a passo**.
 
 ## Fila
 
-Monte a fila no passo 6 ou em **Opções > Fila** (primeiro e último IP,
-**Montar fila**). Gateway, endereços fora da rede e IPs com câmera instalada
+Monte a fila no passo 5 ou em **Sessão > Fila** (primeiro e último IP,
+**Montar a fila**). Gateway, endereços fora da rede e IPs com câmera instalada
 no registro ficam de fora (câmera que falhou não ocupa a posição; se ela
 ainda responde no IP, o ping na hora de usar a posição pula); uma faixa sem
 posição livre é recusada.
@@ -175,7 +188,7 @@ faça backup. Na primeira abertura da 1.2.0, `padroes.json` e
 `ultima-fila.json` de versões anteriores viram `sessao.json` (os antigos ficam
 como `.migrado`). Para usar outra pasta: `Servidor-Painel.ps1 -PastaDados
 D:\obra`. Sem permissão de escrita em ProgramData o painel usa
-`%LOCALAPPDATA%\ConfigurarCameras` e avisa na barra.
+`%LOCALAPPDATA%\ConfigurarCameras` e avisa no quadro do chip da placa.
 
 ## Ferramentas
 
@@ -191,9 +204,10 @@ mantém senha e rede). Use a tela da câmera ou o botão físico.
 
 **Simulação** (sem tela): `Servidor-Painel.ps1 -Simular` ensaia a fila
 inteira sem câmera, com registro separado; nada vai para câmera nem para a
-placa. Serve para diagnóstico e para os testes.
+placa. Serve para diagnóstico e para os testes. Ligada, o topo mostra o chip
+**Simulação**.
 
-**Encerrar o painel** (Opções) fecha o servidor e devolve a placa de rede ao
+**Encerrar o painel**, no topo, pede confirmação, fecha o servidor e devolve a placa de rede ao
 estado de antes (DHCP, endereços, rotas de host e rota que o painel pôs saem);
 a fila em memória se perde, o registro e a sessão ficam. Com câmera no portão
 ou conferindo, o painel recusa encerrar e pede para esperar as câmeras
@@ -207,7 +221,7 @@ a placa fica preparada e o próximo painel avisa e devolve ao encerrar.
 
 ## Versões e atualização
 
-A versão do painel aparece em Opções e vem de
+A versão do painel aparece em **Sessão > Painel** e vem de
 `VERSAO.txt`. Cada versão é publicada em
 <https://github.com/xyron-robotics/ConfigurarCameras/releases>: o instalador e o
 `.sha256` dele são gerados pelo GitHub Actions a partir da tag `vX.Y.Z` (que
@@ -244,24 +258,24 @@ Se o SHA-256 não conferir, nada é instalado e a faixa diz o motivo.
 |---|---|
 | O painel não abre, ou abre uma caixa de erro | a caixa diz o motivo. Para o detalhe, abra pelo `INICIAR-PAINEL-COM-CONSOLE.bat`: a mensagem fica na tela até apertar Enter |
 | O atalho não faz nada | o painel já está aberto: a janela dele é reaberta. Se não aparecer, apague `painel.json` na pasta de dados e tente de novo (ou a empresa bloqueia o `wscript.exe`: use o `.bat`) |
-| "Placa ... sem as faixas" na barra | clique em **Preparar placa**; se não resolver, o painel está sem Administrador (feche e abra de novo aceitando o UAC) |
-| "Placa ... não está mais neste PC" | a placa escolhida sumiu (USB desconectado, renumerada): escolha outra em **Opções > Placa de rede** |
-| Câmera na bancada não aparece, mas responde pelo Wi-Fi | a placa escolhida é a errada, ou a câmera está numa faixa que o Wi-Fi também tem: confira a placa em Opções. Se o IP dela cai na faixa de outra placa, o painel põe um IP temporário e uma rota de host na placa escolhida ao configurar |
+| Chip "Placa sem as faixas" no topo | abra o chip e clique em **Preparar a placa**; se não resolver, o painel está sem Administrador (feche e abra de novo aceitando o UAC) |
+| Chip "Placa ausente" ("não está mais neste PC") | a placa escolhida sumiu (USB desconectado, renumerada): escolha outra em **Sessão > Placa** |
+| Câmera na bancada não aparece, mas responde pelo Wi-Fi | a placa escolhida é a errada, ou a câmera está numa faixa que o Wi-Fi também tem: confira a placa em **Sessão > Placa**. Se o IP dela cai na faixa de outra placa, o painel põe um IP temporário e uma rota de host na placa escolhida ao configurar |
 | Câmera não responde ao ping | cabo, injetor PoE sem energia ou porta errada do injetor (saída **P+D**) |
 | Procurar diz "0 respostas" ao broadcast | um firewall no PC está barrando UDP de entrada (porta 37810). O painel ainda acha pelo IP de fábrica e pela varredura; libere o `powershell.exe` no firewall para o broadcast voltar |
-| Aviso de que o broadcast não responde, e o vigia em "Sem broadcast: uma câmera por vez." | o firewall do PC barra a porta UDP 37810, ou a placa perdeu o IP da faixa de fábrica (clique em **Preparar placa**). Enquanto isso o painel fica no modo de reserva: ligue uma câmera de fábrica por vez no switch. Libere o `powershell.exe` no firewall para UDP 37810; com o broadcast de volta, as câmeras voltam a andar em paralelo sozinhas |
+| Aviso de que o broadcast não responde, e o vigia em "Sem broadcast: uma câmera por vez." | o firewall do PC barra a porta UDP 37810, ou a placa perdeu o IP da faixa de fábrica (clique em **Preparar a placa**, no chip da placa). Enquanto isso o painel fica no modo de reserva: ligue uma câmera de fábrica por vez no switch. Libere o `powershell.exe` no firewall para UDP 37810; com o broadcast de volta, as câmeras voltam a andar em paralelo sozinhas |
 | Aviso de que duas câmeras respondem em 192.168.1.108 | há mais de uma câmera de fábrica no switch e o broadcast não responde, então o painel não sabe qual está atendendo. Deixe ligada só a câmera de fábrica que vai ser configurada agora (as já instaladas podem ficar) e libere a porta UDP 37810, como na linha acima |
 | Aviso de que o painel está sem Administrador e vai uma câmera por vez | o pedido do Windows foi recusado: sem Administrador o painel não põe o vizinho estático nem prepara a placa, e fica no modo de reserva. Encerre o painel e abra pelo atalho aceitando o pedido |
-| "fora das faixas do PC" na lista | a câmera está noutra rede; ao configurar, a placa recebe um IP temporário nessa rede (sai no Restaurar DHCP / ao encerrar) |
-| `senha recusada pela camera` | a câmera já tem outra senha. Não insista: troque a senha em Opções ou volte a câmera de fábrica pela tela dela |
-| `camera recusou o encoder no passo N` | a câmera não aceitou o que o passo grava (passo 1: resolução, fps ou codec; passo 2: bitrate ou GOP). O log mostra o encoder lido antes. Volte a um valor marcado "(testado)" em **Opções > Câmera** e **Tentar de novo** |
+| "fora das faixas do PC" na lista | a câmera está noutra rede; ao configurar, a placa recebe um IP temporário nessa rede (sai no **Restaurar o DHCP** / ao encerrar) |
+| `senha recusada pela camera` | a câmera já tem outra senha. Não insista: troque a senha em **Sessão > Senha** ou volte a câmera de fábrica pela tela dela |
+| `camera recusou o encoder no passo N` | a câmera não aceitou o que o passo grava (passo 1: resolução, fps ou codec; passo 2: bitrate ou GOP). O log mostra o encoder lido antes. Volte a um valor marcado "(testado)" em **Sessão > Câmera** e **Tentar de novo** |
 | `conta admin BLOQUEADA` | espere alguns minutos; depois confirme a senha certa antes de qualquer tentativa |
-| PC ficou sem internet depois de preparar a placa | a barra mostra "sem internet desde o preparo da placa". **Restaurar DHCP** devolve na hora; encerrar o painel também. Se nada disso resolver: `ncpa.cpl` > placa > IPv4 > "Obter um endereço IP automaticamente" |
-| Barra diz "sem internet" mas o navegador navega | a rede só sai por proxy; o teste do painel (`curl.exe`) não usa proxy. Pode ignorar |
-| "ficou preparada desde a última vez" ao abrir | o painel anterior foi fechado no X. Nada a fazer: ela volta ao DHCP ao encerrar (ou em **Restaurar DHCP**) |
+| PC ficou sem internet depois de preparar a placa | o chip "Sem internet" diz, no quadro dele, que a internet caiu depois que o painel preparou a placa. **Restaurar o DHCP**, no chip da placa, devolve na hora; encerrar o painel também. Se nada disso resolver: `ncpa.cpl` > placa > IPv4 > "Obter um endereço IP automaticamente" |
+| Chip "Sem internet", mas o navegador navega | a rede só sai por proxy; o teste do painel (`curl.exe`) não usa proxy. Pode ignorar |
+| "ficou preparada desde a última vez" ao abrir | o painel anterior foi fechado no X. Nada a fazer: ela volta ao DHCP ao encerrar (ou em **Restaurar o DHCP**, no chip da placa) |
 | A faixa de atualização diz "SHA-256 não confere" | o download veio diferente do publicado (proxy que troca conteúdo, download interrompido). Nada foi instalado; tente de novo ou baixe pelo navegador na página de releases |
 | Atualizou e o painel não reabriu | abra pelo atalho. O que o instalador fez está em `instalador.log` na pasta de dados |
-| O painel abre sempre no passo a passo | é assim: a cada abertura ele pede a senha e oferece usar ou revisar a sessão guardada. Se não oferece, a sessão ficou incompleta (placa que sumiu, campo inválido): o passo que falta aparece |
+| O painel abre sempre no passo a passo | é assim: com uma sessão guardada, cada abertura vai direto a **Conferir**, que pede a senha na primeira linha. Se abre num passo, a sessão ficou incompleta (placa que sumiu, campo inválido): é o passo que falta |
 
 O `log.txt` na pasta de dados guarda tudo com data e hora. É o primeiro lugar a olhar.
 
