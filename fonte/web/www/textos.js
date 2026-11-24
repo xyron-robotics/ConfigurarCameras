@@ -18,7 +18,6 @@ const TEXTOS = {
   'menu.rotulo-leitor': 'Seções',
   'menu.painel': 'Painel',
   'menu.ferramentas': 'Ferramentas',
-  'menu.engrenagem': '⚙',
   'menu.opcoes': 'Opções',
   'inicio.inicio-titulo': 'Passo a passo da sessão',
   'inicio.passos.rotulo-leitor': 'Passos',
@@ -190,6 +189,10 @@ const TEXTOS = {
   'opcoes.tema-claro': 'Claro',
   'opcoes.tema-escuro': 'Escuro',
   'log.abrir': 'Log',
+  // Nome acessivel do icone da linha do log (a mensagem nem sempre traz a palavra do estado).
+  'log.falha': 'Falha',
+  'log.sucesso': 'Concluído',
+  'log.atencao': 'Atenção',
   'fim.encerrado-texto': 'Painel encerrado. Pode fechar esta janela.',
   'fim.atualizando-texto': 'Atualizando o painel… ele fecha e reabre sozinho em instantes. Pode fechar esta janela.',
 

@@ -1,4 +1,4 @@
-/* Componentes do painel: faixa, luz, marca, campo, botao, aviso, trilha de passos,
+/* Componentes do painel: faixa, luz, icone, marca, campo, botao, aviso, trilha de passos,
    selo, fita, etapas, tabela, controle segmentado e log. Uma classe por peca;
    a tela so posiciona (telas.css). Cores pelo significado (direcao 4.2):
    --acao acao, --agora em curso, --sucesso concluido, --falha pede voce,
@@ -26,6 +26,16 @@
   .luz.sucesso { background: var(--sucesso); }
   .luz.falha { background: var(--falha); }
   .luz.agora { background: var(--agora); }
+
+  /* ---------------------------------------------------------------- icone (direcao 4.5) */
+  /* SVG do icones.js: traco de 1,5 px na cor do texto em volta, 16 ou 20 px. */
+  .icone {
+    inline-size: var(--icone-p); block-size: var(--icone-p); flex: none;
+    fill: none; stroke: currentColor; stroke-width: var(--traco-icone);
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .icone-m { inline-size: var(--icone-m); block-size: var(--icone-m); }
+  .icone-cheio { fill: currentColor; stroke: none; }
 
   /* ---------------------------------------------------------------- marca (direcao 4.6) */
   /* Logo oficial sem alterar a arte; no escuro, sobre a placa clara. O recuo negativo
@@ -328,6 +338,16 @@
   .log-linhas .atencao { border-left-color: var(--atencao); }
   .log-linhas .destaque { font-weight: var(--peso-forte); }
   .log-linhas .neutro { border-left-color: var(--apoio); }
+  /* Casa do icone em toda linha (vazia sem estado), para hora e mensagem alinharem.
+     O icone repete o significado da barra na forma (estado nunca so pela cor). */
+  .log-sinal {
+    display: inline-block; inline-size: var(--icone-p); margin-right: var(--esp-2);
+    vertical-align: text-bottom;
+  }
+  .log-sinal .icone { display: block; }
+  .log-linhas .falha .log-sinal { color: var(--falha); }
+  .log-linhas .sucesso .log-sinal { color: var(--sucesso); }
+  .log-linhas .atencao .log-sinal { color: var(--atencao); }
 
   /* ---------------------------------------------------------------- faixa de atualizacao */
   /* Versao nova no GitHub: informacao, em --superficie-2 (direcao 5.7). */

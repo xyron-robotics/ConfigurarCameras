@@ -46,11 +46,8 @@ export function montarMarcacao() {
         ' ',
         h('a', { href: '#ferramentas', 'data-view': 'ferramentas' }, t('menu.ferramentas')),
         ' ',
-        h('a', { href: '#opcoes', 'data-view': 'opcoes', class: 'menu-opcoes' }, [
-          h('span', { class: 'engrenagem', 'aria-hidden': 'true' }, t('menu.engrenagem')),
-          ' ',
-          t('menu.opcoes'),
-        ]),
+        // So o texto, sem icone de engrenagem (direcao 2.1 e 4.5, UI-16).
+        h('a', { href: '#opcoes', 'data-view': 'opcoes', class: 'menu-opcoes' }, t('menu.opcoes')),
       ]),
       h('main', { id: 'conteudo', tabindex: '-1' }, [
         h('div', { id: 'aviso', class: 'aviso', role: 'alert', hidden: true }),

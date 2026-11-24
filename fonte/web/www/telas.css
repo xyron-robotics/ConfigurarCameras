@@ -42,7 +42,6 @@
   .menu a.ativo { border-left-color: var(--acao); font-weight: var(--peso-forte); }
   .menu .menu-opcoes { margin-top: auto; color: var(--apoio); }
   .menu .menu-opcoes.ativo { color: var(--texto); }
-  .engrenagem { display: inline-block; width: var(--icone-p); }
   main { padding: var(--esp-5) var(--esp-5) var(--esp-6); max-width: var(--conteudo-max); min-width: 0; }
   .view { display: flex; flex-direction: column; gap: var(--esp-5); }
   .view > h2 + .apoio { margin-top: calc(-1 * var(--esp-4)); }

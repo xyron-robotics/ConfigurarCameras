@@ -2,6 +2,7 @@
 // Painel: log, barras de placa, internet e atualizacao, fita da fila, cartoes
 // das cameras, vigia, resultado das ferramentas e registro.
 import { h } from './dom.js';
+import { icone } from './icones.js';
 import { t, nomeEtapa, motivoVigia } from './textos.js';
 import { dataHora, ipParaNumero, mac as formatarMac } from './formato.js';
 import {
@@ -20,6 +21,14 @@ import {
 const SIGNIFICADO_DO_CONSOLE = Object.freeze({
   Red: 'falha', Green: 'sucesso', Yellow: 'atencao', DarkYellow: 'atencao',
   DarkGray: 'neutro', Cyan: 'destaque',
+});
+// Icone da linha do log por significado (direcao 4.5): estado nunca so pela cor
+// da barra. Com nome acessivel, porque a mensagem nem sempre traz a palavra.
+// neutro e destaque nao levam icone (nao sao estado).
+const ICONE_DO_SIGNIFICADO = Object.freeze({
+  falha: { nome: 'falha', rotulo: 'log.falha' },
+  sucesso: { nome: 'concluido', rotulo: 'log.sucesso' },
+  atencao: { nome: 'atencao', rotulo: 'log.atencao' },
 });
 // Situacao gravada no registro (coluna Status do CSV).
 const SIGNIFICADO_DA_SITUACAO = Object.freeze({ Instalada: 'sucesso', Falhou: 'falha', Resetada: 'neutro' });
@@ -43,7 +52,14 @@ export function anexarLog(entrada) {
   const caixa = $('log');
   const noFim = caixa.scrollHeight - caixa.scrollTop - caixa.clientHeight < LOG_FOLGA_FIM;
   for (const l of linhas) {
-    caixa.append(h('div', { class: SIGNIFICADO_DO_CONSOLE[l.cor] || null }, [h('span', { class: 'ts' }, String(l.ts).slice(LOG_INICIO_HORA)), l.msg]));
+    const significado = SIGNIFICADO_DO_CONSOLE[l.cor] || null;
+    const ic = ICONE_DO_SIGNIFICADO[significado];
+    // A casa do icone existe em toda linha, para a hora e a mensagem ficarem alinhadas.
+    caixa.append(h('div', { class: significado }, [
+      h('span', { class: 'log-sinal' }, ic ? icone(ic.nome, 'p', t(ic.rotulo)) : null),
+      h('span', { class: 'ts' }, String(l.ts).slice(LOG_INICIO_HORA)),
+      l.msg,
+    ]));
   }
   while (caixa.childElementCount > LOG_MAX_LINHAS) caixa.firstElementChild.remove();
   if (noFim) caixa.scrollTop = caixa.scrollHeight;
