@@ -1,6 +1,8 @@
 # Frente redesenho-marca: o sistema visual SmartSeg sobre o layout de hoje (fase B, 2 de 5)
 
-**Status:** Ativo · **Frente:** `redesenho-marca`
+**Status:** Concluído (24/11/2026) · **Frente:** `redesenho-marca`
+
+**Fechamento:** entraram os tokens da direção 4 nos dois temas (primitivos, semânticos, tipo, espaço, raio, sombra, movimento), sem token legado; a classe escolhida pelo significado no JS (log, luzes, situação, atualização); logo, símbolo e favicon SmartSeg com a placa clara no escuro; o `.png` no `$tipos` do servidor; os ícones Lucide da direção 4.5 no `icones.js`, com o log marcado por ícone de estado, e a engrenagem de "Opções" fora. Ficam para as frentes seguintes: o `h1` do topo menor que os títulos de tela e o passo a passo com três estilos de botão (frente 3, casca e passo a passo), os textos longos de Opções e Ferramentas em `--apoio` abaixo de 7:1 e o campo "Outro valor" do encoder nomeado só por `aria-label` (frente 3 em Sessão, frente 5 em Ferramentas), e o "→" de `bancada.trabalho-titulo` (texto, frentes 3 a 5).
 
 Frente 2 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. **Em paralelo com a frente 1 (decisão do usuário, 23/11):** o worktree nasce do commit `Plano-Task: 3` da frente 1 (CSS em quatro camadas e `fonte/Testes-Front.ps1` já existem nele), não do `main`. A Task 1 roda enquanto a frente 1 faz as Tasks 4 a 6. A Task 2 é o ponto de espera: só passa com a frente 1 integrada no `main`, e aí a frente faz `git rebase main` e segue como frente sequencial. Abertura pelo script descrito na seção "Ajuste de 23/11" do mapa. Especificação: `docs/design/2026-11-ux/direcao.md`, seções 4 (sistema visual) e 8 (servidor). Código de partida: `docs/design/2026-11-ux/prototipo/tokens.css`, `icones.js`, `marca.js`, `logo.png`, `simbolo.png`.
 

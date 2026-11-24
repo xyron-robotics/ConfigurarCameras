@@ -11,7 +11,7 @@ Todas são **sequenciais**: cada uma mexe em `fonte/web/www/**` e no `instalador
 | # | Frente (`-Frente`) | Plano | Escopo | Depende de |
 |---|---|---|---|---|
 | 1 | `redesenho-arquitetura` | `docs/plans/2026-11-20-frente-redesenho-1-arquitetura-plan.md` | O front de hoje em módulos, tokens com os valores de hoje, `textos.js`, `constantes.js` e o `Testes-Front.ps1`. Sem mudança visual, provada por captura. Feita em 24/11/2026 | frente `ux` fechada |
-| 2 | `redesenho-marca` | `docs/plans/2026-11-20-frente-redesenho-2-marca-plan.md` | Sistema visual da direção (seção 4) sobre o layout de hoje: tokens de marca e semânticos, tipo, ícones, logo, símbolo, favicon, `.png` no `$tipos`, `.iss` | 1 |
+| 2 | `redesenho-marca` | `docs/plans/2026-11-20-frente-redesenho-2-marca-plan.md` | Sistema visual da direção (seção 4) sobre o layout de hoje: tokens de marca e semânticos, tipo, ícones, logo, símbolo, favicon, `.png` no `$tipos`, `.iss`. Feita em 24/11/2026 | 1 |
 | 3 | `redesenho-navegacao` | `docs/plans/2026-11-20-frente-redesenho-3-navegacao-plan.md` | Casca nova (topo, abas, chips, rotas, diálogo), passo a passo de 6 passos, Conferir e Sessão (antes "Opções") | 2 |
 | 4 | `redesenho-painel` | `docs/plans/2026-11-20-frente-redesenho-4-painel-plan.md` | Painel: fila, fita, tabela, linha da câmera, "Pede você", painel lateral do encoder, vigia, registro. Bug do `salvarCartao` | 3 |
 | 5 | `redesenho-verificacao` | `docs/plans/2026-11-20-frente-redesenho-5-verificacao-plan.md` | Ferramentas, estados globais, saída do código de transição e verificação final (Playwright nos dois temas, `consistency.mjs`, `web-design-guidelines`, roteiro de duas filas, bancada) | 4 |
