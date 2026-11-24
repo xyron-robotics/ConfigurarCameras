@@ -57,7 +57,10 @@ Source: "icone.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\Servidor-Painel.ps1"; DestDir: "{app}\web"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\index.html"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\app.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
-Source: "{#Raiz}\fonte\web\www\app.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\tokens.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\base.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\componentes.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\telas.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\LEIA-ME.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\API-INTELBRAS.md"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -65,6 +68,7 @@ Source: "{#Raiz}\fonte\API-INTELBRAS.md"; DestDir: "{app}"; Flags: ignoreversion
 ; Sobras de versões anteriores que não existem mais no pacote.
 [InstallDelete]
 Type: files; Name: "{app}\INICIAR-PAINEL.bat"
+Type: files; Name: "{app}\web\www\app.css"
 
 [Icons]
 Name: "{group}\{#Nome}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\INICIAR-PAINEL.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icone.ico"; Comment: "Abre o painel (pede Administrador)"

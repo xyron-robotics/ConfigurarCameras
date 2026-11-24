@@ -1,0 +1,327 @@
+/* Componentes do painel: faixa, luz, campo, botao, aviso, trilha de passos,
+   selo, fita, etapas, tabela, controle segmentado e log. Uma classe por peca;
+   a tela so posiciona (telas.css). */
+
+@layer componentes {
+  /* ---------------------------------------------------------------- faixa de simulacao */
+  .faixa-simular {
+    position: sticky; top: 0; z-index: var(--z-faixa);
+    display: flex; gap: var(--esp-5); flex-wrap: wrap;
+    padding: var(--faixa-pad-y) var(--pagina-margem);
+    font-weight: var(--peso-forte); color: var(--simulacao-texto);
+    background: repeating-linear-gradient(var(--listra-angulo), var(--simulacao) 0 var(--listra), var(--simulacao-listra) var(--listra) var(--listra-dupla));
+  }
+  /* O texto fica numa placa lisa: as listras sao a moldura, nao o fundo da letra. */
+  .faixa-simular > span:not(:empty) {
+    background: var(--simulacao);
+    padding: var(--faixa-placa-pad-y) var(--esp-2);
+    border-radius: var(--raio-controle);
+  }
+
+  /* ---------------------------------------------------------------- luz */
+  .luz {
+    width: var(--luz-tamanho); height: var(--luz-tamanho); border-radius: var(--raio-circulo);
+    background: var(--pulada); flex: none;
+  }
+  .luz.ok { background: var(--sucesso); }
+  .luz.falta { background: var(--falha); }
+
+  /* ---------------------------------------------------------------- campos */
+  label {
+    display: flex; flex-direction: column; gap: var(--rotulo-vao);
+    font-size: var(--tipo-meta); font-weight: var(--peso-medio); color: var(--apoio);
+  }
+  input, select {
+    font: inherit; font-size: var(--tipo-leitura); font-weight: var(--peso-normal); color: var(--texto);
+    background: var(--superficie); border: var(--traco) solid var(--linha-forte); border-radius: var(--raio-controle);
+    padding: var(--campo-pad-y) var(--campo-pad-x); min-width: 0;
+    transition: border-color var(--dur-saida) var(--curva), box-shadow var(--dur-saida) var(--curva);
+  }
+  /* Campo de uma linha na altura do botao: alinham pela base em .linha-campos. */
+  input:not([type="checkbox"]):not([type="radio"]), select { height: var(--controle-altura); }
+  /* Lista aberta do select no Windows escuro: sem isto vem branca com texto claro. */
+  select { background-color: var(--superficie); color: var(--texto); }
+  option { background-color: var(--superficie); color: var(--texto); }
+  /* O font: inherit do campo zera o que .mono (base) poe: repete aqui. */
+  input.mono { font-family: var(--familia-mono); font-size: var(--tipo-corpo); font-variant-numeric: tabular-nums; }
+  input:disabled { background: var(--superficie-2); color: var(--apoio); border-style: dashed; }
+  /* O foco aparece na hora (duracao 0); so a saida dele usa a transicao do campo. */
+  input:focus-visible, select:focus-visible {
+    outline: var(--foco-espessura) solid var(--foco); outline-offset: var(--campo-foco-recuo);
+    border-color: var(--foco-halo); box-shadow: 0 0 0 var(--traco) var(--foco-halo);
+    transition-duration: 0s;
+  }
+  input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--falha); border-width: var(--traco-forte); }
+  .erro-campo { color: var(--falha); font-size: var(--tipo-meta); }
+  .linha-campos { display: flex; gap: var(--esp-3); align-items: flex-end; flex-wrap: wrap; }
+  .linha-campos label { flex: 1 1 var(--campo-base); }
+  /* Rotulo de opcao (check, radio) le como texto, nao como rotulo de campo. */
+  label.check {
+    flex-direction: row; align-items: center; gap: var(--esp-2); color: var(--texto);
+    font-size: var(--tipo-leitura); font-weight: var(--peso-normal);
+  }
+  /* Grade dos formularios de secao: 2 a 3 colunas conforme a largura. */
+  .campos {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--campos-coluna-min), 1fr));
+    gap: var(--campos-vao-y) var(--campos-vao-x); align-items: end;
+  }
+  .campos label.largo { grid-column: 1 / -1; }
+  .campos label.duplo { grid-column: span var(--campos-duplo); }
+  /* Botao dentro da grade fica do tamanho do texto, nao da coluna. */
+  .campos > .btn { justify-self: start; }
+  .secao-form { display: flex; flex-direction: column; gap: var(--esp-3); }
+  /* Sem fundo proprio: no maximo dois niveis de caixa (pagina e cartao). */
+  /* min-width 0: sem isso o fieldset cresce ate o min-content e vaza do cartao. */
+  fieldset {
+    margin: 0; padding: var(--caixa-pad-y) var(--caixa-pad) var(--caixa-pad); min-width: 0;
+    background: transparent; border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
+  }
+  legend {
+    font-family: var(--familia-titulo); font-weight: var(--peso-forte); font-size: var(--tipo-corpo);
+    padding: 0 var(--legenda-pad-x);
+  }
+  .erros, .avisos-leves, .aviso { overflow-wrap: anywhere; }
+  .erros {
+    margin: 0; padding: var(--aviso-pad-y) var(--caixa-pad) var(--aviso-pad-y) var(--esp-6);
+    background: var(--falha-fundo); border-radius: var(--raio-controle);
+  }
+  .avisos-leves {
+    margin: 0; padding: var(--aviso-pad-y) var(--caixa-pad) var(--aviso-pad-y) var(--esp-6);
+    background: var(--atencao-fundo); border-radius: var(--raio-controle);
+  }
+  /* Faixa usual do bitrate, embaixo dos campos do stream. */
+  .faixa-encoder { margin: var(--faixa-encoder-recuo) 0 0; font-size: var(--tipo-meta); color: var(--apoio); }
+  .faixa-encoder:empty { display: none; }
+
+  /* ---------------------------------------------------------------- botao */
+  .btn {
+    font: inherit; font-size: var(--tipo-corpo); font-weight: var(--peso-forte);
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: var(--controle-pad-y) var(--controle-pad-x); min-height: var(--controle-altura);
+    color: var(--texto); background: var(--superficie-2);
+    border: var(--traco) solid var(--linha); border-radius: var(--raio-controle);
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+    transition:
+      background-color var(--dur-saida) var(--curva),
+      border-color var(--dur-saida) var(--curva),
+      color var(--dur-saida) var(--curva),
+      transform var(--dur-rapida) var(--curva);
+  }
+  /* Hover e pressionado sobem o contraste em relacao ao repouso. Hover nao
+     levanta o botao; o press afunda 1px. */
+  .btn:hover { border-color: var(--apoio); background: var(--controle-hover); }
+  .btn:active { background: var(--controle-press); transform: translateY(var(--press-desce)) scale(var(--press-escala)); }
+  .btn.discreto:hover { background: var(--discreto-hover); }
+  .btn.acento { background: var(--acao); border-color: var(--acao); color: var(--acao-rotulo); }
+  .btn.acento:hover { background: var(--acao-hover); border-color: var(--acao-hover); }
+  .btn.discreto { background: transparent; font-weight: var(--peso-medio); }
+  /* Desabilitado com a mesma cara do campo desabilitado (apoio, superficie-2,
+     borda tracejada), sem opacidade: o texto continua legivel e nada reage ao ponteiro. */
+  .btn:disabled, .btn:disabled:hover, .btn:disabled:active,
+  .btn.acento:disabled, .btn.acento:disabled:hover, .btn.acento:disabled:active,
+  .btn.discreto:disabled:hover, .btn.discreto:disabled:active {
+    color: var(--apoio); background: var(--superficie-2);
+    border-color: var(--linha-forte); border-style: dashed;
+    cursor: not-allowed; transform: none;
+  }
+  .acoes { display: flex; gap: var(--acoes-vao); align-items: center; flex-wrap: wrap; }
+
+  /* ---------------------------------------------------------------- aviso */
+  .aviso {
+    padding: var(--aviso-pad-y) var(--caixa-pad); border-radius: var(--raio-controle);
+    background: var(--falha-fundo); color: var(--texto); border-left: var(--aviso-marca) solid var(--falha);
+  }
+  /* "Aguarde": nao e erro, some sozinho. */
+  .aviso.neutro { background: var(--superficie-2); border-left-color: var(--apoio); }
+  /* Aviso junto do formulario que o causou. */
+  [data-aviso-de] { margin: var(--esp-3) 0 0; align-self: stretch; }
+
+  /* ---------------------------------------------------------------- trilha de passos */
+  .passos {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(var(--passos-colunas), 1fr); gap: var(--esp-1);
+    counter-reset: passo;
+  }
+  .passos li { counter-increment: passo; }
+  .passo-botao {
+    font: inherit; font-size: var(--tipo-meta); width: 100%; height: 100%; text-align: left;
+    padding: var(--controle-pad-y) var(--passo-botao-pad-x); border-radius: var(--raio-controle); cursor: pointer;
+    background: var(--superficie-2); border: var(--traco) solid var(--linha);
+    border-top: var(--marcador) solid var(--linha); color: var(--apoio);
+  }
+  .passo-botao::before { content: counter(passo) "  "; font-family: var(--familia-mono); }
+  .passo-botao:disabled { cursor: default; opacity: var(--passo-inativo-opacidade); }
+  .passos li.feito .passo-botao { border-top-color: var(--sucesso); color: var(--texto); }
+  .passos li.agora .passo-botao {
+    border-top-color: var(--agora); background: var(--superficie); color: var(--texto);
+    font-weight: var(--peso-forte);
+  }
+  @media (max-width: 760px) {
+    .passos { grid-template-columns: repeat(var(--passos-colunas-estreito), 1fr); }
+    .passo-botao { font-size: var(--tipo-meta); }
+  }
+
+  /* ---------------------------------------------------------------- selo */
+  .selo {
+    display: inline-block; padding: var(--selo-pad-y) var(--esp-2); border-radius: var(--raio-controle);
+    font-size: var(--tipo-meta); font-weight: var(--peso-forte); line-height: var(--entrelinha-folgada);
+    background: var(--superficie-2); color: var(--apoio); border: var(--traco) solid var(--linha);
+  }
+  .selo.internet { background: var(--superficie-2); color: var(--apoio); border: var(--traco) solid var(--linha); }
+
+  /* ---------------------------------------------------------------- fita */
+  /* A fita: cada posicao e uma etiqueta com o IP. A atual fica acesa. */
+  .fita {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--fita-casa-min), 1fr)); gap: var(--esp-1);
+  }
+  .fita li {
+    position: relative;
+    font-family: var(--familia-mono); font-size: var(--tipo-meta);
+    padding: var(--fita-pad-topo) var(--fita-pad-x) var(--fita-pad-base);
+    background: var(--superficie); border: var(--traco) solid var(--linha); border-radius: var(--raio-controle);
+    display: flex; flex-direction: column; gap: var(--fita-casa-vao);
+  }
+  .fita li .pos { font-family: var(--familia); font-size: var(--tipo-meta); color: var(--apoio); }
+  .fita li .motivo {
+    font-family: var(--familia); font-size: var(--tipo-meta); line-height: var(--entrelinha-motivo);
+    color: var(--apoio); overflow-wrap: anywhere;
+  }
+  .fita li .estado { font-weight: var(--peso-forte); }
+  .fita li.feita { background: var(--sucesso-fundo); border-color: transparent; }
+  .fita li.feita .estado { color: var(--sucesso); }
+  .fita li.falhou .estado { color: var(--falha); }
+  .fita li.proxima .estado { color: var(--texto); }
+  .fita li.pulada { color: var(--apoio); background: transparent; border-style: dashed; }
+  .fita li.falhou { background: var(--falha-fundo); border-color: var(--falha); }
+  .fita li.atual { background: var(--agora); border-color: var(--agora); color: var(--agora-texto); }
+  .fita li.atual .pos, .fita li.atual .motivo, .fita li.atual .estado { color: var(--agora-texto); }
+  /* A atual que falhou: vermelho, nao ambar ("acontecendo agora"). */
+  .fita li.atual.falhou { background: var(--falha); border-color: var(--falha); color: var(--superficie); }
+  .fita li.atual.falhou .pos, .fita li.atual.falhou .motivo, .fita li.atual.falhou .estado { color: var(--superficie); }
+  /* A proxima: borda mais grossa, padding encolhe o mesmo para a casa nao crescer. */
+  .fita li.proxima {
+    border-color: var(--agora); border-width: var(--traco-forte);
+    padding: calc(var(--fita-pad-topo) - var(--traco)) calc(var(--fita-pad-x) - var(--traco)) calc(var(--fita-pad-base) - var(--traco));
+  }
+
+  /* ---------------------------------------------------------------- etapas */
+  /* Etapas: sequencia real, por isso numerada. */
+  .etapas {
+    list-style: none; counter-reset: etapa;
+    display: grid; grid-template-columns: repeat(var(--etapas-colunas), 1fr); gap: var(--lista-vao);
+    padding: 0; margin: var(--esp-3) 0;
+  }
+  .etapas li {
+    counter-increment: etapa;
+    padding: var(--etapa-pad-y) var(--etapa-pad-x); border-radius: var(--raio-controle);
+    background: var(--superficie-2); border: var(--traco) solid var(--linha); color: var(--apoio);
+  }
+  .etapas li::before { content: counter(etapa) "  "; font-family: var(--familia-mono); }
+  .etapas li.feita { background: var(--sucesso-fundo); color: var(--texto); border-color: transparent; }
+  .etapas li.agora {
+    background: var(--agora); color: var(--agora-texto); border-color: var(--agora);
+    font-weight: var(--peso-forte);
+  }
+  /* Pulso da etapa atual: vai e volta (alternate) com ease-in-out, que e
+     simetrico; da o mesmo brilho de um ciclo 0 -> pico -> 0. */
+  @media (prefers-reduced-motion: no-preference) {
+    .etapas li.agora { animation: pulso var(--pulso-meia-volta) ease-in-out infinite alternate; }
+    @keyframes pulso { to { filter: brightness(var(--pulso-brilho)); } }
+  }
+  /* Movimento reduzido: o botao nao se mexe, o press vira um tom mais fundo e
+     o pulso da etapa atual para. */
+  @media (prefers-reduced-motion: reduce) {
+    .btn { transition-property: background-color, border-color, color; }
+    .btn:active { transform: none; background: var(--controle-press-reduzido); }
+    .btn.discreto:active { background: var(--discreto-press-reduzido); }
+    .btn.acento:active { background: var(--acao-press-reduzido); border-color: var(--acao-press-reduzido); }
+    .etapas li.agora { animation: none; }
+  }
+  @media (max-width: 760px) {
+    .etapas { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ---------------------------------------------------------------- tabela */
+  .tabela-rolagem {
+    overflow-x: auto; background: var(--superficie);
+    border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
+  }
+  .tabela { width: 100%; border-collapse: collapse; font-size: var(--tipo-corpo); }
+  .tabela th {
+    text-align: left; font-weight: var(--peso-forte); font-size: var(--tipo-meta); color: var(--apoio);
+    padding: var(--celula-cab-pad-y) var(--esp-3); border-bottom: var(--traco) solid var(--linha); white-space: nowrap;
+  }
+  .tabela td {
+    padding: var(--esp-2) var(--esp-3); border-bottom: var(--traco) solid var(--linha);
+    vertical-align: top; overflow-wrap: anywhere;
+  }
+  .tabela tr:last-child td { border-bottom: 0; }
+  .tabela tr:hover td { background: var(--superficie-2); }
+  .tabela td.mono { white-space: nowrap; }
+  .tabela .enc-sec { color: var(--apoio); }
+  .sit { font-weight: var(--peso-forte); }
+  .sit.Instalada { color: var(--sucesso); }
+  .sit.Falhou { color: var(--falha); }
+  .sit.Resetada { color: var(--apoio); }
+  .sit-detalhe {
+    display: block; font-weight: var(--peso-normal); color: var(--apoio);
+    font-size: var(--tipo-meta); max-width: var(--medida-detalhe);
+  }
+
+  /* ---------------------------------------------------------------- controle segmentado */
+  /* Tema: grupo de radio com cara de controle segmentado. O radio fica na tela
+     (so invisivel), entao setas, Tab e leitor de tela funcionam como radio. */
+  .tema {
+    border: 0; padding: 0; margin: 0; background: transparent;
+    display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
+  }
+  .tema legend {
+    float: left; padding: 0; margin-right: var(--esp-1);
+    font-family: var(--familia); font-weight: var(--peso-medio); font-size: var(--tipo-corpo);
+  }
+  .segmentos {
+    display: inline-flex; border: var(--traco) solid var(--linha-forte);
+    border-radius: var(--raio-controle); overflow: hidden;
+  }
+  .segmentos label {
+    position: relative; flex-direction: row; align-items: center;
+    padding: var(--campo-pad-y) var(--controle-pad-x);
+    min-height: calc(var(--controle-altura) - var(--traco) - var(--traco));
+    font-size: var(--tipo-corpo); color: var(--texto); cursor: pointer;
+    background: var(--superficie);
+  }
+  .segmentos label + label { border-left: var(--traco) solid var(--linha-forte); }
+  .segmentos input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+  .segmentos label:hover { background: var(--superficie-2); }
+  .segmentos label:has(input:checked) { background: var(--texto); color: var(--superficie); font-weight: var(--peso-forte); }
+  .segmentos label:has(input:focus-visible) {
+    outline: var(--foco-espessura) solid var(--foco); outline-offset: calc(-1 * var(--segmento-foco-recuo));
+    box-shadow: inset 0 0 0 var(--segmento-foco-recuo) var(--foco-halo);
+  }
+
+  /* ---------------------------------------------------------------- log */
+  .log-linhas {
+    height: var(--log-altura); overflow-y: auto; margin-top: var(--log-recuo);
+    background: var(--superficie-2); border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
+    padding: var(--esp-2) var(--log-pad-x); font-size: var(--tipo-mini); line-height: var(--entrelinha-folgada);
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .log-linhas .ts { color: var(--apoio); margin-right: var(--log-hora-vao); }
+  .log-linhas .Red { color: var(--falha); }
+  .log-linhas .Green { color: var(--sucesso); }
+  .log-linhas .Yellow, .log-linhas .DarkYellow { color: var(--atencao); }
+  .log-linhas .Cyan { color: var(--texto); font-weight: var(--peso-negrito); }
+  .log-linhas .DarkGray, .log-linhas .Gray { color: var(--apoio); }
+
+  /* ---------------------------------------------------------------- faixa de atualizacao */
+  /* Versao nova no GitHub: discreta, acima do topo. */
+  .atualizacao {
+    display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
+    padding: var(--atualizacao-pad-y) var(--esp-4); font-size: var(--tipo-corpo);
+    background: var(--atencao-fundo); border-bottom: var(--traco) solid var(--linha);
+  }
+  .atualizacao.erro { background: var(--falha-fundo); }
+  .atualizacao .btn { padding: var(--atualizacao-botao-pad-y) var(--atualizacao-botao-pad-x); }
+  .atualizacao a { color: inherit; }
+}

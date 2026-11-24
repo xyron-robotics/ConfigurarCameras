@@ -1,0 +1,72 @@
+/* Base do painel: reset, html/body, tipo, links, foco e o que so o leitor de
+   tela le. Seletor de elemento e utilitario de uma classe; nada de tela. */
+
+@layer base {
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: var(--familia);
+    font-size: var(--tipo-leitura);
+    line-height: var(--entrelinha-corpo);
+    color: var(--texto);
+    background: var(--fundo);
+    min-height: var(--altura-tela);
+  }
+  [hidden] { display: none !important; }
+  .mono { font-family: var(--familia-mono); font-size: var(--tipo-mono); }
+  /* Texto de ajuda: linha de leitura curta. */
+  .apoio { color: var(--apoio); margin: var(--esp-1) 0; max-width: var(--medida-texto); }
+  .nota { color: var(--apoio); font-size: var(--tipo-meta); margin: var(--esp-2) 0 0; max-width: var(--medida-texto); }
+  /* Um tamanho por nivel, h1 > h2 > h3 (h1 e a marca no topo). */
+  h1, h2, h3 { font-family: var(--familia-titulo); font-weight: var(--peso-forte); margin: 0; }
+  h2 { font-size: var(--tipo-titulo); letter-spacing: var(--tracking-titulo); margin-bottom: var(--esp-2); }
+  h3 { font-size: var(--tipo-h3); margin-bottom: var(--esp-1); }
+  /* Link em texto: sublinhado discreto, ganha a cor do texto no hover. */
+  a { color: inherit; text-decoration-color: var(--linha); text-underline-offset: var(--sublinhado-recuo); }
+  a:hover { text-decoration-color: currentColor; }
+
+  /* Anel duplo: o contorno na cor do texto aparece em qualquer fundo (inclusive
+     no botao ambar); o halo ambar marca a identidade. */
+  :focus-visible {
+    outline: var(--foco-espessura) solid var(--foco);
+    outline-offset: var(--foco-recuo);
+    box-shadow: 0 0 0 var(--foco-halo-espessura) var(--foco-halo);
+  }
+
+  /* Pular para o conteudo: primeiro Tab da pagina; so aparece com foco. */
+  .pular {
+    position: absolute; left: var(--esp-3); top: calc(-1 * var(--esp-7)); z-index: var(--z-pular);
+    padding: var(--controle-pad-y) var(--controle-pad-x); border-radius: var(--raio-controle);
+    background: var(--texto); color: var(--superficie); font-weight: var(--peso-forte); text-decoration: none;
+  }
+  .pular:focus-visible { top: var(--esp-2); }
+  /* main (tabindex -1) so mostra o anel quando chega pelo teclado, via "Pular
+     para o conteudo"; clique de mouse nao casa :focus-visible. */
+  main:focus-visible { outline-offset: calc(-1 * var(--foco-recuo)); }
+
+  /* Rolagem elastica da pagina so some com mouse/touchpad; toque mantem o padrao. */
+  @media (pointer: fine) { html { overscroll-behavior: none; } }
+
+  /* Clique sem atraso de toque duplo; o flash de toque e escolhido, nao o azul padrao. */
+  button, .btn, a, label, summary, select, input[type="radio"], input[type="checkbox"] { touch-action: manipulation; }
+  html { -webkit-tap-highlight-color: var(--toque); }
+
+  /* Numero que muda ou se compara em coluna: digitos de largura igual. */
+  .mono, .tabela, .fita, .resumo-secao dd, .resultado dd, .bancada-pos, .placa { font-variant-numeric: tabular-nums; }
+  h1, h2, h3, legend { text-wrap: balance; }
+
+  /* Ancoras abaixo da faixa de simulacao (sticky). */
+  .secao, .passo, .bancada, input, select, button, a, summary { scroll-margin-top: var(--ancora-recuo); }
+
+  /* Fora da tela, lido pelo leitor de tela. */
+  .so-leitor {
+    position: absolute; width: var(--recorte-oculto); height: var(--recorte-oculto);
+    margin: calc(-1 * var(--recorte-oculto)); padding: 0; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  progress {
+    display: block; width: 100%; max-width: var(--progresso-max); height: var(--progresso-altura);
+    margin-top: var(--progresso-recuo); accent-color: var(--agora);
+  }
+}

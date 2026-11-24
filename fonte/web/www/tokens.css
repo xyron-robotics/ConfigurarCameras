@@ -1,0 +1,242 @@
+@layer tokens, base, componentes, telas;
+
+/* Tokens do painel ConfigurarCameras. Unico arquivo do www com cor, medida,
+   numero e duracao (direcao.md, secao 7; fonte/Testes-Front.ps1 guarda isso).
+   Valores de hoje: grafite neutro + ambar de rotuladora para o que esta
+   acontecendo agora; verde e vermelho so com sentido (ok / falha). A frente 2
+   do redesenho troca valores, nao nomes.
+   Nome pelo papel da direcao (secoes 4.2 a 4.4); valor de hoje sem papel na
+   direcao leva o comentario "legado: sai na frente 2".
+   As quebras do @media nao aceitam var(): o teste le esta linha.
+   quebras: 760px */
+
+@layer tokens {
+  /* Tema: light-dark(claro, escuro) segue o color-scheme. Sem data-tema (ou
+     data-tema="sistema") vale o do Windows; o servidor poe data-tema no <html>
+     quando o operador forca Claro ou Escuro em Opcoes (sem flash, sem script
+     inline). Edge >= 123. */
+  :root {
+    color-scheme: light dark;
+
+    /* ---- cor: superficie, texto e linha */
+    --fundo: light-dark(#E9ECEE, #191C1E);
+    --superficie: light-dark(#FFFFFF, #23272A);
+    --superficie-2: light-dark(#F4F6F7, #1E2224);
+    --texto: light-dark(#262B2E, #E4E7E9);
+    /* --apoio contra fundo, sup, sup-2 e acento-fraco: claro 5.02 / 5.95 / 5.49 / 5.20,
+       escuro 6.68 / 5.87 / 6.25 / 5.08 (WCAG, todos >= 4.5:1). */
+    --apoio: light-dark(#5C656B, #9AA3A9);
+    /* Linha translucida: some no fundo que estiver embaixo, nos dois temas. */
+    --linha: color-mix(in oklab, var(--texto) 12%, transparent);
+    /* Borda de campo: 3:1 contra a superficie (WCAG 1.4.11). */
+    --linha-forte: light-dark(#7E878D, #7A8389);
+
+    /* ---- cor: acao, agora e foco (hoje o mesmo ambar faz os tres papeis) */
+    --acao: #E0A21B;
+    --acao-rotulo: #2A2206;
+    --acao-hover: color-mix(in oklab, var(--acao) 86%, var(--texto));
+    --agora: #E0A21B;
+    --agora-texto: #2A2206; /* legado: sai na frente 2 */
+    --agora-fundo: light-dark(#FBEFCF, #3A3014); /* legado: sai na frente 2 */
+    /* Texto sobre --agora-fundo: escuro no claro; no escuro o fundo ja e escuro. */
+    --agora-fundo-texto: light-dark(#2A2206, #E4E7E9); /* legado: sai na frente 2 */
+    /* Anel duplo: o contorno na cor do texto aparece em qualquer fundo (inclusive
+       no botao ambar); o halo ambar marca a identidade. */
+    --foco: var(--texto);
+    --foco-halo: #E0A21B; /* legado: sai na frente 2 */
+    /* Flash de toque escolhido, nao o azul padrao. */
+    --toque: color-mix(in oklab, var(--acao) 30%, transparent); /* legado: sai na frente 2 */
+
+    /* ---- cor: estado */
+    --sucesso: light-dark(#2A7146, #5DBB83);
+    --sucesso-fundo: light-dark(#DDEFE3, #1E3527); /* legado: sai na frente 2 */
+    --falha: light-dark(#B3362B, #E86C60);
+    --falha-fundo: light-dark(#F6DEDB, #3D2220);
+    --atencao: light-dark(#8A6408, #E9BD58);
+    --atencao-fundo: light-dark(#FBEFCF, #3A3014);
+    --atencao-fundo-texto: light-dark(#2A2206, #E4E7E9); /* legado: sai na frente 2 */
+    --pulada: light-dark(#8A9297, #6E777C); /* legado: sai na frente 2 */
+
+    /* ---- cor: faixa de simulacao (legado: sai na frente 2, vira chip) */
+    --simulacao: #E0A21B;
+    /* Segunda listra da faixa de simulacao. */
+    --simulacao-listra: #EDBB45;
+    --simulacao-texto: #2A2206;
+
+    /* ---- cor: hover e press do botao. Sobem o contraste em relacao ao repouso
+       (legado: sai na frente 2) */
+    --controle-hover: color-mix(in oklab, var(--superficie-2) 90%, var(--texto));
+    --controle-press: color-mix(in oklab, var(--superficie-2) 82%, var(--texto));
+    --controle-press-reduzido: color-mix(in oklab, var(--superficie-2) 74%, var(--texto));
+    --discreto-hover: color-mix(in oklab, transparent 90%, var(--texto));
+    --discreto-press-reduzido: color-mix(in oklab, transparent 82%, var(--texto));
+    --acao-press-reduzido: color-mix(in oklab, var(--acao) 76%, var(--texto));
+
+    /* ---- tipo */
+    --familia: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    --familia-titulo: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; /* legado: sai na frente 2 */
+    --familia-mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+    --tipo-meta: 13px;
+    --tipo-corpo: 14px;
+    --tipo-leitura: 15px;
+    --tipo-subtitulo: 17px;
+    --tipo-titulo: 21px;
+    --tipo-numero: 24px;
+    --tipo-mini: 12.5px; /* legado: sai na frente 2 (linhas do log) */
+    --tipo-dado: 13.5px; /* legado: sai na frente 2 (valor do resumo) */
+    --tipo-h3: 16px; /* legado: sai na frente 2 */
+    --tipo-encerrado: 18px; /* legado: sai na frente 2 */
+    --tipo-destino: 20px; /* legado: sai na frente 2 (IP de destino da bancada) */
+    --tipo-marca: 24px; /* legado: sai na frente 2 (nome no topo) */
+    --tipo-mono: 0.92em; /* legado: sai na frente 2 (mono no meio do texto) */
+    --peso-normal: 400;
+    --peso-forte: 600;
+    --peso-medio: 500; /* legado: sai na frente 2 */
+    --peso-negrito: 700; /* legado: sai na frente 2 */
+    --entrelinha-corpo: 1.45;
+    --entrelinha-marca: 1.2; /* legado: sai na frente 2 */
+    --entrelinha-motivo: 1.3; /* legado: sai na frente 2 */
+    --entrelinha-folgada: 1.5; /* legado: sai na frente 2 (selo, log) */
+    --tracking-titulo: -0.015em; /* legado: sai na frente 2 */
+    /* Texto de ajuda: linha de leitura curta. */
+    --medida-texto: 64ch;
+    --medida-detalhe: 28ch; /* legado: sai na frente 2 */
+    --sublinhado-recuo: 3px; /* legado: sai na frente 2 */
+
+    /* ---- espaco: passos de 4 px */
+    --esp-1: 4px;
+    --esp-2: 8px;
+    --esp-3: 12px;
+    --esp-4: 16px;
+    --esp-5: 24px;
+    --esp-6: 32px;
+    --esp-7: 48px;
+
+    /* ---- espaco fora da escala de 4 px (legado: sai na frente 2) */
+    --pagina-margem: 1.25rem;
+    --tela-vao: 1.25rem;
+    --titulo-apoio-recuo: 1.1rem;
+    --secao-apoio-recuo: 0.3rem;
+    /* Ancoras abaixo da faixa de simulacao (sticky): ~2.3rem numa linha, ~3.6rem
+       quando a falha simulada quebra para a segunda. */
+    --ancora-recuo: 4.5rem;
+    --controle-pad-y: 0.45rem;
+    --controle-pad-x: 0.9rem;
+    --campo-pad-y: 0.4rem;
+    --campo-pad-x: 0.55rem;
+    --campo-foco-recuo: 1px;
+    --rotulo-vao: 0.2rem;
+    --legenda-pad-x: 0.3rem;
+    --campos-vao-y: 0.6rem;
+    --campos-vao-x: 0.9rem;
+    --acoes-vao: 0.6rem;
+    --caixa-pad-y: 0.7rem;
+    --caixa-pad: 0.9rem;
+    --aviso-pad-y: 0.6rem;
+    --aviso-curto-pad-x: 0.8rem;
+    --faixa-pad-y: 0.45rem;
+    --faixa-placa-pad-y: 0.05rem;
+    --faixa-encoder-recuo: 0.45rem;
+    --passo-botao-pad-x: 0.6rem;
+    --topo-pad-y: 0.7rem;
+    --placa-vao: 0.45rem;
+    --placa-item-vao: 0.7rem;
+    --placa-corpo-vao: 0.15rem;
+    --selo-pad-y: 1px;
+    --menu-vao: 2px;
+    --menu-estreito-pad: 0.4rem;
+    --lista-vao: 6px;
+    --lista-def-vao-y: 0.2rem;
+    --lista-def-vao-x: 0.7rem;
+    --lista-def-recuo: 0.4rem;
+    --resultado-vao-y: 0.3rem;
+    --fita-pad-topo: 0.4rem;
+    --fita-pad-x: 0.55rem;
+    --fita-pad-base: 0.35rem;
+    --fita-casa-vao: 1px;
+    --etapa-pad-y: 0.55rem;
+    --etapa-pad-x: 0.7rem;
+    --celula-cab-pad-y: 0.55rem;
+    --bancada-pos-recuo: 0.1rem;
+    --bancada-form-recuo: 0.9rem;
+    --vigia-recuo: 1.1rem;
+    --vigia-pad-base: 0.9rem;
+    --retomar-recuo: 0.4rem;
+    --log-recuo: 0.4rem;
+    --log-pad-x: 0.7rem;
+    --log-hora-vao: 0.6rem;
+    --atualizacao-pad-y: 0.4rem;
+    --atualizacao-botao-pad-y: 0.2rem;
+    --atualizacao-botao-pad-x: 0.7rem;
+    --progresso-recuo: 0.4rem;
+
+    /* ---- medidas fixas de layout */
+    --altura-tela: 100vh;
+    --topo-altura: 3.5rem;
+    --conteudo-max: 76rem;
+    --coluna-form: 52rem;
+    /* Altura de botao e campo: painel de mouse, nao precisa de 44/48. */
+    --controle-altura: 38px;
+    --recorte-oculto: 1px;
+    --menu-largura: 11rem; /* legado: sai na frente 2 */
+    --campo-base: 9rem; /* legado: sai na frente 2 */
+    --cartao-campo-base: 6rem; /* legado: sai na frente 2 */
+    --campos-coluna-min: 13rem; /* legado: sai na frente 2 */
+    --bloco-coluna-min: 16rem; /* legado: sai na frente 2 */
+    --retomar-campo-max: 16rem; /* legado: sai na frente 2 */
+    --cartao-min: 19rem; /* legado: sai na frente 2 */
+    --fita-casa-min: 8.5rem; /* legado: sai na frente 2 */
+    --log-altura: 15rem; /* legado: sai na frente 2 */
+    --progresso-max: 32rem; /* legado: sai na frente 2 */
+    --progresso-altura: 0.6rem; /* legado: sai na frente 2 */
+    --luz-tamanho: 10px; /* legado: sai na frente 2 */
+    --engrenagem-largura: 1.1em; /* legado: sai na frente 2 */
+    /* Listras da faixa de simulacao (legado: sai na frente 2). */
+    --listra-angulo: -45deg;
+    --listra: 14px;
+    --listra-dupla: 28px;
+
+    /* ---- traco */
+    --traco: 1px;
+    --foco-espessura: 2px;
+    --foco-recuo: 2px;
+    --traco-forte: 2px; /* legado: sai na frente 2 */
+    --foco-halo-espessura: 2px; /* legado: sai na frente 2 */
+    --marcador: 3px; /* legado: sai na frente 2 (aba e passo ativos) */
+    --aviso-marca: 4px; /* legado: sai na frente 2 */
+    --segmento-foco-recuo: 4px; /* legado: sai na frente 2 */
+    --destaque-lateral: 6px; /* legado: sai na frente 2 */
+
+    /* ---- raio: --raio-controle em controle, fita e etapas; --raio-bloco em cartao */
+    --raio-controle: 4px;
+    --raio-bloco: 8px;
+    --raio-selo: 999px;
+    --raio-circulo: 50%; /* legado: sai na frente 2 */
+
+    /* ---- grade */
+    --passos-colunas: 7; /* legado: sai na frente 2 */
+    --passos-colunas-estreito: 4; /* legado: sai na frente 2 */
+    --etapas-colunas: 4; /* legado: sai na frente 2 */
+    --encoder-colunas: 2; /* legado: sai na frente 2 */
+    --campos-duplo: 2; /* legado: sai na frente 2 */
+
+    /* ---- sobreposicao (legado: sai na frente 2) */
+    --z-faixa: 20;
+    --z-encerrado: 50;
+    --z-pular: 60;
+
+    /* ---- movimento: entra devagar, sai rapido, o press e o mais curto */
+    --dur-rapida: 90ms;
+    --dur-media: 150ms;
+    --dur-saida: 120ms; /* legado: sai na frente 2 */
+    --curva: cubic-bezier(.2, .8, .2, 1);
+    --press-desce: 1px; /* legado: sai na frente 2 */
+    --press-escala: .985; /* legado: sai na frente 2 */
+    /* Pulso da etapa atual: meia volta de 1,6 s em vai e volta (3,2 s a volta). */
+    --pulso-meia-volta: 1.6s; /* legado: sai na frente 2 */
+    --pulso-brilho: 1.12; /* legado: sai na frente 2 */
+    --passo-inativo-opacidade: 0.7; /* legado: sai na frente 2 */
+  }
+  :root[data-tema="claro"] { color-scheme: light; }
+  :root[data-tema="escuro"] { color-scheme: dark; }
+}
