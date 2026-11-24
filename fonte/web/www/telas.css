@@ -159,8 +159,6 @@
   }
   .vigia-cabeca { display: flex; align-items: center; gap: var(--esp-2); }
   .vigia-cabeca h3 { margin: 0; }
-  /* Vigia ligado e "agora" (direcao 4.2), nao "concluido": a luz e azul-500. */
-  .vigia .luz.ok { background: var(--agora); }
   .vigia .apoio { max-width: var(--medida-texto); }
   .bancada .vigia form { margin-top: var(--esp-2); }
   .retomar { margin-top: var(--esp-3); }

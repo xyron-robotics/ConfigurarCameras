@@ -12,6 +12,29 @@ import {
   S, $, exigir, comando, naTela, mostrarAviso, mostrarTelaFim, barraProgresso, streamsEncoder,
 } from './legado-estado.js';
 
+// ------------------------------------------------------------------ significado
+// A classe diz o significado, nunca a cor (direcao 4.2): vermelho so falha que
+// pede voce, ambar so atencao, verde concluido, azul-500 o que esta em curso,
+// cinza o resto, inclusive simulacao. Sem classe = cinza.
+// O log traz a cor do console (Write-Log); a linha leva a classe do significado.
+const SIGNIFICADO_DO_CONSOLE = Object.freeze({
+  Red: 'falha', Green: 'sucesso', Yellow: 'atencao', DarkYellow: 'atencao',
+  DarkGray: 'neutro', Cyan: 'destaque',
+});
+// Situacao gravada no registro (coluna Status do CSV).
+const SIGNIFICADO_DA_SITUACAO = Object.freeze({ Instalada: 'sucesso', Falhou: 'falha', Resetada: 'neutro' });
+
+// Luz da placa (direcao 5.9): cinza na simulacao ou sem sessao; vermelha quando
+// pede acao (faixas faltando, placa ausente, sem cabo); verde so preparada e ok.
+function significadoDaPlaca(rede) {
+  if (rede.semSessao || (S.estado && S.estado.simular)) return '';
+  const placa = rede.placa || {};
+  if (!rede.ok || placa.presente === false || placa.cabo === false) return 'falha';
+  return rede.preparada ? 'sucesso' : '';
+}
+
+function classeLuz(significado) { return significado ? 'luz ' + significado : 'luz'; }
+
 // ------------------------------------------------------------------ log
 export function anexarLog(entrada) {
   // Duas buscas em voo podem trazer a mesma linha: so entra o que e mais novo que o cursor.
@@ -20,7 +43,7 @@ export function anexarLog(entrada) {
   const caixa = $('log');
   const noFim = caixa.scrollHeight - caixa.scrollTop - caixa.clientHeight < LOG_FOLGA_FIM;
   for (const l of linhas) {
-    caixa.append(h('div', { class: l.cor }, [h('span', { class: 'ts' }, String(l.ts).slice(LOG_INICIO_HORA)), l.msg]));
+    caixa.append(h('div', { class: SIGNIFICADO_DO_CONSOLE[l.cor] || null }, [h('span', { class: 'ts' }, String(l.ts).slice(LOG_INICIO_HORA)), l.msg]));
   }
   while (caixa.childElementCount > LOG_MAX_LINHAS) caixa.firstElementChild.remove();
   if (noFim) caixa.scrollTop = caixa.scrollHeight;
@@ -31,9 +54,9 @@ export function anexarLog(entrada) {
 export function desenharPlaca(rede) {
   const luz = $('placa-luz');
   const txt = $('placa-texto');
-  if (rede.semSessao) { luz.className = 'luz'; txt.textContent = t('barra.placa-sem-sessao'); return; }
+  luz.className = classeLuz(significadoDaPlaca(rede));
+  if (rede.semSessao) { txt.textContent = t('barra.placa-sem-sessao'); return; }
   const nome = rede.placa && rede.placa.nome ? rede.placa.nome : t('barra.placa-generica');
-  luz.className = 'luz ' + (rede.ok ? 'ok' : 'falta');
   if (rede.placa && rede.placa.presente === false) {
     txt.textContent = t('barra.placa-ausente', { nome });
     return;
@@ -63,7 +86,7 @@ export function desenharAtualizacao(a, e) {
   if (estadoA === 'instalando') { mostrarTelaFim('atualizando'); }
   if (!['disponivel', 'baixando', 'verificando', 'instalando', 'erro'].includes(estadoA)) { faixa.hidden = true; return; }
   faixa.hidden = false;
-  faixa.classList.toggle('erro', estadoA === 'erro');
+  faixa.classList.toggle('falha', estadoA === 'erro');
   notas.hidden = !a.pagina;
   if (a.pagina) notas.href = a.pagina;
   let motivo = '';
@@ -92,15 +115,16 @@ export function desenharAtualizacao(a, e) {
   btn.title = motivo;
 }
 
-// Luz da internet: verde ok, vermelha "caiu depois do preparo" (culpa do
-// painel), cinza quando ja estava sem antes ou ainda nao foi testada.
+// Luz da internet (direcao 5.9): vermelha so em "caiu depois do preparo"
+// (culpa do painel, pede Restaurar DHCP); cinza no resto, inclusive "ok" (a
+// palavra diz o estado).
 export function desenharInternet(net, rede) {
   const luz = $('internet-luz');
   const txt = $('internet-texto');
-  if (net.agora === 'ok') { luz.className = 'luz ok'; txt.textContent = t('barra.internet-ok'); return; }
+  if (net.agora === 'ok') { luz.className = 'luz'; txt.textContent = t('barra.internet-ok'); return; }
   if (net.agora === 'sem') {
     if (net.antes === 'ok' && rede.preparada) {
-      luz.className = 'luz falta';
+      luz.className = classeLuz('falha');
       txt.textContent = t('barra.internet-caiu');
     } else {
       luz.className = 'luz';
@@ -485,7 +509,7 @@ export function desenharVigia(e, visivel) {
   const v = e.vigia || {};
   const f = $('form-vigia').elements;
   const ip = S.ipFabrica || t('vigia.ip-generico');
-  $('vigia-luz').className = 'luz' + (v.ligado ? ' ok' : '');
+  $('vigia-luz').className = classeLuz(v.ligado ? 'agora' : '');
   $('vigia-estado').textContent = v.ligado ? t('vigia.ligado') : t('vigia.desligado');
   $('btn-vigia').textContent = v.ligado ? t('vigia.desligar') : t('vigia.ligar');
   f.broadcast.disabled = !!v.ligado;
@@ -579,7 +603,7 @@ export async function carregarRegistro() {
         h('td', MONO, c.Ip),
         h('td', MONO, formatarMac(c.Mac)),
         h('td', { translate: 'no' }, c.Modelo || ''),
-        h('td', null, [h('span', { class: 'sit ' + c.Status }, c.Status), detalhe ? h('span', { class: 'sit-detalhe' }, detalhe) : null]),
+        h('td', null, [h('span', { class: ['sit', SIGNIFICADO_DA_SITUACAO[c.Status]] }, c.Status), detalhe ? h('span', { class: 'sit-detalhe' }, detalhe) : null]),
         h('td', MONO, enc ? [h('div', null, t('registro.principal', { texto: enc.principal })),
           h('div', { class: 'enc-sec' }, t('registro.secundario', { texto: enc.secundario }))] : null),
         h('td', null, c.Local || ''),

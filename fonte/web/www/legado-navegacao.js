@@ -167,7 +167,7 @@ export function buscarEstado() {
     } catch (e) {
       if (S.atualizando) { mostrarTelaFim('atualizando'); return; }
       $('placa-texto').textContent = t('barra.sem-resposta');
-      $('placa-luz').className = 'luz falta';
+      $('placa-luz').className = 'luz falha';
       return;
     }
     S.estado = dados.estado;

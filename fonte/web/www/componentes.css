@@ -22,8 +22,10 @@
     width: var(--esp-3); height: var(--esp-3); border-radius: var(--raio-selo);
     background: var(--linha-forte); flex: none;
   }
-  .luz.ok { background: var(--sucesso); }
-  .luz.falta { background: var(--falha); }
+  /* A classe e o significado (o JS escolhe); a palavra ao lado diz o estado. */
+  .luz.sucesso { background: var(--sucesso); }
+  .luz.falha { background: var(--falha); }
+  .luz.agora { background: var(--agora); }
 
   /* ---------------------------------------------------------------- campos */
   /* Rotulo visivel acima, 13 com peso 600, nunca caixa alta (direcao 4.3). */
@@ -248,9 +250,9 @@
   .tabela tr:hover td { background: var(--superficie-2); }
   .tabela td.mono { white-space: nowrap; }
   .sit { font-weight: var(--peso-forte); }
-  .sit.Instalada { color: var(--sucesso); }
-  .sit.Falhou { color: var(--falha); }
-  .sit.Resetada { color: var(--apoio); }
+  .sit.sucesso { color: var(--sucesso); }
+  .sit.falha { color: var(--falha); }
+  .sit.neutro { color: var(--apoio); }
   .sit-detalhe {
     display: block; font-weight: var(--peso-normal); color: var(--apoio);
     font-size: var(--tipo-meta);
@@ -294,16 +296,17 @@
     padding: var(--esp-2) var(--esp-3); font-size: var(--tipo-meta); line-height: var(--entrelinha-corpo);
     white-space: pre-wrap; overflow-wrap: anywhere;
   }
-  /* Linha do log e texto corrido: sempre em --texto (7:1). A cor do console vira
-     uma barra a esquerda da linha (decisao do usuario, 24/11); Gray e a cor
-     normal do console, sem barra. DarkGray (simulacao, detalhe) em cinza. */
+  /* Linha do log e texto corrido: sempre em --texto (7:1). O significado da
+     linha vira uma barra a esquerda (decisao do usuario, 24/11); a palavra da
+     mensagem (FALHOU, ATENCAO, PULADA...) diz o estado. Sem classe: sem barra.
+     neutro (simulacao, detalhe) em cinza; destaque so peso. */
   .log-linhas > div { color: var(--texto); padding-left: var(--esp-2); border-left: var(--barra-mini) solid transparent; }
   .log-linhas .ts { color: var(--apoio); margin-right: var(--esp-2); }
-  .log-linhas .Red { border-left-color: var(--falha); }
-  .log-linhas .Green { border-left-color: var(--sucesso); }
-  .log-linhas .Yellow, .log-linhas .DarkYellow { border-left-color: var(--atencao); }
-  .log-linhas .Cyan { font-weight: var(--peso-forte); }
-  .log-linhas .DarkGray { border-left-color: var(--apoio); }
+  .log-linhas .falha { border-left-color: var(--falha); }
+  .log-linhas .sucesso { border-left-color: var(--sucesso); }
+  .log-linhas .atencao { border-left-color: var(--atencao); }
+  .log-linhas .destaque { font-weight: var(--peso-forte); }
+  .log-linhas .neutro { border-left-color: var(--apoio); }
 
   /* ---------------------------------------------------------------- faixa de atualizacao */
   /* Versao nova no GitHub: informacao, em --superficie-2 (direcao 5.7). */
@@ -312,6 +315,6 @@
     padding: var(--esp-2) var(--esp-4); font-size: var(--tipo-corpo);
     background: var(--superficie-2); border-bottom: var(--traco) solid var(--linha);
   }
-  .atualizacao.erro { background: var(--falha-fundo); }
+  .atualizacao.falha { background: var(--falha-fundo); }
   .atualizacao .btn { padding: var(--esp-1) var(--esp-3); }
 }
