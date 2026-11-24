@@ -56,11 +56,22 @@ Source: "{#Raiz}\fonte\INICIAR-PAINEL-COM-CONSOLE.bat"; DestDir: "{app}"; Flags:
 Source: "icone.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\Servidor-Painel.ps1"; DestDir: "{app}\web"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\index.html"; DestDir: "{app}\web\www"; Flags: ignoreversion
-Source: "{#Raiz}\fonte\web\www\app.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\tokens.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\base.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\componentes.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\telas.css"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\app.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\api.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\textos.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\formato.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\constantes.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\dom.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\legado-estado.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\legado-formularios.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\legado-ligacoes.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\legado-marcacao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\legado-navegacao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\legado-painel.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\LEIA-ME.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\API-INTELBRAS.md"; DestDir: "{app}"; Flags: ignoreversion
 

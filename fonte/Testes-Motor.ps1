@@ -2970,18 +2970,23 @@ T 'Tema: data-tema entra so no <html> do index.html real, e o servidor tem as ro
     foreach ($rota in @("'GET /api/tema'", "'PUT /api/tema'", 'Add-TemaNoHtml')) { Assert-Verdade ($txt.Contains($rota)) ('servidor tem ' + $rota) }
 }
 
-T 'Front paralelo: app.js e index.html reais sem textos do modo serial nem a fase escolher; cartao manda /api/camera' {
-    $js = [IO.File]::ReadAllText((Join-Path $raiz 'web\www\app.js'), [Text.Encoding]::UTF8)
-    $html = [IO.File]::ReadAllText((Join-Path $raiz 'web\www\index.html'), [Text.Encoding]::UTF8)
+T 'Front paralelo: .js e .html reais do www sem textos do modo serial nem a fase escolher; cartao manda /api/camera' {
+    # Todos os modulos do www (app.js, textos.js, legado-*.js...) e o index.html, juntos.
+    $www = Join-Path $raiz 'web\www'
+    $lerTodos = { param($filtro) (@(Get-ChildItem -LiteralPath $www -File -Filter $filtro | Sort-Object Name |
+        ForEach-Object { [IO.File]::ReadAllText($_.FullName, [Text.Encoding]::UTF8) }) -join "`n") }
+    $js = & $lerTodos '*.js'
+    $html = & $lerTodos '*.html'
+    Assert-Verdade ($js.Contains('textos.js') -and $html.Contains('<html lang="pt-BR">')) 'leu os modulos e o index.html'
     # Acentos por [char]: este arquivo e ASCII e o PowerShell 5.1 o le como ANSI.
     $proibidos = @(('Tire a c' + [char]0xE2 + 'mera anterior'), ('Em pausa at' + [char]0xE9 + ' voc' + [char]0xEA + ' resolver'),
                    'somam 1', '/api/escolher', 'bancada-escolha')
     foreach ($p in $proibidos) {
-        Assert-Falso ($js.Contains($p)) ('app.js sem ' + $p)
-        Assert-Falso ($html.Contains($p)) ('index.html sem ' + $p)
+        Assert-Falso ($js.Contains($p)) ('.js do www sem ' + $p)
+        Assert-Falso ($html.Contains($p)) ('.html do www sem ' + $p)
     }
-    Assert-Verdade ($js.Contains('/api/camera')) 'app.js manda /api/camera'
-    Assert-Verdade ($js.Contains('por broadcast')) 'app.js tem o texto do vigia paralelo'
+    Assert-Verdade ($js.Contains('/api/camera')) '.js do www manda /api/camera'
+    Assert-Verdade ($js.Contains('por broadcast')) '.js do www tem o texto do vigia paralelo'
 }
 
 # ------------------------------------------------------------------- resultado
