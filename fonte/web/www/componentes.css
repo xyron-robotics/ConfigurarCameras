@@ -1,60 +1,58 @@
 /* Componentes do painel: faixa, luz, campo, botao, aviso, trilha de passos,
    selo, fita, etapas, tabela, controle segmentado e log. Uma classe por peca;
-   a tela so posiciona (telas.css). */
+   a tela so posiciona (telas.css). Cores pelo significado (direcao 4.2):
+   --acao acao, --agora em curso, --sucesso concluido, --falha pede voce,
+   --atencao atencao, cinza o resto. Medida que a direcao nao tem (layout de
+   hoje) sai de calc() de token; a frente 3 refaz o layout. */
 
 @layer componentes {
   /* ---------------------------------------------------------------- faixa de simulacao */
+  /* Simulacao e cinza, nao alarme (direcao 4.2); a frente 3 a leva para o chip do topo. */
   .faixa-simular {
-    position: sticky; top: 0; z-index: var(--z-faixa);
+    position: sticky; top: 0; z-index: var(--z-topo);
     display: flex; gap: var(--esp-5); flex-wrap: wrap;
-    padding: var(--faixa-pad-y) var(--pagina-margem);
-    font-weight: var(--peso-forte); color: var(--simulacao-texto);
-    background: repeating-linear-gradient(var(--listra-angulo), var(--simulacao) 0 var(--listra), var(--simulacao-listra) var(--listra) var(--listra-dupla));
-  }
-  /* O texto fica numa placa lisa: as listras sao a moldura, nao o fundo da letra. */
-  .faixa-simular > span:not(:empty) {
-    background: var(--simulacao);
-    padding: var(--faixa-placa-pad-y) var(--esp-2);
-    border-radius: var(--raio-controle);
+    padding: var(--esp-2) var(--esp-5);
+    font-weight: var(--peso-forte); color: var(--texto);
+    background: var(--superficie-2); border-bottom: var(--traco) solid var(--linha-forte);
   }
 
   /* ---------------------------------------------------------------- luz */
+  /* Cinza (--linha-forte, 3:1 nos dois temas) quando nao ha estado a dizer. */
   .luz {
-    width: var(--luz-tamanho); height: var(--luz-tamanho); border-radius: var(--raio-circulo);
-    background: var(--pulada); flex: none;
+    width: var(--esp-3); height: var(--esp-3); border-radius: var(--raio-selo);
+    background: var(--linha-forte); flex: none;
   }
   .luz.ok { background: var(--sucesso); }
   .luz.falta { background: var(--falha); }
 
   /* ---------------------------------------------------------------- campos */
+  /* Rotulo visivel acima, 13 com peso 600, nunca caixa alta (direcao 4.3). */
   label {
-    display: flex; flex-direction: column; gap: var(--rotulo-vao);
-    font-size: var(--tipo-meta); font-weight: var(--peso-medio); color: var(--apoio);
+    display: flex; flex-direction: column; gap: var(--esp-1);
+    font-size: var(--tipo-meta); font-weight: var(--peso-forte); color: var(--texto);
   }
   input, select {
     font: inherit; font-size: var(--tipo-leitura); font-weight: var(--peso-normal); color: var(--texto);
     background: var(--superficie); border: var(--traco) solid var(--linha-forte); border-radius: var(--raio-controle);
-    padding: var(--campo-pad-y) var(--campo-pad-x); min-width: 0;
-    transition: border-color var(--dur-saida) var(--curva), box-shadow var(--dur-saida) var(--curva);
+    padding: var(--esp-1) var(--esp-2); min-width: 0;
+    transition: border-color var(--dur-rapida) var(--curva);
   }
   /* Campo de uma linha na altura do botao: alinham pela base em .linha-campos. */
   input:not([type="checkbox"]):not([type="radio"]), select { height: var(--controle-altura); }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--acao); }
   /* Lista aberta do select no Windows escuro: sem isto vem branca com texto claro. */
   select { background-color: var(--superficie); color: var(--texto); }
   option { background-color: var(--superficie); color: var(--texto); }
   /* O font: inherit do campo zera o que .mono (base) poe: repete aqui. */
   input.mono { font-family: var(--familia-mono); font-size: var(--tipo-corpo); font-variant-numeric: tabular-nums; }
   input:disabled { background: var(--superficie-2); color: var(--apoio); border-style: dashed; }
-  /* O foco aparece na hora (duracao 0); so a saida dele usa a transicao do campo. */
-  input:focus-visible, select:focus-visible {
-    outline: var(--foco-espessura) solid var(--foco); outline-offset: var(--campo-foco-recuo);
-    border-color: var(--foco-halo); box-shadow: 0 0 0 var(--traco) var(--foco-halo);
-    transition-duration: 0s;
-  }
-  input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--falha); border-width: var(--traco-forte); }
-  .erro-campo { color: var(--falha); font-size: var(--tipo-meta); }
+  /* O foco e o anel da base, na hora; a borda acompanha em --foco. */
+  input:focus-visible, select:focus-visible { border-color: var(--foco); transition-duration: 0ms; }
+  /* Erro: borda mais grossa (forma, alem da cor), e a mensagem embaixo. */
+  input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--falha); border-width: calc(var(--traco) + var(--traco)); }
+  .erro-campo { color: var(--falha); font-size: var(--tipo-meta); font-weight: var(--peso-forte); }
   .linha-campos { display: flex; gap: var(--esp-3); align-items: flex-end; flex-wrap: wrap; }
-  .linha-campos label { flex: 1 1 var(--campo-base); }
+  .linha-campos label { flex: 1 1 calc(var(--entrada-curta) + var(--esp-7)); }
   /* Rotulo de opcao (check, radio) le como texto, nao como rotulo de campo. */
   label.check {
     flex-direction: row; align-items: center; gap: var(--esp-2); color: var(--texto);
@@ -62,74 +60,74 @@
   }
   /* Grade dos formularios de secao: 2 a 3 colunas conforme a largura. */
   .campos {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--campos-coluna-min), 1fr));
-    gap: var(--campos-vao-y) var(--campos-vao-x); align-items: end;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--campo-ip) + var(--esp-2)), 1fr));
+    gap: var(--esp-3) var(--esp-4); align-items: end;
   }
   .campos label.largo { grid-column: 1 / -1; }
-  .campos label.duplo { grid-column: span var(--campos-duplo); }
+  .campos label.duplo { grid-column: span var(--coluna-texto); }
   /* Botao dentro da grade fica do tamanho do texto, nao da coluna. */
   .campos > .btn { justify-self: start; }
   .secao-form { display: flex; flex-direction: column; gap: var(--esp-3); }
   /* Sem fundo proprio: no maximo dois niveis de caixa (pagina e cartao). */
   /* min-width 0: sem isso o fieldset cresce ate o min-content e vaza do cartao. */
   fieldset {
-    margin: 0; padding: var(--caixa-pad-y) var(--caixa-pad) var(--caixa-pad); min-width: 0;
+    margin: 0; padding: var(--esp-3) var(--esp-4) var(--esp-4); min-width: 0;
     background: transparent; border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
   }
   legend {
-    font-family: var(--familia-titulo); font-weight: var(--peso-forte); font-size: var(--tipo-corpo);
-    padding: 0 var(--legenda-pad-x);
+    font-weight: var(--peso-forte); font-size: var(--tipo-corpo);
+    padding: 0 var(--esp-1);
   }
   .erros, .avisos-leves, .aviso { overflow-wrap: anywhere; }
   .erros {
-    margin: 0; padding: var(--aviso-pad-y) var(--caixa-pad) var(--aviso-pad-y) var(--esp-6);
+    margin: 0; padding: var(--esp-2) var(--esp-4) var(--esp-2) var(--esp-6);
     background: var(--falha-fundo); border-radius: var(--raio-controle);
   }
   .avisos-leves {
-    margin: 0; padding: var(--aviso-pad-y) var(--caixa-pad) var(--aviso-pad-y) var(--esp-6);
+    margin: 0; padding: var(--esp-2) var(--esp-4) var(--esp-2) var(--esp-6);
     background: var(--atencao-fundo); border-radius: var(--raio-controle);
   }
   /* Faixa usual do bitrate, embaixo dos campos do stream. */
-  .faixa-encoder { margin: var(--faixa-encoder-recuo) 0 0; font-size: var(--tipo-meta); color: var(--apoio); }
+  .faixa-encoder { margin: var(--esp-2) 0 0; font-size: var(--tipo-meta); color: var(--apoio); }
   .faixa-encoder:empty { display: none; }
 
   /* ---------------------------------------------------------------- botao */
+  /* Direcao 5.1. .btn e o secundario (contorno, texto de acao); .btn.acento e
+     o primario, um por area; .btn.discreto e o link de acao. Hover nao
+     levanta; o press desce 1 px. */
   .btn {
     font: inherit; font-size: var(--tipo-corpo); font-weight: var(--peso-forte);
     display: inline-flex; align-items: center; justify-content: center;
-    padding: var(--controle-pad-y) var(--controle-pad-x); min-height: var(--controle-altura);
-    color: var(--texto); background: var(--superficie-2);
-    border: var(--traco) solid var(--linha); border-radius: var(--raio-controle);
+    padding: var(--esp-1) var(--esp-4); min-height: var(--controle-altura);
+    color: var(--acao-texto); background: var(--superficie);
+    border: var(--traco) solid var(--linha-forte); border-radius: var(--raio-controle);
     cursor: pointer; text-decoration: none; white-space: nowrap;
     transition:
-      background-color var(--dur-saida) var(--curva),
-      border-color var(--dur-saida) var(--curva),
-      color var(--dur-saida) var(--curva),
-      transform var(--dur-rapida) var(--curva);
+      background-color var(--dur-rapida) var(--curva),
+      border-color var(--dur-rapida) var(--curva),
+      color var(--dur-rapida) var(--curva);
   }
-  /* Hover e pressionado sobem o contraste em relacao ao repouso. Hover nao
-     levanta o botao; o press afunda 1px. */
-  .btn:hover { border-color: var(--apoio); background: var(--controle-hover); }
-  .btn:active { background: var(--controle-press); transform: translateY(var(--press-desce)) scale(var(--press-escala)); }
-  .btn.discreto:hover { background: var(--discreto-hover); }
+  .btn:hover { background: var(--acao-fraco); }
+  .btn:active { transform: translateY(var(--pressionado)); }
   .btn.acento { background: var(--acao); border-color: var(--acao); color: var(--acao-rotulo); }
   .btn.acento:hover { background: var(--acao-hover); border-color: var(--acao-hover); }
-  .btn.discreto { background: transparent; font-weight: var(--peso-medio); }
+  .btn.discreto { background: transparent; border-color: transparent; padding-left: var(--esp-2); padding-right: var(--esp-2); }
+  .btn.discreto:hover { background: transparent; text-decoration: underline; text-underline-offset: var(--foco-recuo); }
   /* Desabilitado com a mesma cara do campo desabilitado (apoio, superficie-2,
      borda tracejada), sem opacidade: o texto continua legivel e nada reage ao ponteiro. */
   .btn:disabled, .btn:disabled:hover, .btn:disabled:active,
   .btn.acento:disabled, .btn.acento:disabled:hover, .btn.acento:disabled:active,
-  .btn.discreto:disabled:hover, .btn.discreto:disabled:active {
+  .btn.discreto:disabled, .btn.discreto:disabled:hover, .btn.discreto:disabled:active {
     color: var(--apoio); background: var(--superficie-2);
     border-color: var(--linha-forte); border-style: dashed;
-    cursor: not-allowed; transform: none;
+    cursor: not-allowed; transform: none; text-decoration: none;
   }
-  .acoes { display: flex; gap: var(--acoes-vao); align-items: center; flex-wrap: wrap; }
+  .acoes { display: flex; gap: var(--esp-3); align-items: center; flex-wrap: wrap; }
 
   /* ---------------------------------------------------------------- aviso */
   .aviso {
-    padding: var(--aviso-pad-y) var(--caixa-pad); border-radius: var(--raio-controle);
-    background: var(--falha-fundo); color: var(--texto); border-left: var(--aviso-marca) solid var(--falha);
+    padding: var(--esp-2) var(--esp-4); border-radius: var(--raio-controle);
+    background: var(--falha-fundo); color: var(--texto); border-left: var(--barra-mini) solid var(--falha);
   }
   /* "Aguarde": nao e erro, some sozinho. */
   .aviso.neutro { background: var(--superficie-2); border-left-color: var(--apoio); }
@@ -137,109 +135,98 @@
   [data-aviso-de] { margin: var(--esp-3) 0 0; align-self: stretch; }
 
   /* ---------------------------------------------------------------- trilha de passos */
+  /* Uma coluna por passo, todas iguais (a lista tem os 7 passos). */
   .passos {
     list-style: none; margin: 0; padding: 0;
-    display: grid; grid-template-columns: repeat(var(--passos-colunas), 1fr); gap: var(--esp-1);
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--esp-1);
     counter-reset: passo;
   }
   .passos li { counter-increment: passo; }
   .passo-botao {
     font: inherit; font-size: var(--tipo-meta); width: 100%; height: 100%; text-align: left;
-    padding: var(--controle-pad-y) var(--passo-botao-pad-x); border-radius: var(--raio-controle); cursor: pointer;
+    padding: var(--esp-2); border-radius: var(--raio-controle); cursor: pointer;
     background: var(--superficie-2); border: var(--traco) solid var(--linha);
-    border-top: var(--marcador) solid var(--linha); color: var(--apoio);
+    border-top: var(--barra-mini) solid var(--linha); color: var(--apoio);
   }
-  .passo-botao::before { content: counter(passo) "  "; font-family: var(--familia-mono); }
-  .passo-botao:disabled { cursor: default; opacity: var(--passo-inativo-opacidade); }
+  .passo-botao::before { content: counter(passo) "  "; }
+  /* Passo ainda fechado: a cara de desabilitado (borda tracejada), sem opacidade. */
+  .passo-botao:disabled { cursor: default; border-style: dashed; border-top-style: solid; }
   .passos li.feito .passo-botao { border-top-color: var(--sucesso); color: var(--texto); }
   .passos li.agora .passo-botao {
     border-top-color: var(--agora); background: var(--superficie); color: var(--texto);
     font-weight: var(--peso-forte);
   }
   @media (max-width: 760px) {
-    .passos { grid-template-columns: repeat(var(--passos-colunas-estreito), 1fr); }
-    .passo-botao { font-size: var(--tipo-meta); }
+    .passos { grid-auto-flow: row; grid-template-columns: var(--grade-2); }
   }
 
   /* ---------------------------------------------------------------- selo */
   .selo {
-    display: inline-block; padding: var(--selo-pad-y) var(--esp-2); border-radius: var(--raio-controle);
-    font-size: var(--tipo-meta); font-weight: var(--peso-forte); line-height: var(--entrelinha-folgada);
+    display: inline-block; padding: 0 var(--esp-2); border-radius: var(--raio-selo);
+    font-size: var(--tipo-meta); font-weight: var(--peso-forte); line-height: var(--entrelinha-corpo);
     background: var(--superficie-2); color: var(--apoio); border: var(--traco) solid var(--linha);
   }
-  .selo.internet { background: var(--superficie-2); color: var(--apoio); border: var(--traco) solid var(--linha); }
 
   /* ---------------------------------------------------------------- fita */
-  /* A fita: cada posicao e uma etiqueta com o IP. A atual fica acesa. */
+  /* A fita: cada posicao e uma etiqueta com o IP e o estado em palavra.
+     Direcao 5.5: em curso com contorno --agora, falha em vermelho com borda
+     mais grossa (forma, alem da cor), proxima tracejada em --acao-texto,
+     pulada tracejada em --linha. */
   .fita {
     list-style: none; margin: 0; padding: 0;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--fita-casa-min), 1fr)); gap: var(--esp-1);
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--rotulo-conferir) + var(--esp-4)), 1fr)); gap: var(--esp-1);
   }
   .fita li {
     position: relative;
     font-family: var(--familia-mono); font-size: var(--tipo-meta);
-    padding: var(--fita-pad-topo) var(--fita-pad-x) var(--fita-pad-base);
+    padding: var(--esp-1) var(--esp-2);
     background: var(--superficie); border: var(--traco) solid var(--linha); border-radius: var(--raio-controle);
-    display: flex; flex-direction: column; gap: var(--fita-casa-vao);
+    display: flex; flex-direction: column; gap: 0;
   }
   .fita li .pos { font-family: var(--familia); font-size: var(--tipo-meta); color: var(--apoio); }
   .fita li .motivo {
-    font-family: var(--familia); font-size: var(--tipo-meta); line-height: var(--entrelinha-motivo);
+    font-family: var(--familia); font-size: var(--tipo-meta); line-height: var(--entrelinha-titulo);
     color: var(--apoio); overflow-wrap: anywhere;
   }
   .fita li .estado { font-weight: var(--peso-forte); }
-  .fita li.feita { background: var(--sucesso-fundo); border-color: transparent; }
+  .fita li.feita { background: var(--superficie-2); }
   .fita li.feita .estado { color: var(--sucesso); }
+  .fita li.falhou { background: var(--falha-fundo); border-color: var(--falha); box-shadow: inset 0 0 0 var(--traco) var(--falha); }
   .fita li.falhou .estado { color: var(--falha); }
-  .fita li.proxima .estado { color: var(--texto); }
+  .fita li.proxima { border-style: dashed; border-color: var(--acao-texto); }
+  .fita li.proxima .estado { color: var(--acao-texto); }
   .fita li.pulada { color: var(--apoio); background: transparent; border-style: dashed; }
-  .fita li.falhou { background: var(--falha-fundo); border-color: var(--falha); }
-  .fita li.atual { background: var(--agora); border-color: var(--agora); color: var(--agora-texto); }
-  .fita li.atual .pos, .fita li.atual .motivo, .fita li.atual .estado { color: var(--agora-texto); }
-  /* A atual que falhou: vermelho, nao ambar ("acontecendo agora"). */
-  .fita li.atual.falhou { background: var(--falha); border-color: var(--falha); color: var(--superficie); }
-  .fita li.atual.falhou .pos, .fita li.atual.falhou .motivo, .fita li.atual.falhou .estado { color: var(--superficie); }
-  /* A proxima: borda mais grossa, padding encolhe o mesmo para a casa nao crescer. */
-  .fita li.proxima {
-    border-color: var(--agora); border-width: var(--traco-forte);
-    padding: calc(var(--fita-pad-topo) - var(--traco)) calc(var(--fita-pad-x) - var(--traco)) calc(var(--fita-pad-base) - var(--traco));
-  }
+  .fita li.atual { background: var(--acao-fraco); border-color: var(--agora); box-shadow: inset 0 0 0 var(--traco) var(--agora); }
+  .fita li.atual .estado { color: var(--acao-texto); }
+  /* A atual que falhou: vermelho, nao azul ("agora"). */
+  .fita li.atual.falhou { background: var(--falha-fundo); border-color: var(--falha); box-shadow: inset 0 0 0 var(--traco) var(--falha); }
+  .fita li.atual.falhou .estado { color: var(--falha); }
 
   /* ---------------------------------------------------------------- etapas */
-  /* Etapas: sequencia real, por isso numerada. */
+  /* Etapas: sequencia real, por isso numerada. Uma coluna por etapa (4). */
   .etapas {
     list-style: none; counter-reset: etapa;
-    display: grid; grid-template-columns: repeat(var(--etapas-colunas), 1fr); gap: var(--lista-vao);
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--esp-2);
     padding: 0; margin: var(--esp-3) 0;
   }
   .etapas li {
     counter-increment: etapa;
-    padding: var(--etapa-pad-y) var(--etapa-pad-x); border-radius: var(--raio-controle);
+    padding: var(--esp-2) var(--esp-3); border-radius: var(--raio-controle);
     background: var(--superficie-2); border: var(--traco) solid var(--linha); color: var(--apoio);
   }
-  .etapas li::before { content: counter(etapa) "  "; font-family: var(--familia-mono); }
-  .etapas li.feita { background: var(--sucesso-fundo); color: var(--texto); border-color: transparent; }
+  .etapas li::before { content: counter(etapa) "  "; }
+  .etapas li.feita { background: var(--superficie); color: var(--texto); border-color: var(--sucesso); }
+  /* Etapa atual: contorno e fundo de "agora", parada (sem pulso, UI-15). */
   .etapas li.agora {
-    background: var(--agora); color: var(--agora-texto); border-color: var(--agora);
-    font-weight: var(--peso-forte);
+    background: var(--acao-fraco); color: var(--texto); border-color: var(--agora);
+    box-shadow: inset 0 0 0 var(--traco) var(--agora); font-weight: var(--peso-forte);
   }
-  /* Pulso da etapa atual: vai e volta (alternate) com ease-in-out, que e
-     simetrico; da o mesmo brilho de um ciclo 0 -> pico -> 0. */
-  @media (prefers-reduced-motion: no-preference) {
-    .etapas li.agora { animation: pulso var(--pulso-meia-volta) ease-in-out infinite alternate; }
-    @keyframes pulso { to { filter: brightness(var(--pulso-brilho)); } }
-  }
-  /* Movimento reduzido: o botao nao se mexe, o press vira um tom mais fundo e
-     o pulso da etapa atual para. */
+  /* Movimento reduzido: as duracoes ja vao a 0 nos tokens; o botao nao se mexe. */
   @media (prefers-reduced-motion: reduce) {
-    .btn { transition-property: background-color, border-color, color; }
-    .btn:active { transform: none; background: var(--controle-press-reduzido); }
-    .btn.discreto:active { background: var(--discreto-press-reduzido); }
-    .btn.acento:active { background: var(--acao-press-reduzido); border-color: var(--acao-press-reduzido); }
-    .etapas li.agora { animation: none; }
+    .btn:active { transform: none; }
   }
   @media (max-width: 760px) {
-    .etapas { grid-template-columns: 1fr 1fr; }
+    .etapas { grid-auto-flow: row; grid-template-columns: var(--grade-2); }
   }
 
   /* ---------------------------------------------------------------- tabela */
@@ -250,7 +237,8 @@
   .tabela { width: 100%; border-collapse: collapse; font-size: var(--tipo-corpo); }
   .tabela th {
     text-align: left; font-weight: var(--peso-forte); font-size: var(--tipo-meta); color: var(--apoio);
-    padding: var(--celula-cab-pad-y) var(--esp-3); border-bottom: var(--traco) solid var(--linha); white-space: nowrap;
+    background: var(--superficie-2);
+    padding: var(--esp-2) var(--esp-3); border-bottom: var(--traco) solid var(--linha); white-space: nowrap;
   }
   .tabela td {
     padding: var(--esp-2) var(--esp-3); border-bottom: var(--traco) solid var(--linha);
@@ -259,14 +247,13 @@
   .tabela tr:last-child td { border-bottom: 0; }
   .tabela tr:hover td { background: var(--superficie-2); }
   .tabela td.mono { white-space: nowrap; }
-  .tabela .enc-sec { color: var(--apoio); }
   .sit { font-weight: var(--peso-forte); }
   .sit.Instalada { color: var(--sucesso); }
   .sit.Falhou { color: var(--falha); }
   .sit.Resetada { color: var(--apoio); }
   .sit-detalhe {
     display: block; font-weight: var(--peso-normal); color: var(--apoio);
-    font-size: var(--tipo-meta); max-width: var(--medida-detalhe);
+    font-size: var(--tipo-meta);
   }
 
   /* ---------------------------------------------------------------- controle segmentado */
@@ -278,7 +265,7 @@
   }
   .tema legend {
     float: left; padding: 0; margin-right: var(--esp-1);
-    font-family: var(--familia); font-weight: var(--peso-medio); font-size: var(--tipo-corpo);
+    font-weight: var(--peso-forte); font-size: var(--tipo-corpo);
   }
   .segmentos {
     display: inline-flex; border: var(--traco) solid var(--linha-forte);
@@ -286,42 +273,45 @@
   }
   .segmentos label {
     position: relative; flex-direction: row; align-items: center;
-    padding: var(--campo-pad-y) var(--controle-pad-x);
+    padding: var(--esp-1) var(--esp-4);
     min-height: calc(var(--controle-altura) - var(--traco) - var(--traco));
-    font-size: var(--tipo-corpo); color: var(--texto); cursor: pointer;
+    font-size: var(--tipo-corpo); font-weight: var(--peso-normal); color: var(--texto); cursor: pointer;
     background: var(--superficie);
   }
   .segmentos label + label { border-left: var(--traco) solid var(--linha-forte); }
   .segmentos input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
   .segmentos label:hover { background: var(--superficie-2); }
-  .segmentos label:has(input:checked) { background: var(--texto); color: var(--superficie); font-weight: var(--peso-forte); }
+  /* Escolhido: fundo de selecao, texto de acao e peso 600 (nao so a cor). */
+  .segmentos label:has(input:checked) { background: var(--acao-fraco); color: var(--acao-texto); font-weight: var(--peso-forte); }
   .segmentos label:has(input:focus-visible) {
-    outline: var(--foco-espessura) solid var(--foco); outline-offset: calc(-1 * var(--segmento-foco-recuo));
-    box-shadow: inset 0 0 0 var(--segmento-foco-recuo) var(--foco-halo);
+    outline: var(--foco-espessura) solid var(--foco); outline-offset: calc(-1 * var(--esp-1));
   }
 
   /* ---------------------------------------------------------------- log */
   .log-linhas {
-    height: var(--log-altura); overflow-y: auto; margin-top: var(--log-recuo);
+    height: calc(var(--campo-ip) + var(--esp-6) + var(--esp-2)); overflow-y: auto; margin-top: var(--esp-2);
     background: var(--superficie-2); border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
-    padding: var(--esp-2) var(--log-pad-x); font-size: var(--tipo-mini); line-height: var(--entrelinha-folgada);
+    padding: var(--esp-2) var(--esp-3); font-size: var(--tipo-meta); line-height: var(--entrelinha-corpo);
     white-space: pre-wrap; overflow-wrap: anywhere;
   }
-  .log-linhas .ts { color: var(--apoio); margin-right: var(--log-hora-vao); }
-  .log-linhas .Red { color: var(--falha); }
-  .log-linhas .Green { color: var(--sucesso); }
-  .log-linhas .Yellow, .log-linhas .DarkYellow { color: var(--atencao); }
-  .log-linhas .Cyan { color: var(--texto); font-weight: var(--peso-negrito); }
-  .log-linhas .DarkGray, .log-linhas .Gray { color: var(--apoio); }
+  /* Linha do log e texto corrido: sempre em --texto (7:1). A cor do console vira
+     uma barra a esquerda da linha (decisao do usuario, 24/11); Gray e a cor
+     normal do console, sem barra. DarkGray (simulacao, detalhe) em cinza. */
+  .log-linhas > div { color: var(--texto); padding-left: var(--esp-2); border-left: var(--barra-mini) solid transparent; }
+  .log-linhas .ts { color: var(--apoio); margin-right: var(--esp-2); }
+  .log-linhas .Red { border-left-color: var(--falha); }
+  .log-linhas .Green { border-left-color: var(--sucesso); }
+  .log-linhas .Yellow, .log-linhas .DarkYellow { border-left-color: var(--atencao); }
+  .log-linhas .Cyan { font-weight: var(--peso-forte); }
+  .log-linhas .DarkGray { border-left-color: var(--apoio); }
 
   /* ---------------------------------------------------------------- faixa de atualizacao */
-  /* Versao nova no GitHub: discreta, acima do topo. */
+  /* Versao nova no GitHub: informacao, em --superficie-2 (direcao 5.7). */
   .atualizacao {
     display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
-    padding: var(--atualizacao-pad-y) var(--esp-4); font-size: var(--tipo-corpo);
-    background: var(--atencao-fundo); border-bottom: var(--traco) solid var(--linha);
+    padding: var(--esp-2) var(--esp-4); font-size: var(--tipo-corpo);
+    background: var(--superficie-2); border-bottom: var(--traco) solid var(--linha);
   }
   .atualizacao.erro { background: var(--falha-fundo); }
-  .atualizacao .btn { padding: var(--atualizacao-botao-pad-y) var(--atualizacao-botao-pad-x); }
-  .atualizacao a { color: inherit; }
+  .atualizacao .btn { padding: var(--esp-1) var(--esp-3); }
 }

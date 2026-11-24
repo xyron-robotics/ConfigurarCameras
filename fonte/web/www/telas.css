@@ -1,60 +1,64 @@
 /* Telas do painel: topo, estrutura (menu + conteudo), passo a passo, painel
    (fita, bancada, cartoes), registro, ferramentas, opcoes e tela de
-   encerrado. So posiciona e compoe os componentes; seletor por classe. */
+   encerrado. So posiciona e compoe os componentes; seletor por classe.
+   Medida que a direcao nao tem (layout de hoje) sai de calc() de token; a
+   frente 3 refaz o layout. */
 
 @layer telas {
   /* ---------------------------------------------------------------- topo */
   .topo {
     display: flex; align-items: center; justify-content: space-between; gap: var(--esp-4); flex-wrap: wrap;
-    padding: var(--topo-pad-y) var(--pagina-margem);
+    padding: var(--esp-3) var(--esp-5); min-height: var(--topo-altura);
     background: var(--superficie);
     border-bottom: var(--traco) solid var(--linha);
   }
-  .marca { font-size: var(--tipo-marca); letter-spacing: var(--tracking-titulo); line-height: var(--entrelinha-marca); }
+  .marca { font-size: var(--tipo-subtitulo); }
   .topo > * { min-width: 0; }
   .topo-estado { display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap; }
   /* A placa preparada lista todos os IPs: quebra em vez de vazar da tela. */
   .placa {
-    display: flex; align-items: center; gap: var(--placa-vao); margin-right: var(--esp-2);
+    display: flex; align-items: center; gap: var(--esp-2); margin-right: var(--esp-2);
     font-size: var(--tipo-corpo); min-width: 0;
   }
   .placa > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 
   /* ---------------------------------------------------------------- estrutura */
   .corpo {
-    display: grid; grid-template-columns: var(--menu-largura) 1fr;
+    display: grid; grid-template-columns: var(--grade-sessao);
     min-height: calc(var(--altura-tela) - var(--topo-altura));
   }
   .menu {
-    display: flex; flex-direction: column; padding: var(--esp-4) var(--esp-2); gap: var(--menu-vao);
+    display: flex; flex-direction: column; padding: var(--esp-4) var(--esp-2); gap: var(--esp-1);
     border-right: var(--traco) solid var(--linha);
   }
   .menu a {
     color: var(--texto); text-decoration: none;
-    padding: var(--controle-pad-y) var(--esp-3); border-radius: var(--raio-controle);
-    border-left: var(--marcador) solid transparent;
+    padding: var(--esp-2) var(--esp-3); border-radius: var(--raio-controle);
+    border-left: var(--barra-mini) solid transparent;
   }
   .menu a:hover { background: var(--superficie); }
-  .menu a.ativo { background: var(--superficie); border-left-color: var(--agora); font-weight: var(--peso-forte); }
+  /* Aba ativa: barra em --acao e peso 600, sem fundo (como .sessao-item do
+     prototipo): com fundo ela le como um terceiro estilo de botao. */
+  .menu a.ativo { border-left-color: var(--acao); font-weight: var(--peso-forte); }
   .menu .menu-opcoes { margin-top: auto; color: var(--apoio); }
   .menu .menu-opcoes.ativo { color: var(--texto); }
-  .engrenagem { display: inline-block; width: var(--engrenagem-largura); }
-  main { padding: var(--pagina-margem) var(--esp-5) var(--esp-6); max-width: var(--conteudo-max); min-width: 0; }
-  .view { display: flex; flex-direction: column; gap: var(--tela-vao); }
-  .view > h2 + .apoio { margin-top: calc(-1 * var(--titulo-apoio-recuo)); }
+  .engrenagem { display: inline-block; width: var(--icone-p); }
+  main { padding: var(--esp-5) var(--esp-5) var(--esp-6); max-width: var(--conteudo-max); min-width: 0; }
+  .view { display: flex; flex-direction: column; gap: var(--esp-5); }
+  .view > h2 + .apoio { margin-top: calc(-1 * var(--esp-4)); }
   /* Passo a passo: sem menu, uma coluna, largura de leitura. */
-  body.no-inicio .corpo { grid-template-columns: 1fr; }
+  body.no-inicio .corpo { grid-template-columns: var(--grade-1); }
   body.no-inicio .menu { display: none; }
   body.no-inicio main { max-width: var(--coluna-form); margin: 0 auto; }
 
   @media (max-width: 760px) {
-    .corpo { grid-template-columns: 1fr; }
+    .corpo { grid-template-columns: var(--grade-1); }
     .menu {
       flex-direction: row; overflow-x: auto; border-right: 0;
-      border-bottom: var(--traco) solid var(--linha); padding: var(--menu-estreito-pad);
+      border-bottom: var(--traco) solid var(--linha); padding: var(--esp-2);
     }
-    .menu a { border-left: 0; border-bottom: var(--marcador) solid transparent; }
-    .menu a.ativo { border-bottom-color: var(--agora); }
+    .menu a { border-left: 0; border-bottom: var(--barra-mini) solid transparent; }
+    .menu a.ativo { border-bottom-color: var(--acao); }
     .menu .menu-opcoes { margin-top: 0; margin-left: auto; }
     main { padding: var(--esp-4); }
   }
@@ -64,12 +68,13 @@
   .inicio .so-opcoes, .inicio [data-ok] { display: none !important; }
   /* Encoder dentro do passo: o cartao do passo e estreito para 4 colunas (os
      selects de resolucao e codec vazavam a 1366 px); 2 por linha cabem inteiros. */
-  .inicio fieldset .campos { grid-template-columns: repeat(var(--encoder-colunas), minmax(0, 1fr)); }
+  .inicio fieldset .campos { grid-template-columns: var(--grade-2); }
   .inicio { gap: var(--esp-4); }
 
+  /* O passo aberto e o que esta em curso: a barra lateral em --agora. */
   .passo {
     background: var(--superficie); border: var(--traco) solid var(--linha);
-    border-left: var(--destaque-lateral) solid var(--agora);
+    border-left: var(--barra-mini) solid var(--agora);
     border-radius: var(--raio-bloco); padding: var(--esp-4) var(--esp-5) var(--esp-5);
     display: flex; flex-direction: column; gap: var(--esp-3);
   }
@@ -81,53 +86,52 @@
     padding: var(--esp-2) 0;
   }
   .passo-acoes .espaco { flex: 1; }
-  /* Sem fundo proprio: fica no nivel do cartao do passo; o botao ambar ja chama. */
-  .passo-escolha { display: flex; flex-direction: column; gap: var(--acoes-vao); }
+  /* Sem fundo proprio: fica no nivel do cartao do passo; o botao primario ja chama. */
+  .passo-escolha { display: flex; flex-direction: column; gap: var(--esp-3); }
   .passo-escolha p { margin: 0; }
   .senha-definida {
     margin: 0; color: var(--sucesso); font-weight: var(--peso-forte);
-    display: flex; align-items: center; gap: var(--acoes-vao);
+    display: flex; align-items: center; gap: var(--esp-3);
   }
 
   /* Placas: lista de radios, a sugerida em primeiro. */
-  .placas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--lista-vao); }
+  .placas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
   .placa-item {
-    flex-direction: row; align-items: flex-start; gap: var(--placa-item-vao); cursor: pointer;
-    padding: var(--caixa-pad-y) var(--caixa-pad); border: var(--traco) solid var(--linha);
+    flex-direction: row; align-items: flex-start; gap: var(--esp-3); cursor: pointer;
+    padding: var(--esp-3) var(--esp-4); border: var(--traco) solid var(--linha);
     border-radius: var(--raio-bloco); background: var(--superficie);
     color: var(--texto); font-size: var(--tipo-leitura); font-weight: var(--peso-normal);
   }
   .placa-item input { margin-top: var(--esp-1); accent-color: var(--acao); }
-  /* Selecionada: borda ambar e, por dentro, um fio na cor do texto, que nao
-     depende so do ambar para ser vista. */
+  /* Selecionada: fundo de selecao e borda dupla em --acao, alem do radio marcado. */
   .placa-item:has(input:checked) {
-    border-color: var(--acao);
-    box-shadow: inset 0 0 0 var(--traco) var(--acao), inset 0 0 0 var(--traco-forte) var(--texto);
+    border-color: var(--acao); background: var(--acao-fraco);
+    box-shadow: inset 0 0 0 var(--traco) var(--acao);
   }
-  .placa-corpo { display: flex; flex-direction: column; gap: var(--placa-corpo-vao); }
+  .placa-corpo { display: flex; flex-direction: column; gap: var(--esp-1); }
   .placa-nome { font-weight: var(--peso-forte); display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap; }
   .placa-detalhe { font-size: var(--tipo-meta); color: var(--apoio); }
 
   /* Resumo: um cartao por secao, com "Alterar". */
-  .resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--bloco-coluna-min), 1fr)); gap: var(--esp-3); }
+  .resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--campo-ip) + var(--topo-altura)), 1fr)); gap: var(--esp-3); }
   .resumo-secao {
     background: var(--superficie-2); border: var(--traco) solid var(--linha);
-    border-radius: var(--raio-bloco); padding: var(--caixa-pad-y) var(--caixa-pad);
+    border-radius: var(--raio-bloco); padding: var(--esp-3) var(--esp-4);
   }
   .resumo-cabeca { display: flex; justify-content: space-between; align-items: baseline; gap: var(--esp-2); }
-  .resumo-cabeca a { font-size: var(--tipo-meta); color: var(--apoio); }
+  .resumo-cabeca a { font-size: var(--tipo-meta); }
   .resumo-secao dl {
-    display: grid; grid-template-columns: max-content 1fr; gap: var(--lista-def-vao-y) var(--lista-def-vao-x);
-    margin: var(--lista-def-recuo) 0 0; font-size: var(--tipo-corpo);
+    display: grid; grid-template-columns: max-content 1fr; gap: var(--esp-1) var(--esp-3);
+    margin: var(--esp-2) 0 0; font-size: var(--tipo-corpo);
   }
   .resumo-secao dt { color: var(--apoio); }
-  .resumo-secao dd { margin: 0; font-family: var(--familia-mono); font-size: var(--tipo-dado); overflow-wrap: anywhere; }
+  .resumo-secao dd { margin: 0; overflow-wrap: anywhere; }
 
   /* ---------------------------------------------------------------- painel */
-  /* Ambar = agora: sem fila nada esta em curso, a barra lateral fica em --linha. */
+  /* Azul-500 = agora: sem fila nada esta em curso, a barra lateral fica em --linha. */
   .painel-sem-fila {
     background: var(--superficie); border: var(--traco) solid var(--linha);
-    border-left: var(--destaque-lateral) solid var(--linha);
+    border-left: var(--barra-mini) solid var(--linha);
     border-radius: var(--raio-bloco); padding: var(--esp-4) var(--esp-5);
   }
   .fita-cabeca {
@@ -138,40 +142,46 @@
 
   .bancada {
     background: var(--superficie); border: var(--traco) solid var(--linha);
-    border-left: var(--destaque-lateral) solid var(--agora);
+    border-left: var(--barra-mini) solid var(--agora);
     border-radius: var(--raio-bloco); padding: var(--esp-4) var(--esp-5);
   }
   .bancada-pos {
-    font-family: var(--familia-titulo); font-size: var(--tipo-numero); font-weight: var(--peso-forte);
-    margin: 0 0 var(--bancada-pos-recuo); letter-spacing: var(--tracking-titulo);
+    font-size: var(--tipo-numero); font-weight: var(--peso-forte); line-height: var(--entrelinha-titulo);
+    margin: 0;
   }
   .bancada-destino { margin: 0 0 var(--esp-2); font-size: var(--tipo-subtitulo); }
-  .bancada-destino .mono { font-size: var(--tipo-destino); font-weight: var(--peso-forte); }
-  .bancada form { margin-top: var(--bancada-form-recuo); }
+  .bancada-destino .mono { font-size: var(--tipo-titulo); font-weight: var(--peso-forte); }
+  .bancada form { margin-top: var(--esp-4); }
   .falha-titulo { color: var(--falha); }
   .vigia {
-    margin-bottom: var(--vigia-recuo); padding-bottom: var(--vigia-pad-base);
+    margin-bottom: var(--esp-4); padding-bottom: var(--esp-4);
     border-bottom: var(--traco) solid var(--linha);
   }
   .vigia-cabeca { display: flex; align-items: center; gap: var(--esp-2); }
   .vigia-cabeca h3 { margin: 0; }
+  /* Vigia ligado e "agora" (direcao 4.2), nao "concluido": a luz e azul-500. */
+  .vigia .luz.ok { background: var(--agora); }
   .vigia .apoio { max-width: var(--medida-texto); }
   .bancada .vigia form { margin-top: var(--esp-2); }
   .retomar { margin-top: var(--esp-3); }
-  .retomar summary { cursor: pointer; color: var(--apoio); font-size: var(--tipo-corpo); }
-  .retomar[open] summary { margin-bottom: var(--retomar-recuo); }
-  .retomar label { max-width: var(--retomar-campo-max); margin-top: var(--esp-2); }
+  .retomar summary { cursor: pointer; color: var(--acao-texto); font-size: var(--tipo-corpo); }
+  .retomar[open] summary { margin-bottom: var(--esp-2); }
+  .retomar label { max-width: calc(var(--campo-ip) + var(--topo-altura)); margin-top: var(--esp-2); }
+  /* Erro cru da camera: le como log, em mono. */
   .decisao-erro {
     font-family: var(--familia-mono); font-size: var(--tipo-corpo); background: var(--falha-fundo);
-    padding: var(--aviso-pad-y) var(--aviso-curto-pad-x); border-radius: var(--raio-controle); overflow-wrap: anywhere;
+    padding: var(--esp-2) var(--esp-3); border-radius: var(--raio-controle); overflow-wrap: anywhere;
   }
-  .bancada-fim .btn { margin-top: var(--acoes-vao); }
+  .bancada-fim .btn { margin-top: var(--esp-3); }
+  /* Frase corrida do painel le em --texto (7:1); --apoio fica para legenda e
+     rotulo curto (decisao do usuario, 24/11). */
+  .bancada p.apoio, .painel-sem-fila p.apoio { color: var(--texto); }
 
   /* Cartoes das cameras (modo paralelo). Dentro da bancada, sem fundo proprio
      (dois niveis de caixa no maximo): so a borda. Estado em palavra e cor. */
   .cartoes {
     list-style: none; margin: 0 0 var(--esp-4); padding: 0;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--cartao-min), 1fr)); gap: var(--esp-3);
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--campo-ip) + var(--entrada-curta) + var(--esp-2)), 1fr)); gap: var(--esp-3);
   }
   .cartao {
     display: flex; flex-direction: column; gap: var(--esp-2); min-width: 0;
@@ -179,7 +189,7 @@
     border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
   }
   .cartao.compacto { padding-bottom: var(--esp-3); }
-  /* No portao = agora: borda ambar alem do selo. */
+  /* No portao = agora: contorno azul-500 alem do selo. */
   .cartao[data-fase="portao"] { border-color: var(--agora); box-shadow: inset 0 0 0 var(--traco) var(--agora); }
   .cartao[data-fase="decisao"] { border-color: var(--falha); }
   .cartao-cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: var(--esp-2); flex-wrap: wrap; }
@@ -189,10 +199,12 @@
   }
   .cartao-destino { font-weight: var(--peso-forte); }
   .cartao-estado { margin: 0; }
-  .cartao[data-fase="portao"] .selo { background: var(--agora); border-color: var(--agora); color: var(--agora-texto); }
-  .cartao[data-fase="conferindo"] .selo { background: var(--agora-fundo); border-color: transparent; color: var(--agora-fundo-texto); }
+  /* Selo por fase: em curso no fundo de selecao com texto de acao (o azul-500
+     nao e cor de texto); falha no fundo de falha; instalada com a palavra em verde. */
+  .cartao[data-fase="portao"] .selo { background: var(--acao-fraco); border-color: var(--agora); color: var(--acao-texto); }
+  .cartao[data-fase="conferindo"] .selo { background: var(--acao-fraco); border-color: transparent; color: var(--acao-texto); }
   .cartao[data-fase="decisao"] .selo { background: var(--falha-fundo); border-color: transparent; color: var(--falha); }
-  .cartao[data-fase="feita"] .selo { background: var(--sucesso-fundo); border-color: transparent; color: var(--sucesso); }
+  .cartao[data-fase="feita"] .selo { background: var(--superficie-2); border-color: transparent; color: var(--sucesso); }
   .cartao[data-fase="pulada"] .selo { background: transparent; border-style: dashed; border-color: var(--linha-forte); }
   .cartao-id {
     margin: 0; font-size: var(--tipo-meta); color: var(--apoio);
@@ -211,10 +223,10 @@
   .cartao-falha-apoio { font-size: var(--tipo-corpo); }
   .cartao-aviso {
     margin: 0; padding: var(--esp-2) var(--esp-3); border-radius: var(--raio-controle); font-size: var(--tipo-corpo);
-    background: var(--atencao-fundo); color: var(--atencao-fundo-texto); overflow-wrap: anywhere;
+    background: var(--atencao-fundo); color: var(--texto); overflow-wrap: anywhere;
   }
   .cartao-campos { gap: var(--esp-3); }
-  .cartao-campos label { flex: 1 1 var(--cartao-campo-base); }
+  .cartao-campos label { flex: 1 1 var(--entrada-curta); }
   /* "Salvo" na altura do campo, alinhado ao centro dele. */
   .cartao-salvo {
     flex: none; line-height: var(--controle-altura); font-size: var(--tipo-meta);
@@ -223,14 +235,14 @@
   .cartao-salvo:empty { display: none; }
 
   .ultimo {
-    margin: 0; padding: var(--esp-2) var(--aviso-curto-pad-x);
-    border-left: var(--aviso-marca) solid var(--sucesso); background: var(--sucesso-fundo);
+    margin: 0; padding: var(--esp-2) var(--esp-3);
+    border-left: var(--barra-mini) solid var(--sucesso); background: var(--superficie-2);
     border-radius: var(--raio-controle);
   }
   .registro-bloco { margin-top: var(--esp-2); }
 
   /* ---------------------------------------------------------------- ferramentas */
-  .ferramentas { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--bloco-coluna-min), 1fr)); gap: var(--esp-4); }
+  .ferramentas { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--campo-ip) + var(--topo-altura)), 1fr)); gap: var(--esp-4); }
   .ferramenta {
     background: var(--superficie); border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
     padding: var(--esp-4); display: flex; flex-direction: column; gap: var(--esp-3); align-items: flex-start;
@@ -241,11 +253,11 @@
     border-radius: var(--raio-bloco); padding: var(--esp-4);
   }
   .resultado dl {
-    display: grid; grid-template-columns: max-content 1fr; gap: var(--resultado-vao-y) var(--esp-4);
+    display: grid; grid-template-columns: max-content 1fr; gap: var(--esp-1) var(--esp-4);
     margin: var(--esp-2) 0 0;
   }
   .resultado dt { color: var(--apoio); }
-  .resultado dd { margin: 0; font-family: var(--familia-mono); font-size: var(--tipo-corpo); overflow-wrap: anywhere; }
+  .resultado dd { margin: 0; overflow-wrap: anywhere; }
 
   /* ---------------------------------------------------------------- opcoes */
   .opcoes { gap: var(--esp-4); }
@@ -253,7 +265,7 @@
     background: var(--superficie); border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
     padding: var(--esp-4) var(--esp-5) var(--esp-5); display: flex; flex-direction: column; gap: var(--esp-3);
   }
-  .secao > .apoio { margin-top: calc(-1 * var(--secao-apoio-recuo)); }
+  .secao > .apoio { margin-top: calc(-1 * var(--esp-1)); }
   .secao .slot { display: contents; }
 
   /* ---------------------------------------------------------------- log */
@@ -263,6 +275,6 @@
   /* ---------------------------------------------------------------- telas cheias */
   .encerrado {
     position: fixed; inset: 0; background: var(--fundo);
-    display: grid; place-items: center; font-size: var(--tipo-encerrado); z-index: var(--z-encerrado);
+    display: grid; place-items: center; font-size: var(--tipo-subtitulo); z-index: calc(var(--z-topo) + 1);
   }
 }
