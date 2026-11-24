@@ -567,15 +567,16 @@ try {
     Remove-Item -LiteralPath $tmpRaiz -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Medida do www real, sem assercao ate a Task 5 (R4).
-$wwwReal = Join-Path $raiz 'web\www'
-$issReal = Join-Path (Split-Path $raiz -Parent) 'instalador\ConfigurarCameras.iss'
-$srvReal = Join-Path $raiz 'web\Servidor-Painel.ps1'
-if ((Test-Path -LiteralPath $wwwReal) -and (Test-Path -LiteralPath $issReal) -and (Test-Path -LiteralPath $srvReal)) {
+# O www real, o .iss real e o servidor real: zero violacoes (R4). Arquivo que falta e falha, nao pulo.
+T 'www real: zero violacoes' {
+    $wwwReal = Join-Path $raiz 'web\www'
+    $issReal = Join-Path (Split-Path $raiz -Parent) 'instalador\ConfigurarCameras.iss'
+    $srvReal = Join-Path $raiz 'web\Servidor-Painel.ps1'
+    foreach ($p in @($wwwReal, $issReal, $srvReal)) {
+        if (-not (Test-Path -LiteralPath $p)) { throw ('nao achei ' + $p) }
+    }
     $real = @(Test-Front -Www $wwwReal -Iss $issReal -Servidor $srvReal)
-    $porRegra = @($real | Group-Object regra | Sort-Object Name | ForEach-Object { $_.Name + ' ' + $_.Count }) -join ', '
-    if ($real.Count -eq 0) { $porRegra = 'nenhuma' }
-    Write-Host ("  info   www real: " + $real.Count + " violacoes (" + $porRegra + "); a assercao entra na Task 5") -ForegroundColor DarkGray
+    Assert-Igual 0 $real.Count ('violacoes no www real: ' + (Format-Violacoes $real))
 }
 
 # ------------------------------------------------------------------- resultado
