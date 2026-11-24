@@ -1614,7 +1614,7 @@ try {
 $estaticos = @{}
 foreach ($f in @(Get-ChildItem -LiteralPath $www -File)) { $estaticos['/' + $f.Name] = $f.FullName }
 $estaticos['/'] = Join-Path $www 'index.html'
-$tipos = @{ '.html' = 'text/html; charset=utf-8'; '.js' = 'text/javascript; charset=utf-8'; '.css' = 'text/css; charset=utf-8'; '.svg' = 'image/svg+xml' }
+$tipos = @{ '.html' = 'text/html; charset=utf-8'; '.js' = 'text/javascript; charset=utf-8'; '.css' = 'text/css; charset=utf-8'; '.svg' = 'image/svg+xml'; '.png' = 'image/png' }
 
 function Send-Resposta {
     param($Ctx, [int]$Status, [string]$Tipo, $Corpo, [hashtable]$Cabecalhos = @{})

@@ -10,6 +10,7 @@ const TEXTOS = {
   'topo.atualizacao-notas': 'o que mudou',
   'topo.btn-atualizar': 'Atualizar o painel',
   'topo.marca': 'Configurar câmeras',
+  'marca.alt': 'Grupo SmartSeg',
   'topo.placa-texto': 'Placa de rede: verificando…',
   'topo.internet.dica': 'Internet deste PC, testada ao abrir e depois de preparar a placa',
   'topo.internet-texto': 'Internet: não testada',

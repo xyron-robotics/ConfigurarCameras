@@ -3,6 +3,7 @@
 // e sem innerHTML. Os textos estao em textos.js, com as mesmas letras.
 import { h } from './dom.js';
 import { t } from './textos.js';
+import { logo, simbolo } from './marca.js';
 import { BITRATE_MAX, BITRATE_MIN, FPS_MAX, FPS_MIN, PROGRESSO_MAX } from './constantes.js';
 
 // Os nos do ponto de montagem, na ordem do <body> de antes.
@@ -23,7 +24,7 @@ export function montarMarcacao() {
       h('button', { type: 'button', class: 'btn', id: 'btn-atualizar' }, t('topo.btn-atualizar')),
     ]),
     h('header', { class: 'topo' }, [
-      h('h1', { class: 'marca' }, t('topo.marca')),
+      h('h1', { class: 'marca' }, [simbolo(), t('topo.marca')]),
       h('div', { class: 'topo-estado' }, [
         h('div', { id: 'placa', class: 'placa', role: 'status', 'aria-live': 'polite' }, [
           h('span', { class: 'luz', id: 'placa-luz' }),
@@ -56,6 +57,7 @@ export function montarMarcacao() {
         h('div', { id: 'anuncio', class: 'so-leitor', role: 'status', 'aria-live': 'polite' }),
         h('section', { id: 'inicio', class: 'view inicio', hidden: true, 'aria-labelledby': 'inicio-titulo' }, [
           h('h2', { id: 'inicio-titulo', class: 'so-leitor' }, t('inicio.inicio-titulo')),
+          logo(),
           h('ol', { id: 'passos', class: 'passos', 'aria-label': t('inicio.passos.rotulo-leitor') }, [
             h('li', { 'data-passo': '1' }, [
               h('button', { type: 'button', class: 'passo-botao' }, t('inicio.passo1.botao')),
@@ -626,7 +628,10 @@ export function montarMarcacao() {
       ]),
     ]),
     h('div', { id: 'encerrado', class: 'encerrado', tabindex: '-1', hidden: true }, [
-      h('p', { id: 'encerrado-texto' }, t('fim.encerrado-texto')),
+      h('div', { class: 'fim-marca' }, [
+        logo(),
+        h('p', { id: 'encerrado-texto' }, t('fim.encerrado-texto')),
+      ]),
     ]),
     h('div', { id: 'atualizando', class: 'encerrado', tabindex: '-1', hidden: true }, [
       h('p', { id: 'atualizando-texto' }, t('fim.atualizando-texto')),

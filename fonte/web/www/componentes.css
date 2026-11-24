@@ -1,4 +1,4 @@
-/* Componentes do painel: faixa, luz, campo, botao, aviso, trilha de passos,
+/* Componentes do painel: faixa, luz, marca, campo, botao, aviso, trilha de passos,
    selo, fita, etapas, tabela, controle segmentado e log. Uma classe por peca;
    a tela so posiciona (telas.css). Cores pelo significado (direcao 4.2):
    --acao acao, --agora em curso, --sucesso concluido, --falha pede voce,
@@ -26,6 +26,27 @@
   .luz.sucesso { background: var(--sucesso); }
   .luz.falha { background: var(--falha); }
   .luz.agora { background: var(--agora); }
+
+  /* ---------------------------------------------------------------- marca (direcao 4.6) */
+  /* Logo oficial sem alterar a arte; no escuro, sobre a placa clara. O recuo negativo
+     alinha a arte (e nao a placa) com a borda do conteudo. */
+  .logo {
+    box-sizing: content-box;
+    inline-size: var(--logo-largura);
+    block-size: auto;
+    padding: var(--esp-2) var(--esp-3);
+    margin-inline-start: calc(var(--esp-3) * -1);
+    background: var(--logo-placa);
+    border-radius: var(--raio-bloco);
+  }
+  /* Simbolo no topo, ao lado do nome do painel (o h1 do layout de hoje e bloco). */
+  .simbolo {
+    block-size: var(--simbolo-altura); inline-size: auto;
+    vertical-align: middle; margin-inline-end: var(--esp-2);
+  }
+  /* Logo acima do texto, centrada (tela de encerrado). */
+  .fim-marca { display: grid; justify-items: center; gap: var(--esp-5); }
+  .fim-marca .logo { margin-inline-start: 0; }
 
   /* ---------------------------------------------------------------- campos */
   /* Rotulo visivel acima, 13 com peso 600, nunca caixa alta (direcao 4.3). */
