@@ -46,41 +46,38 @@
   }
   .view { display: flex; flex-direction: column; gap: var(--esp-5); }
   .view > h1 + .apoio { margin-top: calc(-1 * var(--esp-4)); }
-  /* Passo a passo: uma coluna, largura de leitura. */
-  body.no-inicio main { max-inline-size: var(--coluna-form); }
+  /* ---------------------------------------------------------------- passo a passo (2.2, 3.1) */
+  /* Uma coluna de leitura sob a logo; o Conferir usa a largura toda. O rodape
+     fixo cobre o fim da pagina: o respiro embaixo e a altura dele. */
+  .inicio { padding-block-end: calc(var(--rodape-altura) + var(--esp-6)); }
+  .inicio-cabeca { display: flex; justify-content: space-between; align-items: flex-start; margin-block-end: var(--esp-5); }
+  .inicio-corpo { max-inline-size: var(--coluna-form); display: grid; gap: var(--esp-5); }
+  /* Conferir cabe inteiro a 1366x768 (conflito e saida incluidos): respiro menor. */
+  .inicio-conferir { max-inline-size: none; gap: var(--esp-4); }
+  .inicio-titulo { margin: 0; font-size: var(--tipo-numero); }
+  .inicio-trilha { padding-block-end: var(--esp-4); border-block-end: var(--traco) solid var(--linha); }
+  .inicio-secao { display: grid; gap: var(--esp-1); }
+  .inicio-secao-titulo { margin: 0; font-size: var(--tipo-titulo); }
+  .lead { margin: 0; color: var(--texto); font-size: var(--tipo-leitura); max-inline-size: var(--medida-texto); }
 
-  /* ---------------------------------------------------------------- passo a passo */
-  /* Linha de acoes por contexto: no passo a passo quem avanca e o rodape. */
-  .inicio .so-opcoes, .inicio [data-ok] { display: none !important; }
-  /* Encoder dentro do passo: o cartao do passo e estreito para 4 colunas (os
-     selects de resolucao e codec vazavam a 1366 px); 2 por linha cabem inteiros. */
-  .inicio fieldset .campos { grid-template-columns: var(--grade-2); }
-  .inicio { gap: var(--esp-4); }
+  /* Conferir: uma linha por secao, rotulo, valor e "Alterar a <secao>". */
+  .conferir-lista {
+    display: grid; grid-template-columns: var(--grade-conferir);
+    background: var(--superficie); border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
+  }
+  .conferir-linha { display: contents; }
+  .conferir-linha > * { padding: var(--esp-3) var(--esp-4); border-block-end: var(--traco) solid var(--linha); }
+  .conferir-linha:last-child > * { border-block-end: 0; }
+  .conferir-rotulo { font-weight: var(--peso-forte); }
+  /* Conflito da fila: o aviso e a saida (Usar a faixa seguinte) lado a lado. */
+  .conferir-conflito { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2) var(--esp-3); }
+  .conferir-valor { display: grid; gap: var(--esp-1); justify-items: start; min-inline-size: 0; overflow-wrap: anywhere; }
+  .conferir-linha > .conferir-acao { text-align: end; padding-block: var(--esp-1); }
+  .conferir-falta { color: var(--atencao); display: inline-flex; gap: var(--esp-2); align-items: center; }
+  .conferir-senha { display: grid; gap: var(--esp-3); justify-self: stretch; }
+  .conferir-pede { margin: 0; }
 
-  /* O passo aberto e o que esta em curso: a barra lateral em --agora. */
-  .passo {
-    background: var(--superficie); border: var(--traco) solid var(--linha);
-    border-left: var(--barra-mini) solid var(--agora);
-    border-radius: var(--raio-bloco); padding: var(--esp-4) var(--esp-5) var(--esp-5);
-    display: flex; flex-direction: column; gap: var(--esp-3);
-  }
-  .passo h1 { margin: 0; }
-  .passo .explica { margin: 0; max-width: var(--medida-texto); }
-  .passo .slot { display: contents; }
-  .passo-acoes {
-    display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
-    padding: var(--esp-2) 0;
-  }
-  .passo-acoes .espaco { flex: 1; }
-  /* Sem fundo proprio: fica no nivel do cartao do passo; o botao primario ja chama. */
-  .passo-escolha { display: flex; flex-direction: column; gap: var(--esp-3); }
-  .passo-escolha p { margin: 0; }
-  .senha-definida {
-    margin: 0; color: var(--sucesso); font-weight: var(--peso-forte);
-    display: flex; align-items: center; gap: var(--esp-3);
-  }
-
-  /* Placas: lista de radios, a sugerida em primeiro. */
+  /* Placas da Sessao (legado, Opcoes): lista de radios, a sugerida em primeiro. */
   .placas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
   .placa-item {
     flex-direction: row; align-items: flex-start; gap: var(--esp-3); cursor: pointer;
@@ -97,21 +94,6 @@
   .placa-corpo { display: flex; flex-direction: column; gap: var(--esp-1); }
   .placa-nome { font-weight: var(--peso-forte); display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap; }
   .placa-detalhe { font-size: var(--tipo-meta); color: var(--apoio); }
-
-  /* Resumo: um cartao por secao, com "Alterar". */
-  .resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--campo-ip) + var(--topo-altura)), 1fr)); gap: var(--esp-3); }
-  .resumo-secao {
-    background: var(--superficie-2); border: var(--traco) solid var(--linha);
-    border-radius: var(--raio-bloco); padding: var(--esp-3) var(--esp-4);
-  }
-  .resumo-cabeca { display: flex; justify-content: space-between; align-items: baseline; gap: var(--esp-2); }
-  .resumo-cabeca a { font-size: var(--tipo-meta); }
-  .resumo-secao dl {
-    display: grid; grid-template-columns: max-content 1fr; gap: var(--esp-1) var(--esp-3);
-    margin: var(--esp-2) 0 0; font-size: var(--tipo-corpo);
-  }
-  .resumo-secao dt { color: var(--apoio); }
-  .resumo-secao dd { margin: 0; overflow-wrap: anywhere; }
 
   /* ---------------------------------------------------------------- painel */
   /* Azul-500 = agora: sem fila nada esta em curso, a barra lateral fica em --linha. */

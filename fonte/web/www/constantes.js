@@ -53,13 +53,20 @@ export const BITRATE_MIN = 64;
 export const BITRATE_MAX = 16384;
 export const PROGRESSO_MAX = 120;
 
-// Passo a passo: uma secao por passo, na ordem; o 7 e o resumo.
+// Secoes da tela de Opcoes de hoje (legado), na ordem.
 export const SECOES_ORDEM = ['senha', 'placa', 'rede', 'fabrica', 'camera', 'fila'];
-export const PASSO_SENHA = 1;
-export const PASSO_PLACA = 2;
-export const PASSO_FILA = 6;
-export const PASSO_RESUMO = 7;
-export const TOTAL_PASSOS = 7;
+
+// Passo a passo (direcao.md, secao 2.2): seis passos, o ultimo e o Conferir.
+export const PASSOS = Object.freeze(['senha', 'placa', 'rede', 'camera', 'fila', 'conferir']);
+// Etapa que cada passo grava na sessao (o servidor guarda a maior). A 3 era a
+// rede e a 4 a faixa de fabrica no passo a passo antigo: Rede grava as duas.
+export const ETAPA_DO_PASSO = Object.freeze({ placa: 2, rede: 4, camera: 5, fila: 6 });
+// Etapa gravada pelo "Comecar" (POST /api/sessao/concluir).
+export const ETAPA_CONCLUIDA = 7;
+// Ultimo octeto que a fila aceita (o .255 e o broadcast da rede).
+export const OCTETO_MAX_FILA = 254;
+// Ultimo octeto do IP do PC na faixa de fabrica quando o campo fica vazio (o servidor usa o mesmo).
+export const OCTETO_PC_FABRICA = 220;
 
 // Sem sessao.json ainda: os campos ficam com o que o servidor considera fabrica.
 export const SESSAO_PADRAO = {
@@ -79,3 +86,5 @@ export const RE_IP = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d
 // "yyyy-MM-dd HH:mm[:ss]" do servidor (hora local da maquina).
 export const RE_DATA_SERVIDOR = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/;
 export const RE_NAO_HEX = /[^0-9a-f]/g;
+// E-mail com algo antes e depois do @ e um ponto no dominio (a camera nao confere mais que isso).
+export const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

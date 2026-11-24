@@ -5,9 +5,8 @@
 import { h } from './dom.js';
 import { t } from './textos.js';
 import { numero } from './formato.js';
-import { ir, rotaDoPasso } from './rotas.js';
 import {
-  HTTP, NBSP, RE_IP, SECOES_ORDEM, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS,
+  HTTP, NBSP, RE_IP, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS,
   AVISO_NEUTRO_MS, ANUNCIO_ATRASO_MS, CONSULTA_APOS_COMANDO_MS,
 } from './constantes.js';
 
@@ -24,11 +23,6 @@ export const S = {
   avisoDoServidor: false,
   timerAviso: 0,
   modoAtual: '',
-  passoAtual: 0,
-  sugeridoAntes: 0,
-  // Sessao completa ao abrir: "Usar" (vai ao resumo) ou "Revisar" (passo 2).
-  escolhaSessao: '',
-  trocarSenhaAberta: false,
   // Atualizacao em curso: o servidor some no meio (fecha para instalar) e isso
   // nao e erro; a tela de "atualizando" fica.
   atualizando: false,
@@ -50,10 +44,9 @@ export const S = {
   cartoes: new Map(),
 };
 
-// Funcoes dos modulos de cima, registradas por legado-navegacao.iniciar().
+// Funcoes dos modulos de cima, registradas pelo app.js.
 export const ganchos = {
   buscarEstado: () => Promise.resolve(),
-  montarPasso: () => {},
 };
 
 export const $ = (id) => document.getElementById(id);
@@ -72,14 +65,6 @@ export async function exigir(pedido) {
   erro.dados = r.detalhe || {};
   erro.status = r.codigo;
   throw erro;
-}
-
-export function senhaOk() { return !!(S.estado && (S.estado.senhaDefinida || S.estado.simular)); }
-
-export function passoDe(secao) { return SECOES_ORDEM.indexOf(secao) + 1; }
-
-export function irPara(n) {
-  ir(rotaDoPasso(n));
 }
 
 // Espera o estado publicado satisfazer a condicao (ate -ms); devolve true se deu.
@@ -154,8 +139,7 @@ export async function comando(caminho, corpo, opcoes) {
 export function aplicarOcupado(ocupado) {
   const simular = !!(S.estado && S.estado.simular);
   const sel = '#view-ferramentas .btn, #btn-restaurar, #btn-refazer, #form-conectada .btn, ' +
-              '[data-decisao], #btn-avancar, #btn-comecar, #btn-montar-depois, ' +
-              '#btn-usar-sessao, #btn-revisar-sessao, .secao-form .btn[type="submit"]';
+              '[data-decisao], .secao-form .btn[type="submit"]';
   for (const b of document.querySelectorAll(sel)) {
     b.disabled = ocupado || (simular && b.hasAttribute('data-so-real'));
   }

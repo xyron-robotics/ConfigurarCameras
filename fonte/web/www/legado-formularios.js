@@ -1,18 +1,17 @@
 // Transicao: sai nas frentes 3 a 5 do redesenho.
-// As 6 secoes da sessao (senha, placa, rede, fabrica, camera, fila): leitura,
-// escrita, erros de campo, listas do encoder, placas, resumo e senha. Um
-// exemplar de cada formulario, movido entre o passo e Opcoes pela navegacao.
+// As 6 secoes da sessao em Opcoes (senha, placa, rede, fabrica, camera, fila):
+// leitura, escrita, erros de campo, listas do encoder, placas e senha. O passo
+// a passo tem os proprios formularios (formularios.js).
 import { h } from './dom.js';
 import { t } from './textos.js';
 import { numero, dataCurta, hora, ipParaNumero, resolucao } from './formato.js';
-import { rotaDoPasso } from './rotas.js';
 import {
   HTTP, SECOES_ORDEM, SESSAO_PADRAO, ESPERA_SESSAO_MS, CONSULTA_APOS_COMANDO_MS,
-  FILA_MAX_ENDERECOS, PASSO_SENHA, PASSO_RESUMO,
+  FILA_MAX_ENDERECOS,
 } from './constantes.js';
 import {
-  S, ganchos, $, exigir, senhaOk, passoDe, mostrarAviso, aplicarOcupado, esperarEstado,
-  ipValido, conferirCampoIp, textoStream,
+  S, ganchos, $, exigir, mostrarAviso, aplicarOcupado, esperarEstado,
+  ipValido, conferirCampoIp,
 } from './legado-estado.js';
 
 export const STREAMS = {
@@ -115,8 +114,6 @@ export function carregarSessao(forcar) {
       S.sessaoCache = d.sessao || structuredClone(SESSAO_PADRAO);
       S.ipFabrica = S.sessaoCache.IpFabrica;
       preencherFormularios();
-      if (S.passoAtual === PASSO_RESUMO) desenharResumo();
-      if (S.passoAtual === PASSO_SENHA) ganchos.montarPasso(PASSO_SENHA);
     } catch (e) { mostrarAviso(e.message); }
     return S.sessaoCache;
   })().finally(() => { S.carregandoSessao = null; });
@@ -380,40 +377,6 @@ function desenharPlacas() {
   if (temWifiSo) nota.textContent = t('placas.so-wifi');
 }
 
-// ------------------------------------------------------------------ resumo
-export function desenharResumo() {
-  const box = $('resumo');
-  const s = S.sessaoCache;
-  const estado = S.estado;
-  const es = (estado && estado.sessao) || {};
-  if (!s) { box.replaceChildren(h('p', { class: 'apoio' }, t('resumo.carregando'))); return; }
-  const cartao = (n, titulo, linhas) => h('div', { class: 'resumo-secao' }, [
-    h('div', { class: 'resumo-cabeca' }, [h('h2', null, titulo), n ? h('a', { href: rotaDoPasso(n) }, t('resumo.alterar')) : null]),
-    h('dl', null, linhas.filter(([, v]) => v !== undefined && v !== null && v !== '').flatMap(([k, v]) => [h('dt', null, k), h('dd', null, String(v))]))]);
-  const placa = s.Placa
-    ? t('resumo.placa-valor', { nome: s.Placa.Nome, tipo: s.Placa.Tipo === 'wifi' ? t('placas.wifi') : t('placas.ethernet'), ifIndex: s.Placa.IfIndex })
-    : t('resumo.placa-nao-escolhida');
-  const pr = s.Encoder.Principal; const se = s.Encoder.Secundario;
-  const fila = s.Fila && s.Fila.Inicio ? t('resumo.faixa-valor', { inicio: s.Fila.Inicio, fim: s.Fila.Fim }) : '';
-  const senha = senhaOk()
-    ? (estado.simular && !estado.senhaDefinida ? t('resumo.senha-simulacao') : t('resumo.senha-definida'))
-    : t('resumo.senha-nao-definida');
-  box.replaceChildren(
-    cartao(passoDe('senha'), t('inicio.passo1.titulo'), [[t('resumo.senha'), senha]]),
-    cartao(passoDe('placa'), t('inicio.passo2.titulo'), [[t('resumo.placa'), placa]]),
-    cartao(passoDe('rede'), t('inicio.passo3.titulo'), [[t('resumo.gateway'), s.Gateway], [t('resumo.mascara'), s.Mascara],
-      [t('resumo.dns'), s.Dns1 + ', ' + s.Dns2], [t('resumo.ip-pc'), s.IpPcCameras || t('resumo.ip-pc-cameras-auto')]]),
-    cartao(passoDe('fabrica'), t('inicio.passo4.titulo'), [[t('resumo.ip-fabrica'), s.IpFabrica], [t('resumo.ip-pc'), s.IpPcFabrica || t('resumo.ip-pc-fabrica-auto')]]),
-    cartao(passoDe('camera'), t('inicio.passo5.titulo'), [[t('resumo.email'), s.EmailRecuperacao],
-      [t('resumo.stream-principal'), textoStream(pr.Resolucao, pr.Fps, pr.BitRate, pr.Codec, 2 * Number(pr.Fps))],
-      [t('resumo.stream-secundario'), textoStream(se.Resolucao, se.Fps, se.BitRate, se.Codec, 2 * Number(se.Fps))]]),
-    cartao(passoDe('fila'), t('inicio.passo6.titulo'), [[t('resumo.faixa'), fila || t('resumo.faixa-depois')], [t('resumo.local'), s.Fila && s.Fila.Local],
-      [t('resumo.rack'), s.Fila && s.Fila.Rack], [t('resumo.andar'), s.Fila && s.Fila.Andar]]));
-  $('resumo-montar-rotulo').hidden = !fila;
-  $('btn-comecar').textContent = estado && estado.simular ? t('inicio.comecar-simulacao') : t('inicio.btn-comecar');
-  if (!es.placa && !s.Placa) $('btn-comecar').disabled = true;
-}
-
 // Previa da faixa enquanto o IP e digitado.
 export function desenharPrevia() {
   const f = $('form-fila').elements;
@@ -477,15 +440,4 @@ export function textoTrocarFila() {
   if (!itens.length) return '';
   const pend = itens.filter((i) => i.Estado === 'pendente').length;
   return t('fila.confirmar-troca', { inicio: itens[0].Ip, fim: itens[itens.length - 1].Ip, total: itens.length, pend });
-}
-
-export function textoDaEscolha(s) {
-  const partes = [t('escolha.ultima', { quando: dataCurta(s.quando) })];
-  if (s.placa) partes.push(t('escolha.placa', { nome: s.placa.nome }));
-  const c = S.sessaoCache;
-  if (c) partes.push(t('escolha.rede', { gateway: c.Gateway, mascara: c.Mascara, fabrica: c.IpFabrica }));
-  if (s.fila) partes.push(t('escolha.fila', { inicio: s.fila.inicio, fim: s.fila.fim, local: s.fila.local }));
-  else partes.push(t('escolha.sem-fila'));
-  partes.push(t('escolha.explica'));
-  return partes.join(' ');
 }

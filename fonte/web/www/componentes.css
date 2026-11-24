@@ -284,30 +284,73 @@
   /* Aviso junto do formulario que o causou. */
   [data-aviso-de] { margin: var(--esp-3) 0 0; align-self: stretch; }
 
-  /* ---------------------------------------------------------------- trilha de passos */
-  /* Uma coluna por passo, todas iguais (a lista tem os 7 passos). */
-  .passos {
-    list-style: none; margin: 0; padding: 0;
-    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--esp-1);
-    counter-reset: passo;
+  /* ---------------------------------------------------------------- trilha (UI-10) */
+  /* Numero, palavra e, nos feitos, o icone. Nao e botao: e um link de texto
+     (os abertos) ou texto (os de depois), fora do estilo dos botoes. */
+  .trilha-lista { display: flex; flex-wrap: wrap; gap: var(--esp-1) var(--esp-5); list-style: none; margin: 0; padding: 0; }
+  .trilha-passo { display: inline-flex; align-items: center; gap: var(--esp-2); color: var(--apoio); white-space: nowrap; }
+  .trilha-numero {
+    display: inline-grid; place-items: center; inline-size: var(--icone-m); block-size: var(--icone-m);
+    border: var(--traco) solid var(--linha-forte); border-radius: var(--raio-selo);
+    font-size: var(--tipo-meta); font-variant-numeric: tabular-nums;
   }
-  .passos li { counter-increment: passo; }
-  .passo-botao {
-    font: inherit; font-size: var(--tipo-meta); width: 100%; height: 100%; text-align: left;
-    padding: var(--esp-2); border-radius: var(--raio-controle); cursor: pointer;
-    background: var(--superficie-2); border: var(--traco) solid var(--linha);
-    border-top: var(--barra-mini) solid var(--linha); color: var(--apoio);
+  .trilha-feito { color: var(--texto); }
+  .trilha-feito .trilha-numero { border-color: var(--sucesso); color: var(--sucesso); }
+  .trilha-atual { color: var(--texto); font-weight: var(--peso-forte); }
+  .trilha-atual .trilha-numero { background: var(--acao); border-color: var(--acao); color: var(--acao-rotulo); }
+  .trilha-link { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: var(--esp-2); }
+  .trilha-link:hover { text-decoration: underline; }
+
+  /* ---------------------------------------------------------------- rodape fixo (UX-20) */
+  .rodape {
+    position: fixed; inset-inline: 0; inset-block-end: 0; z-index: var(--z-rodape);
+    block-size: var(--rodape-altura); background: var(--superficie);
+    border-block-start: var(--traco) solid var(--linha);
   }
-  .passo-botao::before { content: counter(passo) "  "; }
-  /* Passo ainda fechado: a cara de desabilitado (borda tracejada), sem opacidade. */
-  .passo-botao:disabled { cursor: default; border-style: dashed; border-top-style: solid; }
-  .passos li.feito .passo-botao { border-top-color: var(--sucesso); color: var(--texto); }
-  .passos li.agora .passo-botao {
-    border-top-color: var(--agora); background: var(--superficie); color: var(--texto);
-    font-weight: var(--peso-forte);
+  .rodape-conteudo {
+    display: flex; align-items: center; block-size: 100%;
+    max-inline-size: var(--conteudo-max); margin-inline: auto; padding-inline: var(--esp-5);
   }
-  @media (max-width: 760px) {
-    .passos { grid-auto-flow: row; grid-template-columns: var(--grade-2); }
+  .rodape-linha { display: flex; align-items: center; gap: var(--esp-4); inline-size: 100%; }
+  .rodape-estreito { max-inline-size: var(--coluna-form); }
+  .rodape-fim { margin-inline-start: auto; display: flex; align-items: center; gap: var(--esp-4); }
+  .rodape-nota { color: var(--apoio); font-size: var(--tipo-meta); }
+
+  /* ---------------------------------------------------------------- formulario (5.2) */
+  .form { display: grid; gap: var(--esp-5); }
+  .form-grade { display: grid; grid-template-columns: var(--grade-2); gap: var(--esp-4) var(--esp-5); }
+  .form-grade-local { grid-template-columns: var(--grade-local); }
+  .form-streams { display: grid; grid-template-columns: var(--grade-2); gap: var(--esp-5); }
+  .stream { display: grid; gap: var(--esp-3); margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+  .stream-titulo { font-size: var(--tipo-leitura); font-weight: var(--peso-forte); padding: 0; margin-block-end: var(--esp-1); }
+  .recolhido { border-block-start: var(--traco) solid var(--linha); padding-block-start: var(--esp-3); }
+  .recolhido > summary {
+    cursor: pointer; display: flex; gap: var(--esp-3); align-items: baseline; flex-wrap: wrap;
+  }
+  .recolhido[open] > summary { margin-block-end: var(--esp-4); }
+  .recolhido-titulo { font-weight: var(--peso-forte); }
+  .recolhido-resumo { color: var(--apoio); }
+  .recolhido-acao { color: var(--acao-texto); }
+  .recolhido-corpo { margin: 0; }
+  .previa, .nota-neutra, .placa-nota { display: flex; gap: var(--esp-2); align-items: center; color: var(--apoio); margin: 0; }
+  .previa-atencao { color: var(--atencao); }
+
+  /* Placas: uma linha por placa, o radio marcado pinta a linha. */
+  .placa-lista { margin: 0; padding: 0; border: 0; display: grid; gap: var(--esp-2); min-inline-size: 0; }
+  .placa-linha {
+    display: grid; grid-template-columns: var(--grade-marcador); gap: var(--esp-1) var(--esp-3); align-items: center;
+    padding: var(--esp-3) var(--esp-4); background: var(--superficie);
+    border: var(--traco) solid var(--linha); border-radius: var(--raio-controle); cursor: pointer;
+  }
+  .placa-linha:has(:checked) { border-color: var(--acao); background: var(--acao-fraco); }
+  .placa-radio { margin: 0; inline-size: var(--icone-p); block-size: var(--icone-p); accent-color: var(--acao); }
+  .placa-texto { display: grid; gap: var(--esp-1); min-inline-size: 0; }
+  .placa-cabeca { display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; }
+  .placa-rotulo { font-weight: var(--peso-forte); }
+  .placa-desc { color: var(--apoio); }
+  .placa-nota { font-size: var(--tipo-meta); }
+  @media (max-width: 1100px) {
+    .form-streams { grid-template-columns: var(--grade-1); }
   }
 
   /* ---------------------------------------------------------------- selo */

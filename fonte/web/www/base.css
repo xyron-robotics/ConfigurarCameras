@@ -53,7 +53,7 @@
   html { -webkit-tap-highlight-color: var(--acao-fraco); }
 
   /* Numero que muda ou se compara em coluna: digitos de largura igual. */
-  .mono, .tabela, .fita, .resumo-secao dd, .resultado dd, .bancada-pos, .passo-botao, .etapas { font-variant-numeric: tabular-nums; }
+  .mono, .tabela, .fita, .resultado dd, .bancada-pos, .etapas { font-variant-numeric: tabular-nums; }
   h1, h2, h3, legend { text-wrap: balance; }
 
   /* Ancora e foco por teclado param abaixo do topo fixo (sticky). */

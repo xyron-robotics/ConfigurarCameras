@@ -71,6 +71,8 @@ Source: "{#Raiz}\fonte\web\www\estado.js"; DestDir: "{app}\web\www"; Flags: igno
 Source: "{#Raiz}\fonte\web\www\rotas.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\componentes.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\topo.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\formularios.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\tela-inicio.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-estado.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-formularios.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-ligacoes.js"; DestDir: "{app}\web\www"; Flags: ignoreversion

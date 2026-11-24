@@ -1,8 +1,6 @@
 // Rotas por hash (direcao.md, secao 2.1): #/inicio/<passo>, #/conferir, #/painel,
 // #/painel/registro, #/sessao/<secao>, #/ferramentas. Um lugar so sabe o formato
 // do hash: quem navega chama ir() e quem desenha le lerRota().
-import { PASSO_RESUMO } from './constantes.js';
-
 // Abas do topo, na ordem em que aparecem.
 export const ABAS = Object.freeze(['painel', 'sessao', 'ferramentas']);
 export const ROTA_INICIAL = '#/painel';
@@ -21,9 +19,15 @@ export function hashDe(rota) {
   return '#/' + rota.tela + (rota.parte ? '/' + rota.parte : '');
 }
 
-// Passo 7 do passo a passo e o Conferir.
-export function rotaDoPasso(n) {
-  return n === PASSO_RESUMO ? '#/conferir' : '#/inicio/' + n;
+// Rota de um passo do passo a passo pelo nome ('placa', 'conferir').
+export function rotaDoPasso(passo) {
+  return passo === 'conferir' ? '#/conferir' : '#/inicio/' + passo;
+}
+
+// Passo da rota: #/conferir e o Conferir, #/inicio/<passo> o passo; fora disso, ''.
+export function passoDaRota(rota) {
+  if (rota.tela === 'conferir') return 'conferir';
+  return rota.tela === 'inicio' ? rota.parte : '';
 }
 
 // Navega com entrada no historico; a mesma rota redesenha (o hashchange nao viria).

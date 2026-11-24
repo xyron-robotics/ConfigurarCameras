@@ -50,6 +50,18 @@ export function ipParaNumero(ip) {
   return p.length === OCTETOS_IP ? p.reduce((acc, x) => acc * (OCTETO_MAX + 1) + x, 0) : 0;
 }
 
+// O contrario de ipParaNumero: 3221225994 vira "192.0.2.10".
+export function numeroParaIp(n) {
+  const base = OCTETO_MAX + 1;
+  const partes = [];
+  let resto = Math.floor(Number(n) || 0);
+  for (let i = 0; i < OCTETOS_IP; i += 1) {
+    partes.unshift(resto % base);
+    resto = Math.floor(resto / base);
+  }
+  return partes.join('.');
+}
+
 // "1920x1080" vira "1920 × 1080".
 export function resolucao(r) {
   return String(r).replace('x', t('formato.vezes'));

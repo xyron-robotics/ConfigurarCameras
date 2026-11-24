@@ -1,19 +1,16 @@
 // Transicao: sai nas frentes 3 a 5 do redesenho.
-// Ligacoes dos eventos da marcacao (passo a passo, painel, ferramentas, opcoes)
-// e a troca de tema.
+// Ligacoes dos eventos da marcacao (painel, ferramentas, opcoes) e a troca
+// de tema. O passo a passo liga os proprios eventos (tela-inicio.js).
 import { t } from './textos.js';
-import { SECOES_ORDEM, PASSO_SENHA, PASSO_PLACA, PASSO_RESUMO, HTTP, CONSULTA_APOS_ATUALIZAR_MS } from './constantes.js';
+import { SECOES_ORDEM, HTTP, CONSULTA_APOS_ATUALIZAR_MS } from './constantes.js';
 import {
-  S, ganchos, $, exigir, irPara, comando, mostrarAviso, mostrarTelaFim, conferirCampoIp,
+  S, ganchos, $, exigir, comando, mostrarAviso, mostrarTelaFim, conferirCampoIp,
 } from './legado-estado.js';
 import {
   atualizarPlaceholdersPc, escolherListaValor, desenharAvisosCamera, desenharEncoder, desenharPrevia,
   salvarSecao, carregarPlacas, mostrarSenha, enviarSenha, notaSenhaInstaladas, textoTrocarFila,
 } from './legado-formularios.js';
 import { carregarRegistro } from './legado-painel.js';
-import {
-  avancar, montarDepois, comecar, montarPasso, passoSugerido,
-} from './legado-navegacao.js';
 
 // Fechar ou recarregar a aba com secao editada e nao salva pede confirmacao.
 // Nas telas de fim o servidor ja saiu: nao ha o que salvar.
@@ -31,25 +28,11 @@ function temFila() {
 export function ligar() {
   window.addEventListener('beforeunload', sairComSujo);
 
-  // Passo a passo.
-  $('btn-avancar').addEventListener('click', avancar);
-  $('btn-voltar').addEventListener('click', () => { if (S.passoAtual > PASSO_SENHA) irPara(S.passoAtual - 1); });
-  $('btn-montar-depois').addEventListener('click', montarDepois);
-  $('btn-comecar').addEventListener('click', comecar);
-  $('btn-usar-sessao').addEventListener('click', () => { S.escolhaSessao = 'usar'; S.sugeridoAntes = 0; irPara(PASSO_RESUMO); });
-  $('btn-revisar-sessao').addEventListener('click', () => { S.escolhaSessao = 'revisar'; S.sugeridoAntes = 0; irPara(PASSO_PLACA); });
-  $('btn-trocar-senha').addEventListener('click', () => {
-    S.trocarSenhaAberta = true; montarPasso(PASSO_SENHA); $('form-senha').elements.senha.focus();
-  });
-  for (const b of document.querySelectorAll('#passos .passo-botao')) {
-    b.addEventListener('click', () => { const n = Number(b.closest('li').dataset.passo); if (n <= passoSugerido()) irPara(n); });
-  }
-  // Enter num campo do passo avanca (sem submit do formulario).
+  // Formularios de Opcoes (a Sessao de hoje).
   for (const secao of SECOES_ORDEM) {
     const form = $('form-' + secao);
     form.addEventListener('submit', (ev) => {
       ev.preventDefault();
-      if (S.passoAtual > 0) { avancar(); return; }
       if (secao === 'senha') { enviarSenha(form).then((ok) => { if (ok) notaSenhaInstaladas(); }); return; }
       if (secao === 'fila') {
         const f = form.elements;
@@ -123,7 +106,6 @@ export function ligar() {
   });
   $('btn-refazer').addEventListener('click', () => {
     if (!confirm(t('confirmar.refazer', { temFila: temFila() }))) return;
-    S.escolhaSessao = '';
     comando('/api/sessao/refazer');
   });
 

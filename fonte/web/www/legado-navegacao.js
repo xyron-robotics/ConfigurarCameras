@@ -1,21 +1,14 @@
 // Transicao: sai nas frentes 3 a 5 do redesenho.
-// Navegacao (passo a passo, Painel, Ferramentas, Sessao) e o desenho geral a
-// cada estado recebido. A consulta e o ciclo moram no app.js; o formato do
-// hash, no rotas.js. iniciar() registra o gancho montarPasso.
+// Navegacao (Painel, Ferramentas, Sessao) e o desenho geral a cada estado
+// recebido. A consulta e o ciclo moram no app.js; o formato do hash, no
+// rotas.js; o passo a passo e o Conferir, no tela-inicio.js (o app.js desenha).
 import { t } from './textos.js';
-import {
-  SECOES_ORDEM, PASSO_SENHA, PASSO_PLACA, PASSO_FILA, PASSO_RESUMO, TOTAL_PASSOS,
-  ESPERA_SESSAO_MS, ESPERA_COMECAR_MS, HTTP, BASE_DECIMAL,
-} from './constantes.js';
-import { lerRota, hashDe, corrigir, rotaDoPasso, ir, ROTA_INICIAL } from './rotas.js';
+import { lerRota, hashDe, corrigir } from './rotas.js';
 import { derivar } from './estado.js';
 import {
-  S, ganchos, $, exigir, senhaOk, passoDe, irPara, esperarEstado, ORIGEM_DO_COMANDO, naTela,
-  mostrarAviso, aplicarOcupado, anunciar, mostrarTelaFim, temFocoEmCampo,
+  S, $, ORIGEM_DO_COMANDO, naTela, mostrarAviso, aplicarOcupado, anunciar, mostrarTelaFim,
 } from './legado-estado.js';
-import {
-  carregarSessao, carregarPlacas, desenharResumo, enviarSenha, salvarSecao, textoDaEscolha,
-} from './legado-formularios.js';
+import { carregarSessao, carregarPlacas } from './legado-formularios.js';
 import {
   anexarLog, desenharAtualizacao, desenharFila, desenharFerramenta, carregarRegistro,
 } from './legado-painel.js';
@@ -29,37 +22,24 @@ function precisaInicio() {
   return derivar({ estado: S.estado }).inicio;
 }
 
-// Ate onde o passo a passo deixa ir: a primeira coisa que falta.
-export function passoSugerido() {
-  const s = (S.estado && S.estado.sessao) || {};
-  if (!senhaOk()) return PASSO_SENHA;
-  if (s.completa && !S.escolhaSessao) return PASSO_SENHA;
-  if (S.escolhaSessao === 'usar') return PASSO_RESUMO;
-  if (!s.placa) return PASSO_PLACA;
-  return Math.min(TOTAL_PASSOS, Math.max(PASSO_PLACA, (s.etapa || 0) + 1));
-}
-
+// No passo a passo so a secao #inicio fica a vista (a rota dela e o app.js
+// que corrige); fora dele, a view da aba.
 export function trocarView() {
   if (!S.estado || !S.estado.fase) return;
   const inicio = precisaInicio();
   document.body.classList.toggle('no-inicio', inicio);
-  let r = lerRota();
+  // O log fica fora do passo a passo: nada roda antes do Comecar, e o rodape
+  // fixo cobriria o fim dele.
+  $('log-bloco').hidden = inicio;
   if (inicio) {
-    const sug = passoSugerido();
-    let n = r.tela === 'conferir' ? PASSO_RESUMO : parseInt(r.parte, BASE_DECIMAL);
-    if ((r.tela !== 'inicio' && r.tela !== 'conferir') || !(n >= 1)) n = sug;
-    n = Math.min(Math.max(1, n), sug);
-    corrigir(rotaDoPasso(n));
     for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== 'inicio';
-    montarPasso(n);
-    $('log-bloco').open = false;
     return;
   }
+  let r = lerRota();
   if (!VIEW_DA_TELA[r.tela]) r = { tela: 'painel', parte: '' };
   // Apelido antigo (#opcoes/fila) ou tela desconhecida: a URL mostra a rota de hoje.
   corrigir(hashDe(r));
   const view = VIEW_DA_TELA[r.tela];
-  montarOpcoes();
   for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== 'view-' + view;
   // O log so interessa no painel; nas outras abas ele empurra o conteudo.
   $('log-bloco').open = view === 'painel';
@@ -77,76 +57,13 @@ export function trocarView() {
   }
 }
 
-// Modo ou passo sugerido mudaram entre dois pollings (senha informada,
-// secao salva, "comecar", "refazer"): a tela acompanha.
+// O modo mudou entre dois pollings ("comecar", "refazer"): a tela acompanha.
 function desenharModo() {
   const modo = precisaInicio() ? 'inicio' : 'normal';
-  const sug = modo === 'inicio' ? passoSugerido() : 0;
-  if (modo !== S.modoAtual || sug !== S.sugeridoAntes) {
-    if (modo === 'inicio' && S.modoAtual === 'normal') { S.escolhaSessao = ''; }
-    S.modoAtual = modo; S.sugeridoAntes = sug;
+  if (modo !== S.modoAtual) {
+    S.modoAtual = modo;
     trocarView();
   }
-}
-
-// Formulario de uma secao: um so exemplar, movido entre o passo e Opcoes.
-function slotDe(secao, noInicio) {
-  return noInicio
-    ? document.querySelector('#inicio .passo[data-passo="' + passoDe(secao) + '"] .slot')
-    : document.querySelector('#view-opcoes .secao[data-secao="' + secao + '"] .slot');
-}
-
-export function montarPasso(n) {
-  S.passoAtual = n;
-  const sug = passoSugerido();
-  for (const p of document.querySelectorAll('#inicio .passo')) p.hidden = Number(p.dataset.passo) !== n;
-  for (const li of document.querySelectorAll('#passos li')) {
-    const k = Number(li.dataset.passo);
-    li.className = k < n ? 'feito' : (k === n ? 'agora' : '');
-    li.querySelector('button').disabled = k > sug;
-    if (k === n) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
-  }
-  for (const secao of SECOES_ORDEM) {
-    const form = $('form-' + secao);
-    const alvo = slotDe(secao, passoDe(secao) === n);
-    if (form.parentElement !== alvo) alvo.append(form);
-  }
-  $('passo-n').textContent = t('inicio.passo-n', { n, total: TOTAL_PASSOS });
-  $('btn-voltar').hidden = n === PASSO_SENHA;
-  $('btn-montar-depois').hidden = n !== PASSO_FILA;
-  $('btn-comecar').hidden = n !== PASSO_RESUMO;
-  $('btn-avancar').hidden = n === PASSO_RESUMO;
-  $('btn-avancar').textContent = n === PASSO_SENHA ? t('inicio.avancar-senha')
-    : (n === PASSO_FILA ? t('inicio.avancar-fila') : t('inicio.btn-avancar'));
-
-  if (n === PASSO_SENHA) {
-    const s = S.estado.sessao || {};
-    const temEscolha = senhaOk() && s.completa && !S.escolhaSessao;
-    $('passo-escolha').hidden = !temEscolha;
-    if (temEscolha) $('escolha-texto').textContent = textoDaEscolha(s);
-    $('senha-definida').hidden = !senhaOk();
-    $('form-senha').hidden = senhaOk() && !S.trocarSenhaAberta;
-    // Senha ja definida e sem a escolha da sessao: o rodape ainda avanca
-    // (sem ele o passo 1 so tinha saida pelas abas).
-    const senhaFechada = senhaOk() && !S.trocarSenhaAberta;
-    $('btn-avancar').hidden = senhaFechada && temEscolha;
-    if (senhaFechada) $('btn-avancar').textContent = t('inicio.btn-avancar');
-  }
-  if (n === PASSO_PLACA) carregarPlacas();
-  if (n >= PASSO_PLACA && n <= PASSO_FILA) carregarSessao();
-  if (n === PASSO_RESUMO) { carregarSessao(); desenharResumo(); }
-  const foco = document.querySelector('#inicio .passo:not([hidden]) input:not([type="hidden"]):not([disabled]), #inicio .passo:not([hidden]) select');
-  if (foco && !temFocoEmCampo()) foco.focus({ preventScroll: true });
-}
-
-function montarOpcoes() {
-  S.passoAtual = 0;
-  for (const secao of SECOES_ORDEM) {
-    const form = $('form-' + secao);
-    const alvo = slotDe(secao, false);
-    if (form.parentElement !== alvo) alvo.append(form);
-  }
-  $('form-senha').hidden = false;
 }
 
 // ------------------------------------------------------------------ estado
@@ -181,7 +98,6 @@ function desenhar() {
 
   desenharFila(e);
   desenharFerramenta(e.ferramenta, e);
-  if (S.passoAtual === PASSO_SENHA) montarPasso(PASSO_SENHA);
 
   const falas = [];
   if (S.ultimoVisto !== null && e.ultimo && e.ultimo !== S.ultimoVisto) falas.push(e.ultimo);
@@ -217,58 +133,4 @@ function desenhar() {
   } else if (!e.aviso && S.avisoDoServidor) {
     mostrarAviso('');
   }
-}
-
-// ------------------------------------------------------------------ passo a passo (acoes)
-export async function avancar() {
-  const n = S.passoAtual;
-  if (n === PASSO_SENHA) {
-    if (senhaOk() && !S.trocarSenhaAberta) { irPara(PASSO_PLACA); return; }
-    const ok = await enviarSenha($('form-senha'));
-    if (!ok) return;
-    S.trocarSenhaAberta = false;
-    await esperarEstado((e) => e.senhaDefinida);
-    const s = (S.estado && S.estado.sessao) || {};
-    if (s.completa && !S.escolhaSessao) { montarPasso(PASSO_SENHA); return; }
-    irPara(passoSugerido());
-    return;
-  }
-  if (n >= PASSO_PLACA && n <= PASSO_FILA) {
-    const fila = $('form-fila').elements;
-    if (n === PASSO_FILA && !fila.inicio.value.trim() && !fila.fim.value.trim()) { montarDepois(); return; }
-    const ok = await salvarSecao(SECOES_ORDEM[n - 1], { etapa: n });
-    if (ok) irPara(n + 1);
-  }
-}
-
-export async function montarDepois() {
-  const g = (S.estado && S.estado.sessao && S.estado.sessao.geracao) || 0;
-  try {
-    await exigir(S.api.salvarSessao({ etapa: PASSO_FILA }));
-    await esperarEstado((e) => e.sessao && e.sessao.geracao > g, ESPERA_SESSAO_MS);
-    S.sujo.fila = false;
-    await carregarSessao(true);
-    irPara(PASSO_RESUMO);
-  } catch (e) { mostrarAviso(e.message, null, { neutro: e.status === HTTP.CONFLITO }); }
-}
-
-export async function comecar() {
-  const montar = !$('resumo-montar-rotulo').hidden && $('resumo-montar').checked;
-  try {
-    aplicarOcupado(true);
-    await exigir(S.api.comando('/api/sessao/concluir', { montarFila: montar }));
-    mostrarAviso('');
-    await esperarEstado((e) => e.sessao && e.sessao.iniciada && !e.ocupado, ESPERA_COMECAR_MS);
-    // O passo a passo sai do historico: voltar nao reabre o Conferir.
-    corrigir(ROTA_INICIAL);
-    desenharModo();
-    ir(ROTA_INICIAL);
-  } catch (e) {
-    mostrarAviso(e.message, 'concluir', { neutro: e.status === HTTP.CONFLITO });
-    aplicarOcupado(!!(S.estado && S.estado.ocupado));
-  }
-}
-
-export function iniciar() {
-  ganchos.montarPasso = montarPasso;
 }
