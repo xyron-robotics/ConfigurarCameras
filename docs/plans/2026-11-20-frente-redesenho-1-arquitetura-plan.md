@@ -1,6 +1,8 @@
 # Frente redesenho-arquitetura: o front em módulos, tokens e textos, sem mudança visual (fase B, 1 de 5)
 
-**Status:** Ativo · **Frente:** `redesenho-arquitetura`
+**Status:** Concluído (24/11/2026) · **Frente:** `redesenho-arquitetura`
+
+**Fechamento:** entraram a linha de base de paridade, o `Testes-Front.ps1` com as regras da direção 7.4 (na régua, no CI e no instalador), o CSS em quatro camadas com os valores de hoje, os ES modules de base (`api.js`, `dom.js`, `formato.js`, `textos.js`, `constantes.js`), o `app.js` dividido em `legado-*.js` e a regra valendo no `www` real, sem mudança na tela. Ficam para a frente 2 os tokens marcados `/* legado: sai na frente 2 */` em `tokens.css` e o `.png` no `$tipos` do servidor; os `legado-*.js` saem nas frentes 3 a 5.
 
 Frente 1 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Especificação: `docs/design/2026-11-ux/direcao.md`, seção 7 (arquitetura do front). Código de partida dos módulos de base: `docs/design/2026-11-ux/prototipo/`.
 
