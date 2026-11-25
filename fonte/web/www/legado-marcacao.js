@@ -58,56 +58,10 @@ export function montarMarcacao(topo) {
           // Tabela Fila agora / Registro e linhas de cada camera: o app.js monta aqui a tela-painel.js.
           h('div', { id: 'painel-tabela' }),
         ]),
-        h('section', { id: 'view-ferramentas', class: 'view', hidden: true }, [
-          h('h1', null, t('ferramentas.titulo')),
-          h('p', { class: 'apoio' }, t('ferramentas.apoio')),
-          h('div', { class: 'ferramentas' }, [
-            h('form', { id: 'form-sondar', class: 'ferramenta' }, [
-              h('h2', null, t('ferramentas.form-sondar.titulo')),
-              h('p', { class: 'apoio' }, t('ferramentas.form-sondar.apoio')),
-              h('div', { class: 'linha-campos' }, [
-                h('label', null, [
-                  t('ferramentas.campo-ip'),
-                  h('input', { name: 'ip', class: 'mono', translate: 'no', 'data-ip': true, spellcheck: 'false', required: true, autocomplete: 'off' }),
-                ]),
-                ' ',
-                h('button', { class: 'btn', type: 'submit', 'data-so-real': true }, t('ferramentas.form-sondar.botao')),
-              ]),
-              h('p', { class: 'nota', 'data-nota-simular': true, hidden: true }, t('ferramentas.form-sondar.nota')),
-              h('p', { class: 'aviso-legado', 'data-aviso-de': 'sondar', role: 'alert', hidden: true }),
-            ]),
-            h('div', { class: 'ferramenta' }, [
-              h('h2', null, t('ferramentas.descobrir.titulo')),
-              h('p', { class: 'apoio' }, [
-                t('ferramentas.descobrir.apoio'),
-                ' ',
-                h('span', { translate: 'no' }, t('ferramentas.descobrir.termo')),
-                ' ',
-                t('ferramentas.descobrir.apoio.2'),
-              ]),
-              ' ',
-              h('button', { type: 'button', class: 'btn', id: 'btn-descobrir', 'data-so-real': true }, t('ferramentas.btn-descobrir')),
-              ' ',
-              h('p', { class: 'nota', 'data-nota-simular': true, hidden: true }, t('ferramentas.descobrir.nota')),
-              h('p', { class: 'aviso-legado', 'data-aviso-de': 'descobrir', role: 'alert', hidden: true }),
-            ]),
-            h('div', { class: 'ferramenta' }, [
-              h('h2', null, t('ferramentas.verificar.titulo')),
-              h('p', { class: 'apoio' }, t('ferramentas.verificar.apoio')),
-              ' ',
-              h('button', { type: 'button', class: 'btn', id: 'btn-verificar' }, t('ferramentas.btn-verificar')),
-              ' ',
-              h('p', { class: 'aviso-legado', 'data-aviso-de': 'verificar', role: 'alert', hidden: true }),
-            ]),
-          ]),
-          h('div', { id: 'resultado-ferramenta', class: 'resultado', 'aria-live': 'polite', hidden: true }),
-        ]),
+        // Ferramentas: o app.js monta aqui a tela de tela-ferramentas.js (com o log do painel).
+        h('section', { id: 'ferramentas', class: 'view', hidden: true }),
         // Sessao: o app.js desenha aqui a tela de tela-sessao.js.
         h('section', { id: 'sessao', class: 'view sessao', hidden: true }),
-        h('details', { class: 'log', id: 'log-bloco', open: true }, [
-          h('summary', null, t('log.abrir')),
-          h('div', { id: 'log', class: 'log-linhas mono', translate: 'no', 'aria-live': 'off' }),
-        ]),
       ]),
     h('div', { id: 'encerrado', class: 'encerrado', tabindex: '-1', hidden: true }, [
       h('div', { class: 'fim-marca' }, [

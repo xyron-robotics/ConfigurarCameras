@@ -71,6 +71,11 @@ export function derivar(bruto, extras) {
     registro: derivarRegistro(x.registro, x.registroLeitura),
     // Ultimo aviso do servidor; n sobe a cada aviso novo (quem mandou o comando compara).
     aviso: { texto: e.aviso || '', n: Number(e.avisoN) || 0, origem: e.avisoOrigem || '' },
+    // Ultima ferramenta (Sondar, Verificar, Procurar) como o servidor publica, e o
+    // trabalho em curso dela (texto e { atual, total }): Ferramentas desenha.
+    ferramenta: e.ferramenta || null,
+    trabalho: e.trabalho || '',
+    progresso: e.progresso && e.progresso.total ? e.progresso : null,
     atualizacao: derivarAtualizacao(bruto && bruto.atualizacao),
   };
   modelo.painel = estadoDoPainel(modelo);

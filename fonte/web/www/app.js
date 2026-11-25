@@ -17,6 +17,7 @@ import { criarTopo } from './topo.js';
 import { telaPasso, telaConferir } from './tela-inicio.js';
 import { telaSessao, aplicarTema } from './tela-sessao.js';
 import { telaPainel } from './tela-painel.js';
+import { telaFerramentas } from './tela-ferramentas.js';
 import { montarMarcacao } from './legado-marcacao.js';
 import { usarApi, ganchos, anunciar } from './legado-estado.js';
 import { receberEstado, semResposta, trocarView } from './legado-navegacao.js';
@@ -73,6 +74,7 @@ function consultar() {
       bruto = r.dados;
       remodelar();
       receberEstado(r.dados);
+      if (ferramentas) ferramentas.anexarLog(r.dados.log || []);
       // Sessao gravada de novo (secao salva, fila montada): as telas releem.
       if (!extras.sessao || geracaoLida < modelo.geracao) recarregarSessao().then(desenharTelas);
     } else {
@@ -193,7 +195,11 @@ function desenharTelas(o) {
   desenharInicio(o || {});
   desenharSessao(o || {});
   desenharPainel();
+  if (ferramentas) ferramentas.atualizar(modelo);
 }
+
+// Ferramentas e o log do painel em #ferramentas (tela-ferramentas.js).
+let ferramentas = null;
 
 // Tabela do Painel em #painel-tabela (a marcacao legada guarda o lugar). Com a
 // aba Registro aberta, fila que muda de fase ou camera instalada agora rele o registro.
@@ -329,6 +335,8 @@ painel = telaPainel(ctx, lerRota().parte);
 document.getElementById('painel-tabela').replaceChildren(painel.el);
 document.getElementById('painel-topo').replaceChildren(painel.topo);
 document.getElementById('faixa-painel').replaceChildren(painel.faixa);
+ferramentas = telaFerramentas(ctx);
+document.getElementById('ferramentas').replaceChildren(ferramentas.el);
 ligar();
 aplicarTema(document.documentElement.dataset.tema);
 aoMudarRota(aoTrocarDeTela);

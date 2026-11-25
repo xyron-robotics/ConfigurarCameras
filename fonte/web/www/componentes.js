@@ -99,7 +99,7 @@ export function lugarAviso() {
 }
 
 // Campo com rotulo visivel acima, ajuda embaixo e erro com o conserto (5.2).
-// o: { rotulo, id?, nome?, tipo?, valor?, ajuda?, exemplo?, mono?, curto?, inputmode?, autocomplete?, opcoes? }
+// o: { rotulo, id?, nome?, tipo?, valor?, ajuda?, exemplo?, mono?, curto?, inputmode?, autocomplete?, opcoes?, classe? }
 export function campo(o) {
   const id = o.id || novoId('campo');
   const ajudaId = id + '-ajuda';

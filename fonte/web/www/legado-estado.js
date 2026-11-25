@@ -2,16 +2,14 @@
 // Base dos modulos legado-*: o estado mutavel compartilhado (so aqui, no
 // objeto S), a ponte com a api.js e os ajudantes que todos usam. Nao importa
 // nenhum outro legado-*: o que precisa de modulo de cima passa por ganchos.
-import { h } from './dom.js';
 import { t } from './textos.js';
 import {
-  HTTP, RE_IP, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS,
-  AVISO_NEUTRO_MS, ANUNCIO_ATRASO_MS, CONSULTA_APOS_COMANDO_MS,
+  RE_IP, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS,
+  AVISO_NEUTRO_MS, ANUNCIO_ATRASO_MS,
 } from './constantes.js';
 
 export const S = {
   api: null,
-  cursorLog: 0,
   estado: null,
   ultimaFase: '',
   // Leitor de tela: so as transicoes (instalada, falhou, fim).
@@ -24,7 +22,6 @@ export const S = {
   // nao e erro; a tela de "atualizando" fica.
   atualizando: false,
   buscando: null,
-  ferramentaChave: '',
 };
 
 // Funcoes dos modulos de cima, registradas pelo app.js.
@@ -64,18 +61,11 @@ export async function esperarEstado(cond, ms) {
 // ------------------------------------------------------------------ avisos
 // O aviso aparece junto do formulario que o causou (o primeiro data-aviso-de
 // dele que estiver na tela); se nenhum estiver, na faixa do topo.
-const ORIGEM_DA_ROTA = {
-  '/api/fila': 'fila', '/api/fila/conectada': 'conectada',
-  '/api/decisao': 'conectada', '/api/vigia': 'vigia', '/api/sondar': 'sondar', '/api/descobrir': 'descobrir',
-  '/api/verificar': 'verificar',
-};
 export const ORIGEM_DO_COMANDO = {
   fila: 'fila', conectada: 'conectada', decisao: 'conectada',
-  vigia: 'vigia', sondar: 'sondar', descobrir: 'descobrir', verificar: 'verificar',
+  vigia: 'vigia',
   'sessao-concluir': 'concluir',
 };
-// Rotas que o servidor aceita mesmo ocupado: nao travam os botoes.
-const ROTA_SEMPRE = ['/api/senha', '/api/vigia', '/api/camera'];
 
 export function naTela(el) {
   for (let n = el; n; n = n.parentElement) if (n.hidden) return false;
@@ -94,37 +84,6 @@ export function mostrarAviso(texto, origem, opcoes) {
   a.classList.toggle('neutro', !!o.neutro);
   a.hidden = false;
   if (o.neutro) S.timerAviso = setTimeout(() => { a.hidden = true; }, AVISO_NEUTRO_MS);
-}
-
-// Devolve true se o servidor aceitou. -opcoes.semTrava: quem chama trava os
-// proprios botoes (decisao de uma linha nao trava as outras linhas).
-export async function comando(caminho, corpo, opcoes) {
-  const origem = ORIGEM_DA_ROTA[caminho];
-  // Trava otimista: o estado "ocupado" so chega no proximo polling.
-  if (!ROTA_SEMPRE.includes(caminho) && !(opcoes && opcoes.semTrava)) aplicarOcupado(true);
-  let ok = false;
-  try {
-    await exigir(S.api.comando(caminho, corpo));
-    mostrarAviso('');
-    ok = true;
-  } catch (e) {
-    if (e.status === HTTP.CONFLITO) mostrarAviso(e.message, origem, { neutro: true });
-    else mostrarAviso(e.message, origem);
-  }
-  setTimeout(ganchos.buscarEstado, CONSULTA_APOS_COMANDO_MS);
-  return ok;
-}
-
-// Botoes de trabalho ficam desligados enquanto o worker trabalha. Encerrar o
-// painel, encerrar a fila e o vigia (desligar vale no meio de uma camera)
-// ficam sempre ativos; o Configurar sem vigia trava pelo modelo (tela-painel.js). Os botoes de decisao das linhas da tabela tambem ficam
-// fora: o servidor aceita decisao com o worker ocupado, e cada linha trava os seus.
-export function aplicarOcupado(ocupado) {
-  const simular = !!(S.estado && S.estado.simular);
-  const sel = '#view-ferramentas .btn';
-  for (const b of document.querySelectorAll(sel)) {
-    b.disabled = ocupado || (simular && b.hasAttribute('data-so-real'));
-  }
 }
 
 // urgente: a regiao assertive (falha nova de camera, P3); o resto vai na polite.
@@ -146,10 +105,6 @@ export function mostrarTelaFim(id) {
 export function temFocoEmCampo() {
   const a = document.activeElement;
   return a && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA');
-}
-
-export function barraProgresso(p, rotulo) {
-  return h('progress', { value: p.atual, max: p.total, 'aria-label': rotulo || t('geral.progresso') });
 }
 
 export const ipValido = (v) => RE_IP.test(String(v).trim());

@@ -1,55 +1,10 @@
 // Transicao: sai nas frentes 3 a 5 do redesenho.
-// Painel: log, faixa de atualizacao, bancada da retomada manual (etapas e
-// decisao) e resultado das ferramentas. A tabela, a fita, o cabecalho da fila,
-// o vigia e os estados vazios moram em tela-painel.js.
-import { h } from './dom.js';
-import { icone } from './icones.js';
+// Painel: faixa de atualizacao e bancada da retomada manual (etapas). A tabela,
+// a fita, o cabecalho da fila, o vigia e os estados vazios moram em tela-painel.js;
+// o log e o resultado das ferramentas, em tela-ferramentas.js.
 import { t } from './textos.js';
-import { streamsEncoder } from './formato.js';
-import {
-  ETAPAS, LOG_FOLGA_FIM, LOG_MAX_LINHAS, LOG_INICIO_HORA, PORTA_HTTP,
-  COLUNAS_MONO_DESCOBRIR, COLUNAS_MONO_VERIFICAR,
-} from './constantes.js';
-import { S, $, mostrarTelaFim, barraProgresso } from './legado-estado.js';
-
-// ------------------------------------------------------------------ significado
-// A classe diz o significado, nunca a cor (direcao 4.2): vermelho so falha que
-// pede voce, ambar so atencao, verde concluido, azul-500 o que esta em curso,
-// cinza o resto, inclusive simulacao. Sem classe = cinza.
-// O log traz a cor do console (Write-Log); a linha leva a classe do significado.
-const SIGNIFICADO_DO_CONSOLE = Object.freeze({
-  Red: 'falha', Green: 'sucesso', Yellow: 'atencao', DarkYellow: 'atencao',
-  DarkGray: 'neutro', Cyan: 'destaque',
-});
-// Icone da linha do log por significado (direcao 4.5): estado nunca so pela cor
-// da barra. Com nome acessivel, porque a mensagem nem sempre traz a palavra.
-// neutro e destaque nao levam icone (nao sao estado).
-const ICONE_DO_SIGNIFICADO = Object.freeze({
-  falha: { nome: 'falha', rotulo: 'log.falha' },
-  sucesso: { nome: 'concluido', rotulo: 'log.sucesso' },
-  atencao: { nome: 'atencao', rotulo: 'log.atencao' },
-});
-
-// ------------------------------------------------------------------ log
-export function anexarLog(entrada) {
-  // Duas buscas em voo podem trazer a mesma linha: so entra o que e mais novo que o cursor.
-  const linhas = entrada.filter((l) => !(l.n <= S.cursorLog));
-  if (!linhas.length) return;
-  const caixa = $('log');
-  const noFim = caixa.scrollHeight - caixa.scrollTop - caixa.clientHeight < LOG_FOLGA_FIM;
-  for (const l of linhas) {
-    const significado = SIGNIFICADO_DO_CONSOLE[l.cor] || null;
-    const ic = ICONE_DO_SIGNIFICADO[significado];
-    // A casa do icone existe em toda linha, para a hora e a mensagem ficarem alinhadas.
-    caixa.append(h('div', { class: significado }, [
-      h('span', { class: 'log-sinal' }, ic ? icone(ic.nome, 'p', t(ic.rotulo)) : null),
-      h('span', { class: 'ts' }, String(l.ts).slice(LOG_INICIO_HORA)),
-      l.msg,
-    ]));
-  }
-  while (caixa.childElementCount > LOG_MAX_LINHAS) caixa.firstElementChild.remove();
-  if (noFim) caixa.scrollTop = caixa.scrollHeight;
-}
+import { ETAPAS } from './constantes.js';
+import { S, $, mostrarTelaFim } from './legado-estado.js';
 
 // Faixa de atualizacao: aparece com versao nova conhecida; o botao so ativa
 // com o painel parado (o servidor tambem recusa com 409 e diz o motivo).
@@ -148,75 +103,4 @@ function mostrarBlocos(blocos) {
 function listaCameras(e) {
   const c = e && e.cameras;
   return Array.isArray(c) ? c.filter(Boolean) : (c ? [c] : []);
-}
-
-// IP, MAC, modelo e serial (sempre em .mono) nao passam por tradutor.
-const MONO = { class: 'mono', translate: 'no' };
-
-// ------------------------------------------------------------------ ferramentas
-function tabela(cabecalho, linhas, colunasMono) {
-  return h('div', { class: 'tabela-rolagem' }, h('table', { class: 'tabela' }, [
-    h('thead', null, h('tr', null, cabecalho.map((c) => h('th', null, c)))),
-    h('tbody', null, linhas.map((l) => h('tr', null, l.map((c, n) => h('td',
-      colunasMono.includes(n) ? MONO : null, String(c ?? '')))))),
-  ]));
-}
-
-export function desenharFerramenta(f, e) {
-  const caixa = $('resultado-ferramenta');
-  if (!f) { caixa.hidden = true; S.ferramentaChave = ''; return; }
-  // So redesenha quando muda: o polling nao pode apagar o que esta na tela.
-  const chave = JSON.stringify(f) + (f.emCurso ? '|' + (e.trabalho || '') + '|' + JSON.stringify(e.progresso || null) : '');
-  if (chave === S.ferramentaChave) return;
-  S.ferramentaChave = chave;
-  caixa.hidden = false;
-  if (f.emCurso) {
-    const titulo = { sondar: () => t('ferramenta.sondando', { ip: f.ip }), descobrir: () => t('ferramenta.procurando'),
-      verificar: () => t('ferramenta.verificando') }[f.tipo];
-    caixa.replaceChildren(h('h3', null, titulo ? titulo() : t('geral.trabalhando')), h('p', { class: 'apoio' }, e.trabalho || ''),
-      e.progresso ? barraProgresso(e.progresso, e.trabalho) : '');
-    return;
-  }
-  const titulo = { sondar: () => t('ferramenta.sondagem', { ip: f.ip }), descobrir: () => t('ferramenta.encontradas'),
-    verificar: () => t('ferramenta.verificacao') }[f.tipo];
-  const partes = [h('h3', null, t('ferramenta.titulo-as', { titulo: titulo ? titulo() : f.tipo, quando: f.quando }))];
-
-  if (f.tipo === 'sondar') {
-    const enc = streamsEncoder(f.encoder, true);
-    const campos = [
-      [t('sondar.ping'), f.ping ? t('sondar.responde') : t('sondar.nao-responde')],
-      [t('sondar.estado'), f.fabrica ? t('sondar.de-fabrica') : (f.init === -1 ? t('sondar.nao-respondeu') : t('sondar.inicializada'))],
-      [t('sondar.modelo'), f.modelo], [t('sondar.serial'), f.serial], [t('sondar.firmware'), f.firmware], [t('sondar.mac'), f.mac],
-      [t('sondar.rede'), f.rede],
-      [t('sondar.stream-principal'), enc && enc.principal], [t('sondar.stream-secundario'), enc && enc.secundario],
-      [t('sondar.erro'), f.erro],
-    ].filter(([, v]) => v !== undefined && v !== null && v !== '');
-    partes.push(h('dl', null, campos.flatMap(([k, v]) => [h('dt', null, k), h('dd', null, String(v))])));
-  } else if (f.tipo === 'descobrir') {
-    const itens = f.itens || [];
-    if (!itens.length) {
-      partes.push(h('p', { class: 'apoio' }, t('descobrir.nada')));
-    } else {
-      partes.push(h('p', { class: 'apoio' }, t('descobrir.resumo', { broadcast: f.broadcast, varredura: f.varredura || 0 })));
-      const estadoDe = (i) => {
-        let s = i.fabrica ? t('descobrir.de-fabrica') : (i.init === -1 ? t('descobrir.desconhecido') : t('descobrir.inicializada'));
-        if (i.classe && i.classe !== 'IPC') s += ' (' + i.classe + ')';
-        if (!i.alcancavel) s += t('descobrir.fora-das-faixas');
-        else if (i.fabrica && !i.confirmado) s += t('descobrir.nao-confirmado');
-        return s;
-      };
-      const linhas = itens.map((i) => [i.ip + (i.httpPort && i.httpPort !== PORTA_HTTP ? ':' + i.httpPort : ''), i.mascara || '',
-        i.mac || t('descobrir.nao-lido'), i.modelo || '', i.serial || '', i.firmware || '', estadoDe(i)]);
-      partes.push(tabela(t('descobrir.colunas'), linhas, COLUNAS_MONO_DESCOBRIR));
-    }
-  } else if (f.tipo === 'verificar') {
-    const itens = f.itens || [];
-    if (!itens.length) partes.push(h('p', { class: 'apoio' }, t('verificar.nenhuma')));
-    else {
-      const resultado = (i) => (i.ok ? t('verificar.ok') : (i.ping ? (i.login ? t('verificar.divergente') : t('verificar.login-falhou')) : t('verificar.sem-ping')));
-      const linhas = itens.map((i) => [i.ip, i.mac, resultado(i), i.detalhe]);
-      partes.push(tabela(t('verificar.colunas'), linhas, COLUNAS_MONO_VERIFICAR));
-    }
-  }
-  caixa.replaceChildren(...partes);
 }

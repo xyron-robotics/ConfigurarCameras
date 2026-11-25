@@ -75,6 +75,7 @@ Source: "{#Raiz}\fonte\web\www\formularios.js"; DestDir: "{app}\web\www"; Flags:
 Source: "{#Raiz}\fonte\web\www\tela-inicio.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\tela-sessao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\tela-painel.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
+Source: "{#Raiz}\fonte\web\www\tela-ferramentas.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-estado.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-ligacoes.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\legado-marcacao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion

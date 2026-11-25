@@ -225,11 +225,25 @@ D:\obra`. Sem permissão de escrita em ProgramData o painel usa
 
 ## Ferramentas
 
+A aba **Ferramentas** é para diagnóstico: nenhuma delas altera câmera. Uma
+linha por ferramenta, com o que ela faz e o botão; o que ela devolve aparece
+no bloco **Resultado**, embaixo (uma tabela, os dados da câmera ou o erro com
+o que fazer). IP inválido no Sondar é recusado embaixo do campo, sem ir à rede.
+
 | Ferramenta | O que faz |
 |---|---|
-| **Sondar** | lê uma câmera pelo IP: estado, modelo, serial, MAC, rede e encoder. Não altera nada |
-| **Procurar** | broadcast DHIP pela placa escolhida (responde de qualquer faixa, com IP, máscara, MAC, modelo, serial, firmware e porta) e, se nada vier, varredura por ping. Lista câmeras de fábrica, já inicializadas, NVRs e controladores. "De fábrica" fora das faixas da placa é o que a câmera anunciou; o painel confirma por HTTP antes de configurar |
-| **Verificar** | faz login em cada câmera instalada do registro e confere IP e MAC. Para na primeira senha recusada |
+| **Sondar um IP** | lê uma câmera pelo IP: estado, modelo, serial, MAC, rede e encoder. Não altera nada |
+| **Verificar o registro** | faz login em cada câmera instalada do registro e confere IP e MAC. Para na primeira senha recusada |
+| **Procurar câmeras** | broadcast DHIP pela placa escolhida (responde de qualquer faixa, com IP, máscara, MAC, modelo, serial, firmware e porta) e, se nada vier, varredura por ping. Lista câmeras de fábrica, já inicializadas, NVRs e controladores. "De fábrica" fora das faixas da placa é o que a câmera anunciou; o painel confirma por HTTP antes de configurar |
+| **Testar a internet** | confere se este PC chega à internet (o mesmo teste do chip da internet). O painel só precisa dela para se atualizar |
+
+Em simulação, **Procurar câmeras** fica desligado ("Só no uso real.") e o
+**Sondar um IP** responde no Resultado que, em simulação, ele não lê a rede.
+
+O **Log do painel** fica no fim da aba Ferramentas, recolhido: abra para ver
+as últimas linhas, com hora, em fonte de largura fixa. **Só avisos e erros**
+esconde o resto. O log completo, com data, fica em `log.txt` na pasta de
+dados (veja Registro e relatório).
 
 Não há reset pelo painel: nenhuma chamada por RPC faz reset de fábrica
 completo neste firmware (a VIP-1230-D-G3 2.800 só restaura configurações e
@@ -310,7 +324,7 @@ Se o SHA-256 não conferir, nada é instalado e a faixa diz o motivo.
 | Atualizou e o painel não reabriu | abra pelo atalho. O que o instalador fez está em `instalador.log` na pasta de dados |
 | O painel abre sempre no passo a passo | é assim: com uma sessão guardada, cada abertura vai direto a **Conferir**, que pede a senha na primeira linha. Se abre num passo, a sessão ficou incompleta (placa que sumiu, campo inválido): é o passo que falta |
 
-O `log.txt` na pasta de dados guarda tudo com data e hora. É o primeiro lugar a olhar.
+O `log.txt` na pasta de dados guarda tudo com data e hora. É o primeiro lugar a olhar; as últimas linhas aparecem também no **Log do painel**, no fim da aba Ferramentas.
 
 ## Pendências
 

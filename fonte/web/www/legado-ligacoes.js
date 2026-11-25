@@ -1,10 +1,10 @@
 // Transicao: sai nas frentes 4 e 5 do redesenho.
-// Ligacoes dos eventos da marcacao (painel e ferramentas). O passo a passo e a
-// Sessao ligam os proprios eventos (tela-inicio.js, tela-sessao.js).
+// Ligacoes dos eventos da marcacao (o Atualizar do topo). O passo a passo, a
+// Sessao e as Ferramentas ligam os proprios eventos (tela-*.js).
 import { t } from './textos.js';
 import { HTTP, CONSULTA_APOS_ATUALIZAR_MS } from './constantes.js';
 import {
-  S, ganchos, $, exigir, comando, mostrarAviso, mostrarTelaFim,
+  S, ganchos, $, exigir, mostrarAviso, mostrarTelaFim,
 } from './legado-estado.js';
 
 function temFila() {
@@ -15,10 +15,7 @@ export function ligar() {
   // Painel: o vigia, o Configurar sem vigia, a retomada pelo IP, o Encerrar a
   // fila e a decisao de toda falha (Pede voce) sao de tela-painel.js.
 
-  // Ferramentas.
-  $('form-sondar').addEventListener('submit', (ev) => { ev.preventDefault(); comando('/api/sondar', { ip: ev.target.elements.ip.value }); });
-  $('btn-descobrir').addEventListener('click', () => comando('/api/descobrir'));
-  $('btn-verificar').addEventListener('click', () => comando('/api/verificar'));
+  // Ferramentas: tela-ferramentas.js liga os proprios eventos.
 
   $('btn-atualizar').addEventListener('click', async () => {
     if (!confirm(t('confirmar.atualizar', { temFila: temFila() }))) return;

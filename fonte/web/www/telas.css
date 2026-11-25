@@ -139,22 +139,45 @@
   }
 
   /* ---------------------------------------------------------------- ferramentas */
-  .ferramentas { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--campo-ip) + var(--topo-altura)), 1fr)); gap: var(--esp-4); }
+  /* Direcao 3.4: uma linha por ferramenta (nome, o que faz, acao), um Resultado
+     so embaixo e o log do painel recolhido no fim. Linhas separadas por traco, sem caixa. */
+  .ferramentas-tela { display: grid; gap: var(--esp-5); }
+  .ferramentas-cabeca { display: grid; gap: var(--esp-2); }
+  .ferramentas-cabeca h1, .ferramentas-cabeca .lead { margin: 0; }
+  .ferramentas-lista { border-block-start: var(--traco) solid var(--linha); }
   .ferramenta {
-    background: var(--superficie); border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
-    padding: var(--esp-4); display: flex; flex-direction: column; gap: var(--esp-3); align-items: flex-start;
+    display: grid; grid-template-columns: var(--grade-ferramenta); gap: var(--esp-2) var(--esp-4);
+    align-items: start; padding-block: var(--esp-3); border-block-end: var(--traco) solid var(--linha);
   }
-  .ferramenta .linha-campos { width: 100%; }
+  .ferramenta-nome, .ferramenta-texto {
+    margin: 0; min-block-size: var(--controle-altura); display: flex; align-items: center;
+  }
+  .ferramenta-nome { font-size: var(--tipo-corpo); }
+  .ferramenta-texto { color: var(--texto); max-inline-size: var(--medida-texto); }
+  .ferramenta-campo { margin: 0; inline-size: var(--campo-ip); max-inline-size: 100%; }
+  /* O nome da linha e o rotulo que se ve; o do campo fica para o leitor de tela. */
+  .ferramenta-campo .campo-rotulo {
+    position: absolute; width: var(--traco); height: var(--traco);
+    margin: calc(-1 * var(--traco)); padding: 0; overflow: hidden;
+    clip-path: var(--recorte-oculto); white-space: nowrap; border: 0;
+  }
+  .ferramentas-resultado { display: grid; gap: var(--esp-3); }
+  .ferramentas-resultado h2 { margin: 0; }
   .resultado {
+    display: grid; gap: var(--esp-3); justify-items: start;
     background: var(--superficie); border: var(--traco) solid var(--linha);
     border-radius: var(--raio-bloco); padding: var(--esp-4);
   }
+  .resultado > *, .resultado .aviso-corpo > p { margin: 0; }
+  .resultado > .tabela-rolagem { justify-self: stretch; }
+  .resultado-titulo { font-size: var(--tipo-corpo); }
+  .resultado-texto, .resultado-vazio { color: var(--texto); max-inline-size: var(--medida-texto); }
   .resultado dl {
     display: grid; grid-template-columns: max-content 1fr; gap: var(--esp-1) var(--esp-4);
-    margin: var(--esp-2) 0 0;
   }
   .resultado dt { color: var(--apoio); }
   .resultado dd { margin: 0; overflow-wrap: anywhere; }
+  .log-corpo { display: grid; gap: var(--esp-2); }
 
   /* ---------------------------------------------------------------- sessao */
   /* Direcao 3.5: menu das secoes a esquerda, a secao escolhida a direita. */
@@ -185,10 +208,6 @@
   }
   .sessao-bloco h3 { margin: 0; }
   .sessao-bloco .tema { margin: 0; }
-
-  /* ---------------------------------------------------------------- log */
-  .log { margin-top: var(--esp-5); }
-  .log summary { cursor: pointer; font-weight: var(--peso-forte); color: var(--apoio); padding: var(--esp-1) 0; }
 
   /* ---------------------------------------------------------------- telas cheias */
   .encerrado {

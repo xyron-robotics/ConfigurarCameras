@@ -634,6 +634,8 @@
     vertical-align: text-bottom;
   }
   .log-sinal .icone { display: block; }
+  /* Filtro "So avisos e erros": fica so a linha de falha ou de atencao. */
+  .log-linhas.log-so-avisos > div:not(.falha):not(.atencao) { display: none; }
   .log-linhas .falha .log-sinal { color: var(--falha); }
   .log-linhas .sucesso .log-sinal { color: var(--sucesso); }
   .log-linhas .atencao .log-sinal { color: var(--atencao); }

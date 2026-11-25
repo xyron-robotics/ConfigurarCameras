@@ -18,23 +18,6 @@ const TEXTOS = {
   'painel.etapa-encoder': 'Encoder',
   'painel.etapa-rede': 'Rede',
   'painel.etapa-conferida': 'Conferência',
-  'ferramentas.titulo': 'Ferramentas',
-  'ferramentas.apoio': 'Tudo aqui só lê a rede e as câmeras, pela placa escolhida. Nada é alterado. Para voltar uma câmera de fábrica, use a tela dela ou o botão físico de reset.',
-  'ferramentas.form-sondar.titulo': 'Sondar uma câmera',
-  'ferramentas.form-sondar.apoio': 'Lê uma câmera pelo IP. Sem senha na sessão, mostra apenas se está de fábrica.',
-  'ferramentas.campo-ip': 'IP',
-  'ferramentas.form-sondar.botao': 'Sondar câmera',
-  'ferramentas.form-sondar.nota': 'Desligado em simulação: lê a rede de verdade.',
-  'ferramentas.descobrir.titulo': 'Procurar câmeras na rede',
-  'ferramentas.descobrir.apoio': 'Broadcast',
-  'ferramentas.descobrir.termo': 'DHIP',
-  'ferramentas.descobrir.apoio.2': 'pela placa escolhida (responde de qualquer faixa, com modelo, serial e firmware) e, se nada vier, varredura por ping. Lista câmeras de fábrica, já inicializadas, NVRs e controladores.',
-  'ferramentas.btn-descobrir': 'Procurar câmeras',
-  'ferramentas.descobrir.nota': 'Desligado em simulação: lê a rede de verdade.',
-  'ferramentas.verificar.titulo': 'Verificar câmeras instaladas',
-  'ferramentas.verificar.apoio': 'Faz login em cada câmera do registro e confere IP e MAC. Para na primeira senha recusada.',
-  'ferramentas.btn-verificar': 'Verificar câmeras',
-  'log.abrir': 'Log',
   // Nome acessivel do icone da linha do log (a mensagem nem sempre traz a palavra do estado).
   'log.falha': 'Falha',
   'log.sucesso': 'Concluído',
@@ -520,14 +503,47 @@ const TEXTOS = {
   'fim.encerrado-restaurando': 'Painel encerrado. A placa de rede está voltando ao DHCP (leva alguns segundos). Pode fechar ' +
     'esta janela.',
 
-  // ---------------------------------------------------------------- ferramentas
+  // ---------------------------------------------------------------- ferramentas (tela-ferramentas.js, direcao 3.4)
+  'ferr.titulo': 'Ferramentas',
+  'ferr.lead': 'Para diagnóstico. Nenhuma delas altera câmera.',
+  // Nome da linha e nome do campo (o rotulo do campo fica so para o leitor de tela).
+  'ferr.sondar': 'Sondar um IP',
+  'ferr.sondar.acao': 'Sondar o IP',
+  'ferr.sondar.ocupado': 'Sondando…',
+  'ferr.sondar.resultado': 'Sondagem',
+  'ferr.verificar': 'Verificar o registro',
+  'ferr.verificar.texto': 'Faz login em cada câmera instalada e confere IP e MAC. Para na primeira senha recusada.',
+  'ferr.verificar.ocupado': 'Verificando…',
+  'ferr.procurar': 'Procurar câmeras',
+  'ferr.procurar.texto': 'Pergunta na rede da placa escolhida quem responde: câmeras de fábrica, instaladas e outros aparelhos.',
+  'ferr.procurar.motivo': 'Só no uso real.',
+  'ferr.procurar.ocupado': 'Procurando…',
+  'ferr.internet': 'Testar a internet',
+  'ferr.internet.texto': 'Confere se este PC chega à internet. O painel só precisa dela para se atualizar.',
+  'ferr.internet.ocupado': 'Testando…',
+  'ferr.internet.resultado': 'Teste da internet',
+  'ferr.resultado': 'Resultado',
+  'ferr.resultado.vazio': 'Escolha uma ferramenta acima. O resultado aparece aqui.',
+  'ferr.log': 'Log do painel',
+  'ferr.log.filtro': 'Só avisos e erros',
+  'ferr.log.resumo': 'As últimas linhas, com hora. O completo fica em log.txt, na pasta de dados.',
+  'ferr.log.mostrar': 'Mostrar',
+  'ferr.log.esconder': 'Esconder',
+  // Avisos das ferramentas que o servidor manda (traduzirAvisoFerramenta).
+  'ferr.aviso.soReal': 'Em simulação não há câmera na rede: Sondar e Procurar câmeras só leem a rede no uso real.',
+  'ferr.aviso.senhaRecusada': ({ ip }) => 'A câmera em ' + ip + ' recusou a senha da sessão. Não repita: cada tentativa conta ' +
+    'para o bloqueio. Confira a senha em Sessão > Senha.',
+  'ferr.aviso.verificarRecusada': ({ ip, bloqueada }) => 'Senha recusada em ' + ip + ': a verificação parou para não ' +
+    'bloquear as outras câmeras. ' + (bloqueada ? t('falha.bloqueada') : 'Confira a senha em Sessão > Senha.'),
+  'ferr.aviso.semSessao': 'Conclua o passo a passo antes: placa de rede, rede das câmeras e faixa de fábrica. Para revisar, ' +
+    'abra Sessão.',
   'ferramenta.sondando': ({ ip }) => 'Sondando ' + ip + '…',
   'ferramenta.procurando': 'Procurando câmeras na rede…',
   'ferramenta.verificando': 'Verificando câmeras instaladas…',
-  'ferramenta.sondagem': ({ ip }) => 'Sondagem de ' + ip,
   'ferramenta.encontradas': 'Câmeras encontradas',
   'ferramenta.verificacao': 'Verificação',
   'ferramenta.titulo-as': ({ titulo, quando }) => titulo + ' às ' + quando,
+  'sondar.ip': 'IP',
   'sondar.ping': 'Ping',
   'sondar.responde': 'responde',
   'sondar.nao-responde': 'não responde',
@@ -635,6 +651,28 @@ export function traduzirServidor(res) {
   if (m) return { texto: t('servidor.emCurso', { n: Number(m[1]), acao: ACAO_RECUSADA[m[2]] || m[2] }), cru: '' };
   if (RE_TEMA_INVALIDO.test(msg)) return { texto: t('servidor.temaInvalido'), cru: '' };
   return { texto: t('servidor.recusou'), cru: msg || textoCru || t('erro.http', { codigo: res.codigo }) };
+}
+
+// Avisos dos comandos sondar, verificar e descobrir (Servidor-Painel.ps1), pelo
+// comeco fixo de cada um: o servidor ainda cita a tela de antes, e aqui a frase
+// aponta a de hoje (Sessao > Senha). Desconhecido: o texto do servidor, que ja
+// vem em pt-BR. -> { tipo: 'info' | 'erro', texto }
+const AVISO_FERRAMENTA = [
+  [/^Em simulação, Sondar e Procurar/, () => ({ tipo: 'info', texto: t('ferr.aviso.soReal') })],
+  [/^A câmera em (\S+) recusou a senha da sessão\./, (m) => ({ tipo: 'erro', texto: t('ferr.aviso.senhaRecusada', { ip: m[1] }) })],
+  [/^Senha recusada em (\S+): verificação interrompida/, (m, msg) => ({
+    tipo: 'erro', texto: t('ferr.aviso.verificarRecusada', { ip: m[1], bloqueada: /bloqueou o admin/.test(msg) }),
+  })],
+  [/^A câmera bloqueou o admin/, () => ({ tipo: 'erro', texto: t('falha.bloqueada') })],
+  [/^Conclua o passo a passo antes/, () => ({ tipo: 'erro', texto: t('ferr.aviso.semSessao') })],
+];
+export function traduzirAvisoFerramenta(texto) {
+  const msg = String(texto || '').trim();
+  for (const [re, frase] of AVISO_FERRAMENTA) {
+    const m = re.exec(msg);
+    if (m) return frase(m, msg);
+  }
+  return { tipo: 'erro', texto: msg };
 }
 
 export function t(chave, dados) {
