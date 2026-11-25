@@ -1,5 +1,5 @@
 // Formatacao de dado de maquina (direcao.md, secao 7.2), no formato do pt-BR (Intl).
-import { OCTETOS_IP, OCTETO_MAX, MAC_DIGITOS, RE_DATA_SERVIDOR, RE_NAO_HEX } from './constantes.js';
+import { OCTETOS_IP, OCTETO_MAX, MAC_DIGITOS, NBSP, RE_DATA_SERVIDOR, RE_NAO_HEX } from './constantes.js';
 import { t } from './textos.js';
 
 const LOCALE = 'pt-BR';
@@ -65,4 +65,20 @@ export function numeroParaIp(n) {
 // "1920x1080" vira "1920 × 1080".
 export function resolucao(r) {
   return String(r).replace('x', t('formato.vezes'));
+}
+
+// Uma linha por stream: "1920 × 1080, 20 fps, 1596 kbps, H.264", sem os campos vazios.
+export function textoStream(res, fps, kbps, codec, gop) {
+  return [res ? resolucao(res) : '', fps ? numero(fps) + NBSP + t('unidade.fps') : '',
+    kbps ? numero(kbps) + NBSP + t('unidade.kbps') : '', codec || '',
+    gop ? t('encoder.gop', { gop }) : ''].filter(Boolean).join(', ');
+}
+
+// Encoder do registro ou da sondagem (Resolucao, FpsPrincipal...) nas duas linhas de stream.
+export function streamsEncoder(en, comGop) {
+  if (!en) return null;
+  return {
+    principal: textoStream(en.Resolucao, en.FpsPrincipal, en.BitratePrincipal, en.CodecPrincipal, comGop && en.GopPrincipal),
+    secundario: textoStream(en.ResolucaoSecundario, en.FpsSecundario, en.BitrateSecundario, en.CodecSecundario, comGop && en.GopSecundario),
+  };
 }

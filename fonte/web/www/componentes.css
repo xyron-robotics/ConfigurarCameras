@@ -345,11 +345,22 @@
   }
 
   /* ---------------------------------------------------------------- selo */
-  .selo {
-    display: inline-block; padding: 0 var(--esp-2); border-radius: var(--raio-selo);
-    font-size: var(--tipo-meta); font-weight: var(--peso-forte); line-height: var(--entrelinha-corpo);
-    background: var(--superficie-2); color: var(--apoio); border: var(--traco) solid var(--linha);
-  }
+  /* Estado da linha da tabela (5.3): icone e palavra. A cor de estado vai no
+     icone e na palavra, nunca sozinha; instalada so pinta o icone. */
+  .selo { display: inline-flex; align-items: center; gap: var(--esp-2); white-space: nowrap; }
+  .selo-instalada .icone { color: var(--sucesso); }
+  .selo-curso { color: var(--acao-texto); }
+  .selo-curso .icone { color: var(--agora); }
+  .selo-falha { color: var(--falha); font-weight: var(--peso-forte); }
+  .selo-proxima { color: var(--acao-texto); }
+  .selo-aguardando, .selo-pulada, .selo-espera { color: var(--apoio); }
+  .selo-ignorada .icone { color: var(--atencao); }
+  /* Mini barra das 4 etapas ao lado do selo em curso (UX-04). */
+  .estado-linha { display: inline-flex; align-items: center; gap: var(--esp-3); }
+  .barra-etapas { display: inline-flex; gap: var(--traco); inline-size: var(--barra-mini-largura); }
+  .barra-etapa { flex: 1 1 0; block-size: var(--barra-mini); border-radius: var(--traco); background: var(--linha); }
+  .barra-etapa-feita { background: var(--agora); }
+  .barra-etapa-atual { box-shadow: inset 0 0 0 var(--traco) var(--agora); }
 
   /* ---------------------------------------------------------------- fita */
   /* A fita: cada posicao e uma etiqueta com o IP e o estado em palavra.
@@ -414,31 +425,71 @@
   }
 
   /* ---------------------------------------------------------------- tabela */
+  /* 5.4: cabecalho fixo na rolagem, linha de altura fixa, dado de maquina em
+     mono e sem quebra (UX-33), numeros tabulares. */
   .tabela-rolagem {
-    overflow-x: auto; background: var(--superficie);
+    max-block-size: var(--tabela-altura-max); overflow: auto; background: var(--superficie);
     border: var(--traco) solid var(--linha); border-radius: var(--raio-bloco);
   }
-  .tabela { width: 100%; border-collapse: collapse; font-size: var(--tipo-corpo); }
+  .tabela { inline-size: 100%; border-collapse: collapse; font-size: var(--tipo-corpo); font-variant-numeric: tabular-nums; }
   .tabela th {
-    text-align: left; font-weight: var(--peso-forte); font-size: var(--tipo-meta); color: var(--apoio);
+    position: sticky; inset-block-start: 0; z-index: 1;
+    text-align: start; font-weight: var(--peso-forte); font-size: var(--tipo-meta); color: var(--apoio);
     background: var(--superficie-2);
-    padding: var(--esp-2) var(--esp-3); border-bottom: var(--traco) solid var(--linha); white-space: nowrap;
+    padding: var(--esp-2) var(--esp-3); border-block-end: var(--traco) solid var(--linha); white-space: nowrap;
   }
   .tabela td {
-    padding: var(--esp-2) var(--esp-3); border-bottom: var(--traco) solid var(--linha);
-    vertical-align: top; overflow-wrap: anywhere;
+    block-size: var(--linha-tabela); padding: var(--esp-1) var(--esp-3);
+    border-block-end: var(--traco) solid var(--linha); vertical-align: middle; overflow-wrap: anywhere;
   }
-  .tabela tr:last-child td { border-bottom: 0; }
-  .tabela tr:hover td { background: var(--superficie-2); }
-  .tabela td.mono { white-space: nowrap; }
-  .sit { font-weight: var(--peso-forte); }
-  .sit.sucesso { color: var(--sucesso); }
-  .sit.falha { color: var(--falha); }
-  .sit.neutro { color: var(--apoio); }
-  .sit-detalhe {
-    display: block; font-weight: var(--peso-normal); color: var(--apoio);
-    font-size: var(--tipo-meta);
+  .tabela tbody tr:last-child td { border-block-end: 0; }
+  .tabela tbody tr:hover { background: var(--superficie-2); }
+  .tabela td.mono, .tabela .coluna-pos, .tabela .coluna-estado, .tabela .coluna-campo, .tabela .numeros { white-space: nowrap; }
+  .tabela .coluna-pos { inline-size: var(--coluna-pos); color: var(--apoio); }
+  .tabela .coluna-estado { inline-size: var(--coluna-estado); }
+  .tabela .linha-falha, .tabela .linha-falha:hover { background: var(--falha-fundo); }
+  /* Instalada agora: fundo de acao por um ciclo de consulta. */
+  .tabela .linha-nova, .tabela .linha-nova:hover { background: var(--acao-fraco); }
+  /* Linha de detalhe (falha, nota da porta e do canal): junto da linha de cima. */
+  .tabela .linha-detalhe td { block-size: auto; padding-block: var(--esp-2); }
+  .tabela tr:has(+ .linha-detalhe) td { border-block-end-color: transparent; }
+  .entrada-tabela {
+    inline-size: var(--coluna-campo-curto);
+    min-block-size: calc(var(--linha-tabela) - var(--esp-2));
+    padding: 0 var(--esp-2);
+    background: var(--superficie); color: var(--texto);
+    border: var(--traco) solid var(--linha-forte); border-radius: var(--raio-controle);
+    font-variant-numeric: tabular-nums;
   }
+  .entrada-tabela[aria-invalid="true"] { border-color: var(--falha); }
+  .entrada-tabela[readonly] { background: var(--superficie-2); color: var(--apoio); }
+  .tabela-vazio { padding: var(--esp-5); color: var(--apoio); display: grid; gap: var(--esp-3); justify-items: start; }
+  .tabela-vazio p { margin: 0; display: inline-flex; align-items: center; gap: var(--esp-2); }
+  .situacao-detalhe, .stream { display: block; font-size: var(--tipo-meta); color: var(--apoio); }
+  .tabela .coluna-situacao { white-space: normal; min-inline-size: var(--coluna-estado); }
+  .tabela .coluna-encoder { white-space: nowrap; }
+  /* Falha na linha: o erro, o conserto e as duas decisoes. */
+  .falha-linha { display: grid; gap: var(--esp-2); justify-items: start; white-space: normal; }
+  .falha-linha p { margin: 0; }
+  .falha-erro { font-weight: var(--peso-forte); color: var(--falha); overflow-wrap: anywhere; }
+  .falha-conserto { color: var(--texto); }
+  .falha-acoes { display: flex; gap: var(--esp-2); flex-wrap: wrap; }
+  .falha-motivo { display: inline-flex; align-items: center; gap: var(--esp-2); color: var(--texto); font-size: var(--tipo-meta); }
+  /* Nota junto da porta e do canal: salvando, salvo ou o erro do servidor. */
+  .nota { margin: 0; display: flex; align-items: center; justify-content: flex-end; gap: var(--esp-2); white-space: normal; font-size: var(--tipo-meta); }
+  .nota-info { color: var(--apoio); }
+  .nota-sucesso { color: var(--sucesso); font-weight: var(--peso-forte); }
+  .nota-erro { color: var(--falha); font-weight: var(--peso-forte); overflow-wrap: anywhere; }
+
+  /* Abas da tabela (Fila agora | Registro): a atual leva a barra em --acao. */
+  .abas { display: flex; gap: var(--esp-1); border-block-end: var(--traco) solid var(--linha); }
+  .aba {
+    padding: var(--esp-2) var(--esp-3); border: 0; border-block-end: var(--foco-espessura) solid transparent;
+    background: transparent; color: var(--apoio); font: inherit; font-weight: var(--peso-forte); cursor: pointer;
+    margin-block-end: calc(var(--traco) * -1);
+  }
+  .aba:hover { color: var(--texto); }
+  .aba[aria-selected="true"] { color: var(--texto); border-block-end-color: var(--acao); }
 
   /* ---------------------------------------------------------------- controle segmentado */
   /* Tema: grupo de radio com cara de controle segmentado. O radio fica na tela

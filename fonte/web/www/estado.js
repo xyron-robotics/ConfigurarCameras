@@ -3,12 +3,14 @@
 // modelo que as telas novas desenham (decisao N1). Funcao pura: nao busca, nao
 // guarda e nao toca no DOM. As regras de placa, internet, simulacao, passo do
 // passo a passo e conflito da fila com o registro moram so aqui; as telas leem o
-// modelo. Cresce com o uso (decisao N2): contagens, etapa e falha chegam na frente 4.
-import { PASSOS, ETAPA_DO_PASSO, SESSAO_PADRAO, FILA_MAX_ENDERECOS, OCTETO_MAX, OCTETO_MAX_FILA, RE_IP } from './constantes.js';
-import { ipParaNumero, numeroParaIp } from './formato.js';
+// modelo. Cresce com o uso (decisao N2): a frente 4 trouxe a fila por posicao
+// (estado, etapa, falha e camera de cada linha), as cameras sem posicao e o registro.
+import { ETAPAS, PASSOS, ETAPA_DO_PASSO, SESSAO_PADRAO, FILA_MAX_ENDERECOS, OCTETO_MAX, OCTETO_MAX_FILA, RE_IP } from './constantes.js';
+import { ipParaNumero, numeroParaIp, mac as formatarMac } from './formato.js';
 
 // extras (do app.js): { sessao: dados do GET /api/sessao, placas: { dados, erro, lendo },
-// registro: cameras do GET /api/registro }. Sem extras, o modelo sai sem essas partes.
+// registro: cameras do GET /api/registro, registroLeitura: { lendo, erro, simulado } }.
+// Sem extras, o modelo sai sem essas partes.
 export function derivar(bruto, extras) {
   const e = (bruto && bruto.estado) || {};
   const sessao = e.sessao || {};
@@ -20,7 +22,9 @@ export function derivar(bruto, extras) {
   const dadosSessao = x.sessao || null;
   const valores = (dadosSessao && dadosSessao.sessao) || JSON.parse(JSON.stringify(SESSAO_PADRAO));
   const instaladas = (x.registro || []).filter((c) => c.Status === 'Instalada').map((c) => c.Ip);
-  const fila = valores.Fila;
+  const faixa = valores.Fila;
+  const cams = listaCameras(e);
+  const fila = derivarFila(e, cams);
   return {
     carregado,
     simular: !!e.simular,
@@ -50,7 +54,7 @@ export function derivar(bruto, extras) {
     placas: derivarPlacas(x.placas),
     registroCarregado: Array.isArray(x.registro),
     instaladas,
-    conflito: fila ? conflitoDaFaixa(fila.Inicio, fila.Fim, instaladas) : null,
+    conflito: faixa ? conflitoDaFaixa(faixa.Inicio, faixa.Fim, instaladas) : null,
     fase: e.fase || '',
     // Comando na fila do servidor ainda nao virou "ocupado": ja conta como ocupado.
     ocupado: !!e.ocupado || !!(bruto && bruto.comandos > 0),
@@ -58,22 +62,137 @@ export function derivar(bruto, extras) {
     pastaAlternativa: e.pastaDadosAlternativa ? (e.pastaDados || '') : '',
     placa: derivarPlaca(e),
     internet: derivarInternet(e),
-    // Fila na memoria do servidor (null sem fila): a Sessao pergunta antes de troca-la.
-    fila: derivarFila(e.fila),
+    // Fila na memoria do servidor (null sem fila): a Sessao pergunta antes de troca-la;
+    // o Painel desenha uma linha por posicao.
+    fila,
+    ...derivarSemPosicao(fila, cams),
+    registro: derivarRegistro(x.registro, x.registroLeitura),
     // Ultimo aviso do servidor; n sobe a cada aviso novo (quem mandou o comando compara).
     aviso: { texto: e.aviso || '', n: Number(e.avisoN) || 0, origem: e.avisoOrigem || '' },
     atualizacao: derivarAtualizacao(bruto && bruto.atualizacao),
   };
 }
 
-function derivarFila(f) {
+function listaCameras(e) {
+  const c = e.cameras;
+  return Array.isArray(c) ? c.filter(Boolean) : (c ? [c] : []);
+}
+
+function chaveMac(m) {
+  return formatarMac(m);
+}
+
+// Camera de cameras[] como a tabela mostra (MAC formatado, porta e canal publicados).
+function derivarCamera(c) {
+  return {
+    mac: formatarMac(c.mac),
+    macBruto: String(c.mac || ''),
+    serial: c.serial || '',
+    modelo: c.modelo || '',
+    ipOrigem: c.ipOrigem || '',
+    fase: String(c.fase || ''),
+    porta: String(c.porta ?? '').trim(),
+    canal: String(c.canal ?? '').trim(),
+    aviso: c.aviso || '',
+  };
+}
+
+// Falha de uma camera (ou da retomada manual): "Tentar de novo" fica travado
+// enquanto a senha recusada for a mesma da sessao (o servidor tambem recusa;
+// repetir gastaria o lockout da camera).
+function derivarFalha(f, senhaGeracao) {
+  const x = f || {};
+  return {
+    etapa: x.etapa || '',
+    erro: x.erro || '',
+    recusa: !!x.recusa,
+    loginRecusado: !!x.loginRecusado,
+    bloqueada: !!x.bloqueada,
+    bloqueiaTentar: !!x.loginRecusado && x.geracao === senhaGeracao,
+  };
+}
+
+// Etapa em curso: a do motor (Write-Progresso vem antes do passo); conferindo
+// sem etapa publicada e a conferencia. etapaN 0 = no portao, antes da primeira.
+function etapaEmCurso(etapa, fase) {
+  const nome = etapa || (fase === 'conferindo' ? ETAPAS[ETAPAS.length - 1] : '');
+  return { etapa: nome, etapaN: ETAPAS.indexOf(nome) + 1 };
+}
+
+// Estado de cada posicao da fila (direcao 5.3), com a camera dela. A camera
+// vem pelo indice (base 0 em fila.itens) ou pelo MAC gravado na posicao; sem
+// camera, a retomada manual pelo IP (e.atual) explica a posicao em curso.
+function derivarPosicao(item, idx, cam, e, livre) {
+  const fase = cam ? cam.fase : '';
+  const manual = !cam && idx === e.atual;
+  const base = { posicao: Number(item.Posicao) || idx + 1, ip: item.Ip || '', motivo: item.Motivo || '', etapa: '', etapaN: 0, falha: null };
+  if (item.Estado === 'feita' || fase === 'feita') return { ...base, estado: 'instalada' };
+  if (item.Estado === 'pulada' || fase === 'pulada') return { ...base, estado: 'pulada' };
+  if (fase === 'decisao') return { ...base, estado: 'falha', falha: derivarFalha(cam.falha, e.senhaGeracao) };
+  if (fase === 'portao' || fase === 'conferindo') return { ...base, estado: 'curso', ...etapaEmCurso(cam.etapa, fase) };
+  if (manual && e.fase === 'decisao' && e.falha) return { ...base, estado: 'falha', falha: derivarFalha(e.falha, e.senhaGeracao) };
+  if (manual && e.fase === 'configurando') return { ...base, estado: 'curso', ...etapaEmCurso(e.etapa, '') };
+  if (livre) return { ...base, estado: 'proxima' };
+  return { ...base, estado: 'aguardando' };
+}
+
+// Fila na memoria do servidor (null sem fila): posicoes com estado e camera,
+// contagem por estado e a faixa. As cameras sem posicao ficam fora (espera e
+// ignoradas, em derivarSemPosicao).
+function derivarFila(e, cams) {
+  const f = e.fila;
   const itens = (f && f.itens) || [];
   if (!itens.length) return null;
+  const aberta = !['concluida', 'encerrada'].includes(e.fase) && !(e.paralelo && e.paralelo.admitindo === false);
+  const porIndice = new Map(cams.filter((c) => c.indice >= 0).map((c) => [c.indice, c]));
+  const porMac = new Map(cams.filter((c) => c.mac).map((c) => [chaveMac(c.mac), c]));
+  let proximaDada = false;
+  const posicoes = itens.map((item, idx) => {
+    const c = porIndice.get(idx) || (item.Mac ? porMac.get(chaveMac(item.Mac)) : null) || null;
+    // Proxima: a primeira pendente sem camera, com a fila aberta.
+    const livre = aberta && !proximaDada && !c && item.Estado === 'pendente' && idx !== e.atual;
+    if (livre) proximaDada = true;
+    // Etapa e falha vem da camera crua; a tabela recebe a camera ja formatada.
+    const camera = c ? derivarCamera(c) : null;
+    return { ...derivarPosicao(item, idx, c, e, livre), camera };
+  });
+  const contagem = { instalada: 0, falha: 0, curso: 0, proxima: 0, aguardando: 0, pulada: 0 };
+  for (const p of posicoes) contagem[p.estado] += 1;
   return {
     total: itens.length,
     pendentes: itens.filter((i) => i.Estado === 'pendente').length,
     inicio: f.inicio || '',
     fim: f.fim || '',
+    local: f.local || '',
+    rack: f.rack || '',
+    andar: f.andar || '',
+    aberta,
+    totalEtapas: ETAPAS.length,
+    posicoes,
+    contagem,
+  };
+}
+
+// Cameras sem posicao na fila: na espera do portao e as ja inicializadas que o
+// vigia nao toca (a tabela oferece "Retomar esta camera" pelo IP de agora).
+function derivarSemPosicao(fila, cams) {
+  const comPosicao = new Set(fila ? fila.posicoes.filter((p) => p.camera).map((p) => p.camera.mac) : []);
+  const soltas = cams.map(derivarCamera).filter((c) => !comPosicao.has(c.mac));
+  return {
+    espera: soltas.filter((c) => !['ignorada', 'feita', 'pulada'].includes(c.fase)),
+    ignoradas: soltas.filter((c) => c.fase === 'ignorada'),
+  };
+}
+
+// Registro (GET /api/registro) ordenado por IP. lendo/erro vem do app.js: com
+// erro, a tela mostra so o erro, nunca a lista velha.
+function derivarRegistro(lista, leitura) {
+  const l = leitura || {};
+  return {
+    lendo: !!l.lendo,
+    erro: l.erro || '',
+    simulado: !!l.simulado,
+    lista: Array.isArray(lista) ? lista.slice().sort((a, b) => ipParaNumero(a.Ip) - ipParaNumero(b.Ip)) : null,
   };
 }
 

@@ -6,7 +6,6 @@ import { HTTP, CONSULTA_APOS_ATUALIZAR_MS } from './constantes.js';
 import {
   S, ganchos, $, exigir, comando, mostrarAviso, mostrarTelaFim,
 } from './legado-estado.js';
-import { carregarRegistro } from './legado-painel.js';
 
 function temFila() {
   return !!(S.estado && S.estado.fila && S.estado.fila.itens && S.estado.fila.itens.length);
@@ -42,7 +41,6 @@ export function ligar() {
     if (!confirm(t('confirmar.encerrar-fila', { pend }))) return;
     comando('/api/decisao', { acao: 'encerrar' });
   });
-  $('btn-registro-atualizar').addEventListener('click', carregarRegistro);
 
   // Ferramentas.
   $('form-sondar').addEventListener('submit', (ev) => { ev.preventDefault(); comando('/api/sondar', { ip: ev.target.elements.ip.value }); });

@@ -9,7 +9,7 @@ import {
   S, $, ORIGEM_DO_COMANDO, naTela, mostrarAviso, aplicarOcupado, anunciar, mostrarTelaFim,
 } from './legado-estado.js';
 import {
-  anexarLog, desenharAtualizacao, desenharFila, desenharFerramenta, carregarRegistro,
+  anexarLog, desenharAtualizacao, desenharFila, desenharFerramenta,
 } from './legado-painel.js';
 
 // Aba do topo -> secao da marcacao (a Sessao e a secao #sessao, desenhada pelo app.js).
@@ -42,10 +42,6 @@ export function trocarView() {
   for (const s of document.querySelectorAll('.view')) s.hidden = s.id !== view;
   // O log so interessa no painel; nas outras abas ele empurra o conteudo.
   $('log-bloco').open = r.tela === 'painel';
-  if (r.tela === 'painel') {
-    carregarRegistro();
-    if (r.parte === 'registro') $('registro-bloco').scrollIntoView({ block: 'start' });
-  }
 }
 
 // O modo mudou entre dois pollings ("comecar", "refazer"): a tela acompanha.
@@ -89,8 +85,7 @@ function desenhar() {
   if (S.ultimoVisto !== null && e.ultimo && e.ultimo !== S.ultimoVisto) falas.push(e.ultimo);
   S.ultimoVisto = e.ultimo || '';
   if (S.ultimaFase && S.ultimaFase !== e.fase) {
-    if (lerRota().tela === 'painel' && S.modoAtual === 'normal') carregarRegistro();
-    // Falha de camera do cartao: quem anuncia e a linha de estado do cartao.
+    // Falha de camera em paralelo: quem anuncia e a tabela (tela-painel.js).
     if (e.fase === 'decisao' && e.falha && !$('bancada-decisao').hidden) {
       falas.push($('decisao-titulo').textContent + '. ' + e.falha.erro);
       S.focarTentar = true;
@@ -115,7 +110,8 @@ function desenhar() {
     S.avisoN = e.avisoN;
     // Fila montada pela Sessao: o resultado aparece junto do botao dela (tela-sessao.js).
     const daSessao = e.avisoOrigem === 'fila' && lerRota().tela === 'sessao';
-    if (e.aviso && !daSessao) mostrarAviso(e.aviso, ORIGEM_DO_COMANDO[e.avisoOrigem], { servidor: true });
+    // Recusa de porta e canal: aparece junto dos campos da linha (tela-painel.js).
+    if (e.aviso && !daSessao && e.avisoOrigem !== 'camera') mostrarAviso(e.aviso, ORIGEM_DO_COMANDO[e.avisoOrigem], { servidor: true });
     // Aviso que manda retomar: abre o bloco que ele cita.
     if (e.aviso && e.aviso.includes(t('painel.retomar.abrir'))) $('retomar').open = true;
   } else if (!e.aviso && S.avisoDoServidor) {

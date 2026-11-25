@@ -2,27 +2,29 @@
 // adaptador da api.js (fetch, este servidor), monta a casca nova (topo.js) com
 // a marcacao de transicao dos legado-*.js e e o unico lugar que consulta o
 // estado em ciclo: a resposta vira modelo (estado.js) para a casca, o passo a
-// passo (tela-inicio.js) e a Sessao (tela-sessao.js) e segue crua para os
-// legado-*.js, que as frentes 4 e 5 substituem. Sessao, placas e registro sao
-// lidos aqui (extras do modelo): a tela so recebe o modelo e o contexto (decisao N1).
+// passo (tela-inicio.js), a Sessao (tela-sessao.js) e a tabela do Painel
+// (tela-painel.js) e segue crua para os legado-*.js, que as frentes 4 e 5
+// substituem. Sessao, placas e registro sao lidos aqui (extras do modelo): a
+// tela so recebe o modelo e o contexto (decisao N1).
 import { criarApi, transporteFetch } from './api.js';
 import { derivar } from './estado.js';
 import { ABAS, lerRota, aoMudarRota, ir, corrigir, rotaDoPasso, passoDaRota } from './rotas.js';
-import { t } from './textos.js';
+import { t, traduzirServidor } from './textos.js';
 import { h, focar } from './dom.js';
 import { confirmar } from './componentes.js';
 import { CONSULTA_MS, CONSULTA_RAPIDA_MS, ESPERA_ESTADO_PASSO_MS, PASSOS, SECOES_SESSAO } from './constantes.js';
 import { criarTopo } from './topo.js';
 import { telaPasso, telaConferir } from './tela-inicio.js';
 import { telaSessao, aplicarTema } from './tela-sessao.js';
+import { telaPainel } from './tela-painel.js';
 import { montarMarcacao } from './legado-marcacao.js';
-import { S, usarApi, ganchos } from './legado-estado.js';
+import { S, usarApi, ganchos, anunciar } from './legado-estado.js';
 import { receberEstado, semResposta, trocarView } from './legado-navegacao.js';
 import { ligar, telaEncerrado } from './legado-ligacoes.js';
 
 const api = criarApi(transporteFetch());
 let bruto = null;
-const extras = { sessao: null, placas: null, registro: null };
+const extras = { sessao: null, placas: null, registro: null, registroLeitura: null };
 let versaoExtras = 0;
 let modelo = derivar(null);
 let cursor = 0;
@@ -63,6 +65,14 @@ function consultar() {
   return emVoo;
 }
 
+// Consulta que comeca depois de quem chama (a que esta em voo pode ter saido
+// antes do comando): devolve o modelo novo.
+async function consultarNova() {
+  if (emVoo) await emVoo;
+  await consultar();
+  return modelo;
+}
+
 async function ciclo() {
   await consultar();
   setTimeout(ciclo, modelo.ocupado || modelo.fase === 'configurando' ? CONSULTA_RAPIDA_MS : CONSULTA_MS);
@@ -83,12 +93,37 @@ function recarregarSessao() {
       // Texto do vigia no Painel legado ("procura a camera em <IP de fabrica>").
       S.ipFabrica = (s.dados && s.dados.sessao && s.dados.sessao.IpFabrica) || '';
     }
-    if (reg.ok) extras.registro = (reg.dados && reg.dados.cameras) || [];
+    if (reg.ok) guardarRegistro(reg.dados);
     versaoExtras++;
     remodelar();
   })().finally(() => { if (pedidoSessao && pedidoSessao.p === p) pedidoSessao = null; });
   pedidoSessao = { g, p };
   return p;
+}
+
+function guardarRegistro(dados) {
+  extras.registro = (dados && dados.cameras) || [];
+  extras.registroLeitura = { lendo: false, erro: '', simulado: !!(dados && dados.simulado) };
+}
+
+// Aba Registro do Painel: "Lendo o registro..." enquanto le; com erro, so o
+// erro (nunca a lista velha).
+let lendoRegistro = null;
+function lerRegistro() {
+  if (lendoRegistro) return lendoRegistro;
+  extras.registroLeitura = { ...(extras.registroLeitura || {}), lendo: true, erro: '' };
+  versaoExtras++;
+  remodelar();
+  desenharPainel();
+  lendoRegistro = (async () => {
+    const r = await api.registro();
+    if (r.ok) guardarRegistro(r.dados);
+    else extras.registroLeitura = { lendo: false, erro: traduzirServidor(r).texto, simulado: false };
+    versaoExtras++;
+    remodelar();
+    desenharPainel();
+  })().finally(() => { lendoRegistro = null; });
+  return lendoRegistro;
 }
 
 // Placas: GET /api/placas le os adaptadores (demora); "lendo" redesenha a tela.
@@ -130,12 +165,32 @@ const ctx = {
   esperar,
   recarregarSessao,
   lerPlacas,
+  consultarNova,
+  lerRegistro,
+  anunciar,
   redesenhar: (foco) => desenharTelas({ forcar: true, focarAcao: foco === 'acao' }),
 };
 
 function desenharTelas(o) {
   desenharInicio(o || {});
   desenharSessao(o || {});
+  desenharPainel();
+}
+
+// Tabela do Painel em #painel-tabela (a marcacao legada guarda o lugar). Com a
+// aba Registro aberta, fila que muda de fase ou camera instalada agora rele o registro.
+let painel = null;
+let marcaRegistro = '';
+function desenharPainel() {
+  if (!painel) return;
+  painel.atualizar(modelo);
+  const f = modelo.fila;
+  const marca = [modelo.fase, f ? f.contagem.instalada : 0, f ? f.contagem.pulada : 0].join('|');
+  if (marca !== marcaRegistro) {
+    const antes = marcaRegistro;
+    marcaRegistro = marca;
+    if (antes && lerRota().parte === 'registro' && lerRota().tela === 'painel') lerRegistro();
+  }
 }
 let tela = null;
 let chaveTela = '';
@@ -238,6 +293,11 @@ function aoTrocarDeTela() {
   desenharInicio({ rotaMudou: true });
   desenharSessao({ rotaMudou: true });
   const rota = lerRota();
+  // Painel: a aba segue a rota (#/painel/registro) e o registro e relido ao entrar.
+  if (painel && rota.tela === 'painel') {
+    painel.abrirAba(rota.parte === 'registro' ? 'registro' : 'fila');
+    lerRegistro();
+  }
   if (rota.parte || modelo.inicio || rota.tela === 'sessao') return;
   const titulo = [...document.querySelectorAll('.view:not([hidden]) h1')].find((el) => !el.closest('[hidden]'));
   focar(titulo);
@@ -247,6 +307,8 @@ function aoTrocarDeTela() {
 usarApi(api);
 ganchos.buscarEstado = consultar;
 document.getElementById('app').replaceChildren(...montarMarcacao(topo.el));
+painel = telaPainel(ctx, lerRota().parte);
+document.getElementById('painel-tabela').replaceChildren(painel.el);
 ligar();
 aplicarTema(document.documentElement.dataset.tema);
 aoMudarRota(aoTrocarDeTela);

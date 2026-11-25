@@ -21,7 +21,6 @@ const TEXTOS = {
   'painel.campo-broadcast.dica': 'Broadcast DHIP (UDP 37810): acha câmera de fábrica mesmo fora do IP de fábrica; a placa recebe um IP temporário na rede dela. Na rede do escritório, só com a bancada isolada.',
   'painel.campo-broadcast': 'Aceitar câmera de fábrica em qualquer faixa (broadcast)',
   'painel.btn-vigia': 'Ligar vigia',
-  'painel.cartoes.rotulo-leitor': 'Câmeras em curso',
   'painel.bancada-destino.rotulo': 'Destino',
   'painel.bancada-apoio': 'Ligue uma câmera só no cabo e confirme. A câmera de fábrica é encontrada sozinha, em qualquer faixa de IP.',
   'painel.campo-porta': 'Porta do switch',
@@ -38,18 +37,6 @@ const TEXTOS = {
   'painel.decisao-tentar': 'Tentar de novo',
   'painel.decisao-pular': 'Pular esta posição',
   'painel.bancada-fim.link': 'Montar outra fila',
-  'painel.registro-titulo': 'Registro',
-  'painel.btn-registro-atualizar': 'Atualizar registro',
-  'painel.btn-exportar': 'Exportar relatório',
-  'painel.registro-bloco.coluna': 'IP',
-  'painel.registro-bloco.coluna.2': 'MAC',
-  'painel.registro-bloco.coluna.3': 'Modelo',
-  'painel.registro-bloco.coluna.4': 'Situação',
-  'painel.registro-bloco.coluna.5': 'Encoder',
-  'painel.registro-bloco.coluna.6': 'Local',
-  'painel.registro-bloco.coluna.7': 'Rack / porta',
-  'painel.registro-bloco.coluna.8': 'Data',
-  'painel.registro-vazio': 'Nenhuma câmera registrada ainda.',
   'ferramentas.titulo': 'Ferramentas',
   'ferramentas.apoio': 'Tudo aqui só lê a rede e as câmeras, pela placa escolhida. Nada é alterado. Para voltar uma câmera de fábrica, use a tela dela ou o botão físico de reset.',
   'ferramentas.form-sondar.titulo': 'Sondar uma câmera',
@@ -337,34 +324,76 @@ const TEXTOS = {
   'bancada.decisao-titulo': ({ etapa, ip }) => 'Falhou na etapa ' + etapa + (ip ? ' (' + ip + ')' : ''),
   'bancada.fila-encerrada': 'Fila encerrada',
   'bancada.fila-concluida': 'Fila concluída',
-  'bancada.fim-texto': 'O registro abaixo tem cada câmera; Exportar relatório gera o CSV.',
+  'bancada.fim-texto': 'A aba Registro, abaixo, tem cada câmera; Exportar o relatório gera o CSV.',
   'bancada.fim-vigia': ({ motivo }) => ' O vigia foi desligado: ' + motivo + '.',
   'bancada.conecte': ({ n, total }) => 'Conecte a câmera ' + n + ' de ' + total,
   'bancada.apoio-vigia': 'O vigia configura sozinho. Câmera conectada fica para retomar uma câmera já inicializada, pelo bloco abaixo.',
   'bancada.apoio-cabo': 'Ligue uma câmera só no cabo e confirme. A câmera de fábrica é encontrada sozinha pela placa escolhida.',
 
-  'cartao.fase-espera': 'Na espera',
-  'cartao.fase-portao': 'No portão',
-  'cartao.fase-conferindo': 'Conferindo',
-  'cartao.fase-decisao': 'Falhou',
-  'cartao.fase-feita': 'Instalada',
-  'cartao.fase-pulada': 'Pulada',
-  'cartao.fase-ignorada': 'Já inicializada: não tocada',
-  'cartao.serial': 'Serial ',
-  'cartao.mac': 'MAC ',
-  'cartao.tentar': 'Tentar de novo',
-  'cartao.pular': 'Pular esta posição',
-  'cartao.porta': 'Porta',
-  'cartao.canal': 'Canal',
-  'cartao.confirmar-pular': ({ numero, serial, mac }) => 'Pular ' + (numero ? 'a câmera ' + numero : 'esta câmera') +
-    (serial ? ' (serial ' + serial + ')' : (mac ? ' (MAC ' + mac + ')' : '')) +
-    '? Ela fica como está agora, registrada como Falhou e fora das instaladas. As outras seguem.',
-  'cartao.titulo': ({ n }) => 'Câmera ' + n,
-  'cartao.sem-posicao': 'Sem posição',
-  'cartao.etapa': ({ i, total, nome }) => 'Etapa ' + i + ' de ' + total + ': ' + nome,
-  'cartao.falhou-etapa': ({ etapa }) => 'Falhou na etapa ' + etapa,
-  'cartao.etapa-desconhecida': 'desconhecida',
-  'cartao.salvo': 'Salvo',
+  // ---------------------------------------------------------------- tabela do painel (tela-painel.js)
+  'painel.abas': 'Vistas do painel',
+  'painel.aba.fila': 'Fila agora',
+  'painel.aba.registro': 'Registro',
+  'tabela.pos': 'Pos.',
+  'tabela.estado': 'Estado',
+  'tabela.ip': 'IP de destino',
+  'tabela.ipAtual': 'IP atual',
+  'tabela.modelo': 'Modelo',
+  'tabela.serial': 'Serial',
+  'tabela.mac': 'MAC',
+  'tabela.porta': 'Porta do switch',
+  'tabela.canal': 'Canal no NVR',
+  'tabela.acao': 'Ação',
+  'estado.instalada': 'Instalada',
+  'estado.portao': 'No portão',
+  // "2 de 4: encoder"; a ultima etapa em curso e "conferindo".
+  'estado.curso': ({ n, total, etapa }) => n + ' de ' + total + ': ' + (ETAPA_EM_CURSO[etapa] || etapa),
+  'estado.falha': ({ etapa }) => FALHOU_NA[etapa] || 'Falhou',
+  'estado.proxima': 'Próxima',
+  'estado.aguardando': 'Aguardando',
+  'estado.pulada': 'Pulada',
+  'estado.espera': 'Na espera',
+  'estado.ignorada': 'Já inicializada',
+  'painel.semFila': 'Sem fila montada. As posições aparecem aqui quando houver uma.',
+  'painel.espera.titulo': ({ n }) => 'Na espera do portão (' + n + ')',
+  'painel.espera.texto': 'Câmeras que o vigia achou e que esperam vaga no portão. Cada uma recebe a próxima posição livre.',
+  'painel.ignoradas.titulo': ({ n }) => 'Já inicializadas, não tocadas (' + n + ')',
+  'painel.ignoradas.texto': 'O vigia não mexe em câmera que já tem senha. Retome só a que for desta sessão, como depois de uma ' +
+    'falha ou com o painel fechado no meio.',
+  'painel.retomar': 'Retomar esta câmera',
+  'painel.retomando': 'Retomando…',
+  'painel.portaCanal.salvando': 'Salvando…',
+  'painel.portaCanal.salvo': 'Salvo.',
+  'painel.portaCanal.semConfirmacao': 'O painel não confirmou a porta e o canal. Tente de novo.',
+  'painel.decisao.tentar': 'Tentar de novo',
+  'painel.decisao.tentando': 'Tentando…',
+  'painel.decisao.pular': 'Pular esta posição',
+  'painel.decisao.senha': 'Repetir a senha recusada bloqueia o admin. Troque a senha em Sessão > Senha.',
+  'painel.pular.titulo': ({ n }) => 'Pular a câmera ' + n + '?',
+  'painel.pular.texto': ({ ip }) => 'A posição ' + ip + ' fica registrada como falha e a fila segue para a próxima.',
+  'painel.pular.confirmar': ({ n }) => 'Pular a câmera ' + n,
+  'painel.anuncio.falha': ({ n, texto }) => 'Câmera ' + n + ': ' + texto + '.',
+  'painel.anuncio.instalada': ({ n }) => 'Câmera ' + n + ' instalada.',
+  'registro.titulo': 'Registro',
+  'registro.lendo': 'Lendo o registro…',
+  'registro.erro': 'Não deu para ler o registro.',
+  'registro.lerDeNovo': 'Ler de novo',
+  'registro.ler': 'Ler o registro de novo',
+  'registro.exportar': 'Exportar o relatório',
+  'registro.vazio': 'Nenhuma câmera registrada ainda.',
+  'registro.col.ip': 'IP',
+  'registro.col.mac': 'MAC',
+  'registro.col.modelo': 'Modelo',
+  'registro.col.situacao': 'Situação',
+  'registro.col.encoder': 'Encoder',
+  'registro.col.local': 'Local',
+  'registro.col.rackPorta': 'Rack / porta',
+  'registro.col.canal': 'Canal',
+  'registro.col.data': 'Data',
+  'registro.status.instalada': 'Instalada',
+  'registro.status.falha': 'Falhou',
+  'registro.status.curso': 'Em andamento',
+  'registro.status.pulada': 'Resetada',
 
   'falha.bloqueada': 'A câmera bloqueou o admin por senhas erradas. Espere alguns minutos, confirme a senha certa em Sessão, ' +
     'seção Senha, e só então tente de novo.',
@@ -393,7 +422,7 @@ const TEXTOS = {
     'aparecer, na próxima posição livre. Com a caixa marcada, aceita também câmera de fábrica em qualquer faixa (broadcast): só ' +
     'com a bancada isolada da rede do escritório.',
   'vigia.texto-ligado': ({ ip }) => 'Observando ' + ip + ' por broadcast. Ligue quantas câmeras quiser no switch: cada uma ' +
-    'entra na próxima posição livre. Digite porta e canal no cartão de cada câmera, pelo serial da etiqueta.',
+    'entra na próxima posição livre. Digite porta e canal na linha de cada câmera, na tabela abaixo, pelo serial da etiqueta.',
 
   'registro.titulo-simulacao': 'Registro da simulação',
   'registro.concluiu': ({ etapa }) => 'concluiu: ' + etapa,
@@ -499,6 +528,12 @@ const TEXTOS = {
 
 // Nome de cada etapa no meio de uma frase ("Falhou na etapa encoder").
 const NOME_ETAPA = { inicializada: 'inicialização', encoder: 'encoder', rede: 'rede', conferida: 'conferência' };
+// Etapa em curso na linha da tabela ("2 de 4: encoder", "4 de 4: conferindo").
+const ETAPA_EM_CURSO = { inicializada: 'inicialização', encoder: 'encoder', rede: 'rede', conferida: 'conferindo' };
+// Falha da linha da tabela, com o artigo de cada etapa.
+const FALHOU_NA = {
+  inicializada: 'Falhou na inicialização', encoder: 'Falhou no encoder', rede: 'Falhou na rede', conferida: 'Falhou na conferência',
+};
 
 // Motivos que o servidor publica ao desligar o vigia sozinho.
 const MOTIVO_VIGIA = {
@@ -565,4 +600,20 @@ export function nomeEtapa(etapa) {
 
 export function motivoVigia(motivo) {
   return MOTIVO_VIGIA[motivo] || motivo;
+}
+
+// O que a camera ja recebeu e o que "Tentar de novo" faz, por etapa. Espelha
+// Get-PlanoRetomada: a nova tentativa olha onde a camera esta antes de agir.
+// destino: IP da posicao (vazio vira "o destino").
+export function textoDaFalha(f, destino) {
+  if (f.loginRecusado) return f.bloqueada ? t('falha.bloqueada') : t('falha.senha-recusada');
+  if (f.recusa) return t('falha.recusa');
+  const ip = destino || t('falha.o-destino');
+  const porEtapa = {
+    inicializada: () => t('falha.inicializada'),
+    encoder: () => t('falha.encoder'),
+    rede: () => t('falha.rede', { destino: ip }),
+    conferida: () => t('falha.conferida', { destino: ip }),
+  }[f.etapa];
+  return porEtapa ? porEtapa() : t('falha.outra');
 }

@@ -4,9 +4,8 @@
 // nenhum outro legado-*: o que precisa de modulo de cima passa por ganchos.
 import { h } from './dom.js';
 import { t } from './textos.js';
-import { numero } from './formato.js';
 import {
-  HTTP, NBSP, RE_IP, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS,
+  HTTP, RE_IP, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS,
   AVISO_NEUTRO_MS, ANUNCIO_ATRASO_MS, CONSULTA_APOS_COMANDO_MS,
 } from './constantes.js';
 
@@ -29,8 +28,6 @@ export const S = {
   atualizando: false,
   buscando: null,
   ferramentaChave: '',
-  // Um cartao por camera de cameras[], chave no MAC.
-  cartoes: new Map(),
 };
 
 // Funcoes dos modulos de cima, registradas pelo app.js.
@@ -103,7 +100,7 @@ export function mostrarAviso(texto, origem, opcoes) {
 }
 
 // Devolve true se o servidor aceitou. -opcoes.semTrava: quem chama trava os
-// proprios botoes (decisao de um cartao nao trava os outros cartoes).
+// proprios botoes (decisao de uma linha nao trava as outras linhas).
 export async function comando(caminho, corpo, opcoes) {
   const origem = ORIGEM_DA_ROTA[caminho];
   // Trava otimista: o estado "ocupado" so chega no proximo polling.
@@ -123,8 +120,8 @@ export async function comando(caminho, corpo, opcoes) {
 
 // Botoes de trabalho ficam desligados enquanto o worker trabalha. Encerrar o
 // painel, encerrar a fila e o vigia (desligar vale no meio de uma camera)
-// ficam sempre ativos. Os botoes de decisao dos cartoes tambem ficam fora: o
-// servidor aceita decisao com o worker ocupado, e cada cartao trava os seus.
+// ficam sempre ativos. Os botoes de decisao das linhas da tabela tambem ficam
+// fora: o servidor aceita decisao com o worker ocupado, e cada linha trava os seus.
 export function aplicarOcupado(ocupado) {
   const simular = !!(S.estado && S.estado.simular);
   const sel = '#view-ferramentas .btn, #form-conectada .btn, [data-decisao]';
@@ -162,19 +159,4 @@ export const ipValido = (v) => RE_IP.test(String(v).trim());
 export function conferirCampoIp(campo) {
   const v = campo.value.trim();
   campo.setCustomValidity(v && !ipValido(v) ? t('campo.ip-invalido') : '');
-}
-
-// Uma linha por stream: "1920 × 1080, 20 fps, 1596 kbps, H.264", sem os campos vazios.
-export function textoStream(res, fps, kbps, codec, gop) {
-  return [res ? String(res).replace('x', t('formato.vezes')) : '', fps ? numero(fps) + NBSP + t('unidade.fps') : '',
-    kbps ? numero(kbps) + NBSP + t('unidade.kbps') : '', codec || '',
-    gop ? t('encoder.gop', { gop }) : ''].filter(Boolean).join(', ');
-}
-
-export function streamsEncoder(en, comGop) {
-  if (!en) return null;
-  return {
-    principal: textoStream(en.Resolucao, en.FpsPrincipal, en.BitratePrincipal, en.CodecPrincipal, comGop && en.GopPrincipal),
-    secundario: textoStream(en.ResolucaoSecundario, en.FpsSecundario, en.BitrateSecundario, en.CodecSecundario, comGop && en.GopSecundario),
-  };
 }

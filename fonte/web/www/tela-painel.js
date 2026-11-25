@@ -1,0 +1,442 @@
+// Painel, tabela das cameras (direcao.md, secoes 5.3 e 5.4): abas "Fila agora"
+// e "Registro", uma linha por posicao da fila, os grupos das cameras sem posicao
+// e o registro gravado. So desenha o modelo do estado.js (decisao P1); o que a
+// tela guarda e o que e dela: o que o operador digitou, o envio em curso e o
+// resultado junto dos campos.
+//
+// Porta e canal (P2): vale o valor publicado pelo servidor. A linha mostra o
+// valor enviado so ate a consulta seguinte ao envio; recusado, volta ao
+// publicado e o erro fica junto dos campos; reenviar o mesmo valor envia de novo.
+import { h, focar } from './dom.js';
+import { icone } from './icones.js';
+import { t, nomeEtapa, textoDaFalha, traduzirServidor } from './textos.js';
+import { botao, ocupar, selo, barraEtapas } from './componentes.js';
+import { dataHora, mac as formatarMac, streamsEncoder } from './formato.js';
+import { CONSULTA_MS, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS, NOTA_SALVO_MS, TRAVA_DECISAO_MS } from './constantes.js';
+
+const COLUNAS_FILA = ['pos', 'estado', 'ip', 'modelo', 'serial', 'mac', 'porta', 'canal'];
+const COLUNAS_REGISTRO = ['ip', 'mac', 'modelo', 'situacao', 'encoder', 'local', 'rackPorta', 'canal', 'data'];
+const ESTADO_DO_STATUS = { Instalada: 'instalada', Falhou: 'falha', 'Em andamento': 'curso', Resetada: 'pulada' };
+const COM_CAMPOS = ['instalada', 'curso', 'falha'];
+
+function textoEstado(p, totalEtapas) {
+  if (p.estado === 'curso') return p.etapaN ? t('estado.curso', { n: p.etapaN, total: totalEtapas, etapa: p.etapa }) : t('estado.portao');
+  if (p.estado === 'falha') return t('estado.falha', { etapa: p.falha.etapa });
+  return t('estado.' + p.estado);
+}
+
+const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ctx: { api, modelo(), consultarNova(), lerRegistro(), anunciar(texto), confirmar(o) }
+export function telaPainel(ctx, parte) {
+  const raiz = h('section', { class: 'vista', 'aria-label': t('painel.abas') });
+  // Por posicao: rascunho digitado { porta, canal }, envio em curso, nota junto
+  // dos campos { tipo, texto } e a trava dos botoes da falha.
+  const linhas = new Map();
+  // Por MAC: erro do "Retomar esta camera".
+  const retomadas = new Map();
+  let aba = parte === 'registro' ? 'registro' : 'fila';
+  let assinatura = '';
+  let versaoLocal = 0;
+  let estadosAntes = null;
+  let novas = new Set();
+  let redesenhando = false;
+
+  function linha(n) {
+    if (!linhas.has(n)) linhas.set(n, { rascunho: null, enviando: false, nota: null, trava: 0, timer: 0 });
+    return linhas.get(n);
+  }
+
+  function mudouLocal() {
+    versaoLocal += 1;
+    atualizar(ctx.modelo());
+  }
+
+  function posicaoNoModelo(m, n) {
+    return m.fila ? m.fila.posicoes.find((p) => p.posicao === n) : null;
+  }
+
+  // ------------------------------------------------------------ porta e canal
+  function valoresDaLinha(n) {
+    const ler = (campo) => {
+      const el = raiz.querySelector(`[data-foco="${campo}-${n}"]`);
+      return el ? el.value.trim() : '';
+    };
+    return { porta: ler('porta'), canal: ler('canal') };
+  }
+
+  function mostrarNota(n, tipo, texto) {
+    const l = linha(n);
+    clearTimeout(l.timer);
+    l.nota = tipo ? { tipo, texto } : null;
+    if (tipo === 'sucesso') l.timer = setTimeout(() => { if (l.nota && l.nota.tipo === 'sucesso') { l.nota = null; mudouLocal(); } }, NOTA_SALVO_MS);
+  }
+
+  async function salvarPortaCanal(n) {
+    const l = linha(n);
+    if (l.enviando) return;
+    const p = posicaoNoModelo(ctx.modelo(), n);
+    if (!p || !p.camera) return;
+    const { porta, canal } = valoresDaLinha(n);
+    const pub = p.camera;
+    if (porta === pub.porta && canal === pub.canal) {
+      // Igual ao publicado: nada a gravar; um erro antigo deixa de valer.
+      l.rascunho = null;
+      if (l.nota && l.nota.tipo === 'erro') { mostrarNota(n, null); mudouLocal(); }
+      return;
+    }
+    const mac = pub.macBruto;
+    const n0 = ctx.modelo().aviso.n;
+    l.enviando = true;
+    l.rascunho = { porta, canal };
+    mostrarNota(n, 'info', t('painel.portaCanal.salvando'));
+    mudouLocal();
+    let erro = '';
+    const r = await ctx.api.comando('/api/camera', { mac, porta, canal });
+    if (!r.ok) {
+      erro = traduzirServidor(r).texto;
+    } else {
+      // O comando vai para a fila do worker: espera ele publicar o valor novo ou
+      // recusar. "Worker livre" nao resolve: o estado publicado pode vir antes do
+      // comando ser lido e daria "nao confirmou" com o valor ja gravado.
+      const fim = Date.now() + ESPERA_ESTADO_MS;
+      let m = await ctx.consultarNova();
+      const resolvido = (x) => {
+        const c = camera(x, mac);
+        return (c && c.porta === porta && c.canal === canal) || (x.aviso.n > n0 && x.aviso.origem === 'camera');
+      };
+      while (!resolvido(m) && Date.now() < fim) {
+        await pausa(ESPERA_ESTADO_PASSO_MS);
+        m = await ctx.consultarNova();
+      }
+      const c = camera(m, mac);
+      if (c && c.porta === porta && c.canal === canal) erro = '';
+      else if (m.aviso.n > n0 && m.aviso.origem === 'camera') erro = m.aviso.texto;
+      else erro = t('painel.portaCanal.semConfirmacao');
+    }
+    // A partir daqui vale o publicado: o rascunho sai, com ou sem erro.
+    l.enviando = false;
+    l.rascunho = null;
+    mostrarNota(n, erro ? 'erro' : 'sucesso', erro || t('painel.portaCanal.salvo'));
+    mudouLocal();
+  }
+
+  function camera(m, mac) {
+    const chave = formatarMac(mac);
+    const p = m.fila ? m.fila.posicoes.find((x) => x.camera && x.camera.mac === chave) : null;
+    return p ? p.camera : null;
+  }
+
+  // Nome do campo: cabecalho da coluna e celula Pos., os dois visiveis.
+  function entrada(p, campo) {
+    const n = p.posicao;
+    const l = linha(n);
+    const valor = l.rascunho ? l.rascunho[campo] : p.camera[campo];
+    const comErro = !!(l.nota && l.nota.tipo === 'erro');
+    return h('input', {
+      class: ['entrada-tabela', 'mono'], type: 'text', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false',
+      value: valor,
+      'aria-labelledby': `painel-col-${campo} painel-pos-${n}`,
+      'aria-invalid': comErro ? 'true' : null,
+      'aria-describedby': l.nota ? `painel-nota-${n}` : null,
+      readonly: l.enviando,
+      dados: { foco: `${campo}-${n}`, campo, linha: String(n) },
+      oninput: () => { l.rascunho = valoresDaLinha(n); },
+      onkeydown: (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); salvarPortaCanal(n); } },
+      onfocusout: (ev) => {
+        if (redesenhando) return;
+        const para = ev.relatedTarget;
+        // Indo da porta para o canal da mesma linha ainda nao grava.
+        if (para && para.dataset && para.dataset.linha === String(n) && para.dataset.campo) return;
+        salvarPortaCanal(n);
+      },
+    });
+  }
+
+  // ------------------------------------------------------------ falha
+  async function decidir(btn, p, acao) {
+    const n = p.posicao;
+    const l = linha(n);
+    if (acao === 'pular') {
+      const ok = await ctx.confirmar({
+        titulo: t('painel.pular.titulo', { n }), texto: t('painel.pular.texto', { ip: p.ip }),
+        confirmar: t('painel.pular.confirmar', { n }), perigo: true,
+      });
+      if (!ok) return;
+    }
+    const restaurar = ocupar(btn, acao === 'tentar' ? t('painel.decisao.tentando') : t('painel.decisao.pular'));
+    const corpo = p.camera ? { mac: p.camera.macBruto, acao } : { acao };
+    const r = await ctx.api.comando('/api/decisao', corpo);
+    restaurar();
+    if (!r.ok) {
+      mostrarNota(n, 'erro', traduzirServidor(r).texto);
+      mudouLocal();
+      return;
+    }
+    // Aceito: os botoes ficam travados ate a linha mudar ou a trava vencer.
+    mostrarNota(n, null);
+    l.trava = Date.now() + TRAVA_DECISAO_MS;
+    setTimeout(mudouLocal, TRAVA_DECISAO_MS);
+    mudouLocal();
+  }
+
+  function linhaFalha(p, colunas) {
+    const n = p.posicao;
+    const f = p.falha;
+    const travado = linha(n).trava > Date.now();
+    const motivoId = `painel-motivo-${n}`;
+    const tentar = botao(t('painel.decisao.tentar'), (ev) => decidir(ev.currentTarget, p, 'tentar'), {
+      tipo: 'primario', desabilitado: travado || f.bloqueiaTentar, motivoId: f.bloqueiaTentar ? motivoId : undefined,
+      dados: { foco: `tentar-${n}` },
+    });
+    const pular = botao(t('painel.decisao.pular'), (ev) => decidir(ev.currentTarget, p, 'pular'), {
+      tipo: 'secundario', desabilitado: travado, dados: { foco: `pular-${n}` },
+    });
+    return h('tr', { class: ['linha-falha', 'linha-detalhe'] }, h('td', { colspan: String(colunas) }, h('div', { class: 'falha-linha' }, [
+      f.erro ? h('p', { class: 'falha-erro' }, f.erro) : null,
+      h('p', { class: 'falha-conserto' }, textoDaFalha(f, p.ip)),
+      h('div', { class: 'falha-acoes' }, [tentar, pular]),
+      f.bloqueiaTentar ? h('p', { class: 'falha-motivo', id: motivoId }, [icone('informacao'), h('span', null, t('painel.decisao.senha'))]) : null,
+    ])));
+  }
+
+  function linhaNota(n, colunas) {
+    const nota = linha(n).nota;
+    if (!nota) return null;
+    const nomeIcone = { erro: 'falha', sucesso: 'concluido', info: 'espera' }[nota.tipo];
+    return h('tr', { class: ['linha-detalhe', 'linha-nota', nota.tipo === 'erro' ? 'linha-falha' : null] }, h('td', { colspan: String(colunas) },
+      h('p', { class: ['nota', 'nota-' + nota.tipo], id: `painel-nota-${n}`, role: nota.tipo === 'erro' ? 'alert' : 'status' }, [
+        icone(nomeIcone), h('span', null, nota.texto),
+      ])));
+  }
+
+  // ------------------------------------------------------------ Fila agora
+  function tabelaFila(m) {
+    const f = m.fila;
+    if (!f) return h('div', { class: 'tabela-vazio' }, h('p', null, t('painel.semFila')));
+    const corpo = [];
+    for (const p of f.posicoes) {
+      const c = p.camera;
+      const n = p.posicao;
+      const comCampos = c && COM_CAMPOS.includes(p.estado);
+      corpo.push(h('tr', { class: [p.estado === 'falha' ? 'linha-falha' : null, novas.has(n) ? 'linha-nova' : null], dados: { linha: String(n) } }, [
+        h('td', { class: 'coluna-pos', id: `painel-pos-${n}` }, String(n)),
+        h('td', { class: 'coluna-estado' }, h('span', { class: 'estado-linha' }, [
+          selo(p.estado, textoEstado(p, f.totalEtapas)),
+          p.estado === 'curso' && p.etapaN ? barraEtapas(p.etapaN, f.totalEtapas) : null,
+        ])),
+        h('td', { class: 'mono', translate: 'no' }, p.ip),
+        h('td', null, c ? c.modelo : ''),
+        h('td', { class: 'mono', translate: 'no' }, c ? c.serial : ''),
+        h('td', { class: 'mono', translate: 'no' }, c ? c.mac : ''),
+        h('td', { class: 'coluna-campo' }, comCampos ? entrada(p, 'porta') : ''),
+        h('td', { class: 'coluna-campo' }, comCampos ? entrada(p, 'canal') : ''),
+      ]));
+      if (p.estado === 'falha') corpo.push(linhaFalha(p, COLUNAS_FILA.length));
+      const nota = linhaNota(n, COLUNAS_FILA.length);
+      if (nota) corpo.push(nota);
+    }
+    return h('div', { class: 'tabela-rolagem' }, h('table', { class: 'tabela' }, [
+      h('thead', null, h('tr', null, COLUNAS_FILA.map((k) => h('th', { scope: 'col', id: `painel-col-${k}` }, t('tabela.' + k))))),
+      h('tbody', null, corpo),
+    ]));
+  }
+
+  // Cameras sem posicao: na espera do portao e as ja inicializadas.
+  function grupoEspera(m) {
+    if (!m.espera.length) return null;
+    return h('section', { class: 'grupo', 'aria-labelledby': 'painel-espera-titulo' }, [
+      h('h2', { class: 'grupo-titulo', id: 'painel-espera-titulo' }, t('painel.espera.titulo', { n: m.espera.length })),
+      h('p', { class: 'apoio' }, t('painel.espera.texto')),
+      h('div', { class: 'tabela-rolagem' }, h('table', { class: 'tabela' }, [
+        h('thead', null, h('tr', null, ['estado', 'modelo', 'serial', 'mac'].map((k) => h('th', { scope: 'col' }, t('tabela.' + k))))),
+        h('tbody', null, m.espera.map((c) => h('tr', null, [
+          h('td', { class: 'coluna-estado' }, selo('espera', t('estado.espera'))),
+          h('td', null, c.modelo),
+          h('td', { class: 'mono', translate: 'no' }, c.serial),
+          h('td', { class: 'mono', translate: 'no' }, c.mac),
+        ]))),
+      ])),
+    ]);
+  }
+
+  async function retomar(btn, c) {
+    const restaurar = ocupar(btn, t('painel.retomando'));
+    const r = await ctx.api.comando('/api/fila/conectada', { porta: '', canal: '', ip: c.ipOrigem });
+    restaurar();
+    if (r.ok) retomadas.delete(c.mac); else retomadas.set(c.mac, traduzirServidor(r).texto);
+    mudouLocal();
+  }
+
+  function grupoIgnoradas(m) {
+    if (!m.ignoradas.length) return null;
+    const colunas = ['estado', 'ipAtual', 'modelo', 'serial', 'mac', 'acao'];
+    const corpo = [];
+    for (const c of m.ignoradas) {
+      corpo.push(h('tr', null, [
+        h('td', { class: 'coluna-estado' }, selo('ignorada', t('estado.ignorada'))),
+        h('td', { class: 'mono', translate: 'no' }, c.ipOrigem),
+        h('td', null, c.modelo),
+        h('td', { class: 'mono', translate: 'no' }, c.serial),
+        h('td', { class: 'mono', translate: 'no' }, c.mac),
+        h('td', null, botao(t('painel.retomar'), (ev) => retomar(ev.currentTarget, c), { tipo: 'secundario', dados: { foco: `retomar-${c.mac}` } })),
+      ]));
+      const erro = retomadas.get(c.mac);
+      if (erro) {
+        corpo.push(h('tr', { class: ['linha-detalhe', 'linha-falha'] }, h('td', { colspan: String(colunas.length) },
+          h('p', { class: ['nota', 'nota-erro'], role: 'alert' }, [icone('falha'), h('span', null, erro)]))));
+      }
+    }
+    return h('section', { class: 'grupo', 'aria-labelledby': 'painel-ignoradas-titulo' }, [
+      h('h2', { class: 'grupo-titulo', id: 'painel-ignoradas-titulo' }, t('painel.ignoradas.titulo', { n: m.ignoradas.length })),
+      h('p', { class: 'apoio' }, t('painel.ignoradas.texto')),
+      h('div', { class: 'tabela-rolagem' }, h('table', { class: 'tabela' }, [
+        h('thead', null, h('tr', null, colunas.map((k) => h('th', { scope: 'col' }, t('tabela.' + k))))),
+        h('tbody', null, corpo),
+      ])),
+    ]);
+  }
+
+  // ------------------------------------------------------------ Registro
+  function situacao(r) {
+    const estado = ESTADO_DO_STATUS[r.Status] || 'aguardando';
+    const texto = ESTADO_DO_STATUS[r.Status] ? t('registro.status.' + estado) : String(r.Status || '');
+    const detalheTexto = r.Status === 'Falhou' && r.Erro ? r.Erro
+      : (r.Status !== 'Instalada' && r.Etapa ? t('registro.concluiu', { etapa: nomeEtapa(r.Etapa) || r.Etapa }) : '');
+    return [selo(estado, texto), detalheTexto ? h('span', { class: 'situacao-detalhe' }, detalheTexto) : null];
+  }
+
+  function encoder(r) {
+    const s = streamsEncoder(r.Encoder, false);
+    if (!s) return '';
+    return [
+      s.principal ? h('span', { class: 'stream' }, t('registro.principal', { texto: s.principal })) : null,
+      s.secundario ? h('span', { class: 'stream' }, t('registro.secundario', { texto: s.secundario })) : null,
+    ];
+  }
+
+  function tabelaRegistro(m) {
+    const reg = m.registro;
+    if (reg.lendo) return h('div', { class: 'tabela-vazio', role: 'status' }, h('p', null, t('registro.lendo')));
+    if (reg.erro) {
+      return h('div', { class: 'tabela-vazio', role: 'alert' }, [
+        h('p', null, [icone('falha'), ' ', t('registro.erro')]),
+        botao(t('registro.lerDeNovo'), () => ctx.lerRegistro(), { tipo: 'secundario', dados: { foco: 'registro-ler-erro' } }),
+      ]);
+    }
+    if (!reg.lista) return h('div', { class: 'tabela-vazio', role: 'status' }, h('p', null, t('registro.lendo')));
+    if (!reg.lista.length) return h('div', { class: 'tabela-vazio' }, h('p', null, t('registro.vazio')));
+    const corpo = reg.lista.map((r) => h('tr', null, [
+      h('td', { class: 'mono', translate: 'no' }, r.Ip || ''),
+      h('td', { class: 'mono', translate: 'no' }, formatarMac(r.Mac)),
+      h('td', null, r.Modelo || ''),
+      h('td', { class: 'coluna-situacao' }, situacao(r)),
+      h('td', { class: 'coluna-encoder' }, encoder(r)),
+      h('td', null, r.Local || ''),
+      h('td', { class: 'mono' }, [r.Rack, r.Porta].filter(Boolean).join(' / ')),
+      h('td', { class: 'mono' }, r.Canal || ''),
+      h('td', { class: 'numeros' }, dataHora(r.Data)),
+    ]));
+    return h('div', { class: 'tabela-rolagem' }, h('table', { class: 'tabela' }, [
+      h('thead', null, h('tr', null, COLUNAS_REGISTRO.map((k) => h('th', { scope: 'col' }, t('registro.col.' + k))))),
+      h('tbody', null, corpo),
+    ]));
+  }
+
+  function barraRegistro(m) {
+    return h('div', { class: 'vista-cabeca' }, [
+      h('h2', { class: 'grupo-titulo' }, m.registro.simulado || m.simular ? t('registro.titulo-simulacao') : t('registro.titulo')),
+      h('div', { class: 'vista-acoes' }, [
+        botao(t('registro.ler'), () => ctx.lerRegistro(), { tipo: 'secundario', desabilitado: m.registro.lendo, dados: { foco: 'registro-ler' } }),
+        h('a', { class: ['botao', 'botao-secundario'], href: '/api/relatorio.csv', download: '', dados: { foco: 'registro-exportar' } },
+          h('span', { class: 'botao-rotulo' }, t('registro.exportar'))),
+      ]),
+    ]);
+  }
+
+  // ------------------------------------------------------------ abas e desenho
+  function trocarAba(nome, focarAba) {
+    if (nome !== aba) {
+      aba = nome;
+      history.replaceState(null, '', nome === 'registro' ? '#/painel/registro' : '#/painel');
+      if (nome === 'registro') ctx.lerRegistro();
+      mudouLocal();
+    }
+    if (focarAba) focar(raiz.querySelector(`[data-foco="aba-${nome}"]`));
+  }
+
+  function abas() {
+    const nomes = ['fila', 'registro'];
+    return h('div', { class: 'abas', role: 'tablist', 'aria-label': t('painel.abas') }, nomes.map((nome, i) => h('button', {
+      type: 'button', role: 'tab', class: 'aba', id: `painel-aba-${nome}`,
+      'aria-selected': String(aba === nome), 'aria-controls': 'painel-aba-conteudo', tabindex: aba === nome ? '0' : '-1',
+      dados: { foco: `aba-${nome}` },
+      onclick: () => trocarAba(nome),
+      onkeydown: (ev) => {
+        if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+        ev.preventDefault();
+        const passo = ev.key === 'ArrowRight' ? 1 : -1;
+        trocarAba(nomes[(i + passo + nomes.length) % nomes.length], true);
+      },
+    }, t('painel.aba.' + nome))));
+  }
+
+  function desenhar(m) {
+    const conteudo = aba === 'fila'
+      ? [tabelaFila(m), grupoEspera(m), grupoIgnoradas(m)]
+      : [barraRegistro(m), tabelaRegistro(m)];
+    raiz.replaceChildren(
+      abas(),
+      h('div', { class: 'vista-conteudo', role: 'tabpanel', id: 'painel-aba-conteudo', 'aria-labelledby': `painel-aba-${aba}` }, conteudo),
+    );
+  }
+
+  // Avisa o leitor de tela da falha nova e da camera instalada agora; a linha
+  // instalada agora ganha o fundo de acao por um ciclo de consulta.
+  function compararEstados(m) {
+    const agora = new Map(m.fila ? m.fila.posicoes.map((p) => [p.posicao, p]) : []);
+    const novasAgora = new Set();
+    if (estadosAntes) {
+      for (const [n, p] of agora) {
+        const antes = estadosAntes.get(n);
+        if (antes === undefined || antes === p.estado) continue;
+        if (p.estado === 'falha') ctx.anunciar(t('painel.anuncio.falha', { n, texto: textoEstado(p, m.fila.totalEtapas) }));
+        if (p.estado === 'instalada') { ctx.anunciar(t('painel.anuncio.instalada', { n })); novasAgora.add(n); }
+      }
+    }
+    estadosAntes = new Map([...agora].map(([n, p]) => [n, p.estado]));
+    if (novasAgora.size) {
+      novas = new Set([...novas, ...novasAgora]);
+      setTimeout(() => { for (const n of novasAgora) novas.delete(n); mudouLocal(); }, CONSULTA_MS);
+    }
+  }
+
+  function atualizar(m) {
+    compararEstados(m);
+    const nova = JSON.stringify([m.fila, m.espera, m.ignoradas, m.registro, m.simular, aba, versaoLocal, [...novas]]);
+    if (nova === assinatura) return;
+    assinatura = nova;
+    // O redesenho troca os nos: o foco (e o cursor do campo) volta ao mesmo controle.
+    const ativo = document.activeElement;
+    const chave = ativo && raiz.contains(ativo) && ativo.dataset ? ativo.dataset.foco : null;
+    const cursor = chave && ativo.tagName === 'INPUT' ? [ativo.selectionStart, ativo.selectionEnd] : null;
+    redesenhando = true;
+    try {
+      desenhar(m);
+    } finally {
+      redesenhando = false;
+    }
+    if (!chave) return;
+    const alvo = raiz.querySelector(`[data-foco="${chave}"]`);
+    if (!alvo) return;
+    alvo.focus({ preventScroll: true });
+    if (cursor && alvo.tagName === 'INPUT') alvo.setSelectionRange(cursor[0], cursor[1]);
+  }
+
+  function abrirAba(nome) {
+    trocarAba(nome === 'registro' ? 'registro' : 'fila', false);
+  }
+
+  atualizar(ctx.modelo());
+  return { el: raiz, atualizar, abrirAba };
+}

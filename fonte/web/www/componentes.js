@@ -1,5 +1,6 @@
 // Componentes da direcao.md, secao 5: botao (5.1), campo (5.2), aviso (5.6),
-// dialogo de confirmacao (5.8), chip e popover (5.9). Aqui so estrutura, estado
+// dialogo de confirmacao (5.8), chip e popover (5.9), selo e mini barra das
+// etapas da linha da tabela (5.3). Aqui so estrutura, estado
 // e acessibilidade; a cara de cada um esta em componentes.css, so com tokens.
 import { h, novoId, focar } from './dom.js';
 import { icone } from './icones.js';
@@ -34,6 +35,27 @@ export function chip(rotulo, nivel, nomeIcone) {
     nomeIcone ? icone(nomeIcone) : null,
     h('span', null, rotulo),
   ]);
+}
+
+// Estado de uma linha da tabela (5.3): icone e palavra, nunca so a cor.
+// estado: 'instalada' | 'curso' | 'falha' | 'proxima' | 'aguardando' | 'pulada' | 'espera' | 'ignorada'
+const ICONE_DO_ESTADO = {
+  instalada: 'concluido', curso: 'agora', falha: 'falha', proxima: 'abrir',
+  aguardando: null, pulada: 'pulada', espera: 'espera', ignorada: 'informacao',
+};
+export function selo(estado, texto) {
+  const nomeIcone = ICONE_DO_ESTADO[estado];
+  return h('span', { class: ['selo', 'selo-' + estado] }, [nomeIcone ? icone(nomeIcone) : null, h('span', null, texto)]);
+}
+
+// Mini barra das etapas (UX-04): as feitas cheias, a atual so contornada. O
+// texto do selo ja diz "n de total"; a barra e so desenho.
+export function barraEtapas(n, total) {
+  const el = h('span', { class: 'barra-etapas', 'aria-hidden': 'true' });
+  for (let i = 1; i <= total; i += 1) {
+    el.append(h('span', { class: ['barra-etapa', i < n ? 'barra-etapa-feita' : null, i === n ? 'barra-etapa-atual' : null] }));
+  }
+  return el;
 }
 
 // Popover do chip (5.9): Popover API nativa, fecha com Esc e clique fora.

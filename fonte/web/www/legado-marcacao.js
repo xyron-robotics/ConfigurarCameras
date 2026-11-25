@@ -73,7 +73,6 @@ export function montarMarcacao(topo) {
               ]),
               h('p', { class: 'aviso-legado', 'data-aviso-de': 'vigia', role: 'alert', hidden: true }),
             ]),
-            h('ol', { id: 'cartoes', class: 'cartoes', 'aria-label': t('painel.cartoes.rotulo-leitor'), hidden: true }),
             h('div', { id: 'bancada-pronta' }, [
               h('p', { class: 'bancada-pos', id: 'bancada-pos' }),
               h('p', { class: 'bancada-destino' }, [
@@ -138,34 +137,8 @@ export function montarMarcacao(topo) {
             h('p', { class: 'aviso-legado', 'data-aviso-de': 'conectada', role: 'alert', hidden: true }),
           ]),
           h('p', { id: 'ultimo', class: 'ultimo', hidden: true }),
-          h('div', { id: 'registro-bloco', class: 'registro-bloco' }, [
-            h('div', { class: 'fita-cabeca' }, [
-              h('h2', { id: 'registro-titulo' }, t('painel.registro-titulo')),
-              h('div', { class: 'acoes' }, [
-                h('button', { type: 'button', class: 'btn discreto', id: 'btn-registro-atualizar' }, t('painel.btn-registro-atualizar')),
-                ' ',
-                h('a', { class: 'btn', id: 'btn-exportar', href: '/api/relatorio.csv' }, t('painel.btn-exportar')),
-              ]),
-            ]),
-            h('div', { class: 'tabela-rolagem' }, [
-              h('table', { class: 'tabela' }, [
-                h('thead', null, [
-                  h('tr', null, [
-                    h('th', { scope: 'col' }, t('painel.registro-bloco.coluna')),
-                    h('th', { scope: 'col' }, t('painel.registro-bloco.coluna.2')),
-                    h('th', { scope: 'col' }, t('painel.registro-bloco.coluna.3')),
-                    h('th', { scope: 'col' }, t('painel.registro-bloco.coluna.4')),
-                    h('th', { scope: 'col' }, t('painel.registro-bloco.coluna.5')),
-                    h('th', { scope: 'col' }, t('painel.registro-bloco.coluna.6')),
-                    h('th', { scope: 'col' }, t('painel.registro-bloco.coluna.7')),
-                    h('th', { scope: 'col' }, t('painel.registro-bloco.coluna.8')),
-                  ]),
-                ]),
-                h('tbody', { id: 'registro-corpo' }),
-              ]),
-            ]),
-            h('p', { id: 'registro-vazio', class: 'apoio', hidden: true }, t('painel.registro-vazio')),
-          ]),
+          // Tabela Fila agora / Registro e linhas de cada camera: o app.js monta aqui a tela-painel.js.
+          h('div', { id: 'painel-tabela' }),
         ]),
         h('section', { id: 'view-ferramentas', class: 'view', hidden: true }, [
           h('h1', null, t('ferramentas.titulo')),

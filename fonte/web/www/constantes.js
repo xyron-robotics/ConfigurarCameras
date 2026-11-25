@@ -15,9 +15,11 @@ export const ESPERA_ESTADO_PASSO_MS = 250;
 export const ESPERA_SESSAO_MS = 8000;
 export const ESPERA_COMECAR_MS = 60000;
 
-// Tempo maximo da trava dos botoes de um cartao depois de um clique: o
+// Tempo maximo da trava dos botoes de uma linha da tabela depois de um clique: o
 // servidor pode aceitar e nao mudar nada (o motivo chega pelo aviso).
 export const TRAVA_DECISAO_MS = 5000;
+// "Salvo." junto da porta e do canal some sozinho; o erro fica ate a proxima tentativa.
+export const NOTA_SALVO_MS = 4000;
 // Aviso neutro (409, "aguarde") some sozinho.
 export const AVISO_NEUTRO_MS = 4000;
 // Pausa entre limpar e escrever o anuncio, para o leitor de tela falar de novo.
