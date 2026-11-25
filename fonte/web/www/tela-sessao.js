@@ -89,10 +89,16 @@ async function montarFila(ctx, f, resposta, form) {
 }
 
 // ------------------------------------------------------------------ secao com formulario
+// Nota junto do botao. Placa e Rede: salvar a placa ou as faixas devolve a
+// placa e a prepara de novo (decisao N3: o servidor segue igual, a tela diz).
+// Fila: Salvar so guarda a faixa; Montar a fila troca a fila agora.
+const NOTA_SALVAR = { placa: 'sessao.placa.nota', rede: 'sessao.rede.nota', fila: 'sessao.fila.nota' };
+
 function secaoFormulario(ctx, modelo, secao, est, resposta) {
   const form = montarFormulario(secao, modelo, { lerPlacas: () => { est.sujo = false; ctx.lerPlacas(); } });
+  const notaId = NOTA_SALVAR[secao] ? novoId('sessao-nota') : undefined;
   // Na simulacao a senha nao e usada: a secao so mostra a nota.
-  const salvar = secao === 'senha' && modelo.simular ? null : botao(t('sessao.salvar'), null, { tipo: 'primario', submit: true });
+  const salvar = secao === 'senha' && modelo.simular ? null : botao(t('sessao.salvar'), null, { tipo: 'primario', submit: true, motivoId: notaId });
   if (salvar) salvar.id = 'sessao-salvar';
   let montar = null;
 
@@ -143,7 +149,7 @@ function secaoFormulario(ctx, modelo, secao, est, resposta) {
   const marcarSujo = () => { est.sujo = true; };
   return h('form', { class: 'form sessao-form', novalidate: true, onsubmit: aoSalvar, oninput: marcarSujo, onchange: marcarSujo }, [
     form.el,
-    montar ? h('p', { class: 'sessao-nota' }, t('sessao.fila.nota')) : null,
+    notaId && salvar ? h('p', { class: 'sessao-nota', id: notaId }, t(NOTA_SALVAR[secao])) : null,
     salvar ? h('div', { class: 'sessao-acoes' }, [salvar, montar]) : null,
     resposta.el,
   ]);

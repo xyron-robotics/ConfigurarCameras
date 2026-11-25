@@ -408,6 +408,9 @@ const TEXTOS = {
   'sessao.salvando': 'Salvando…',
   'sessao.salvas': 'Alterações salvas.',
   'sessao.senhaContinua': 'Nada mudou: a senha atual continua.',
+  'sessao.placa.nota': 'Trocar a placa e salvar devolve a placa atual ao que era e prepara a nova. Com fila montada, o painel pede confirmação antes.',
+  'sessao.rede.nota': 'Mudar a máscara, o gateway, a faixa de fábrica ou um IP do PC e salvar devolve a placa de rede e a prepara ' +
+    'de novo; o DNS não mexe nela. Com fila montada, o painel pede confirmação antes, e a fila continua se couber na rede nova.',
   'sessao.fila.nota': 'Salvar alterações só guarda a faixa. Montar a fila troca agora a fila da bancada e também guarda a faixa.',
   'sessao.fila.montar': 'Montar a fila',
   'sessao.fila.montando': 'Montando a fila…',
