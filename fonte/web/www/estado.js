@@ -25,7 +25,8 @@ export function derivar(bruto, extras) {
   const faixa = valores.Fila;
   const cams = listaCameras(e);
   const fila = derivarFila(e, cams);
-  return {
+  const vigia = derivarVigia(e, valores, x);
+  const modelo = {
     carregado,
     simular: !!e.simular,
     // Etapa onde a simulacao forca a falha (texto do servidor); vazio fora da simulacao.
@@ -65,12 +66,52 @@ export function derivar(bruto, extras) {
     // Fila na memoria do servidor (null sem fila): a Sessao pergunta antes de troca-la;
     // o Painel desenha uma linha por posicao.
     fila,
+    vigia,
     ...derivarSemPosicao(fila, cams),
     registro: derivarRegistro(x.registro, x.registroLeitura),
     // Ultimo aviso do servidor; n sobe a cada aviso novo (quem mandou o comando compara).
     aviso: { texto: e.aviso || '', n: Number(e.avisoN) || 0, origem: e.avisoOrigem || '' },
     atualizacao: derivarAtualizacao(bruto && bruto.atualizacao),
   };
+  modelo.painel = estadoDoPainel(modelo);
+  return modelo;
+}
+
+// Vigia (GET /api/estado: vigia e paralelo.dhip). qualquerFaixa: com o vigia
+// ligado vale o que o servidor usa; desligado, a escolha da Sessao (extras),
+// que vai junto no proximo Ligar. reserva: o broadcast nao respondeu e o vigia
+// so olha o IP de fabrica, uma camera por vez (direcao 3.6 e 5.7). desde: quando
+// o app.js viu o vigia ligar (o servidor nao publica a hora).
+function derivarVigia(e, valores, x) {
+  const v = e.vigia || {};
+  const ligado = !!v.ligado;
+  const escolha = typeof x.qualquerFaixa === 'boolean' ? x.qualquerFaixa : !!v.broadcast;
+  return {
+    ligado,
+    motivo: v.motivo || '',
+    porta: String(v.porta ?? '').trim(),
+    canal: String(v.canal ?? '').trim(),
+    broadcast: !!v.broadcast,
+    qualquerFaixa: ligado ? !!v.broadcast : escolha,
+    reserva: ligado && !!(e.paralelo && e.paralelo.dhip === 'sem-resposta'),
+    ipFabrica: (valores && valores.IpFabrica) || '',
+    desde: (ligado && x.vigiaDesde) || null,
+  };
+}
+
+// Estado vazio do Painel (direcao 3.6), um so por vez; null quando ha camera
+// para mostrar. Parada = nada em curso, em falha nem na espera do portao.
+function estadoDoPainel(m) {
+  const f = m.fila;
+  if (!f) return 'semFila';
+  if (f.concluida) return 'concluida';
+  if (f.encerrada) return 'encerrada';
+  const c = f.contagem;
+  const parada = c.curso === 0 && c.falha === 0 && m.espera.length === 0;
+  if (!parada) return null;
+  if (!m.vigia.ligado) return 'vigiaDesligado';
+  if (c.instalada === 0) return 'esperando';
+  return null;
 }
 
 function listaCameras(e) {
@@ -167,10 +208,21 @@ function derivarFila(e, cams) {
     rack: f.rack || '',
     andar: f.andar || '',
     aberta,
+    concluida: e.fase === 'concluida',
+    encerrada: e.fase === 'encerrada',
+    // Primeira posicao livre (a que o vigia ou o Configurar pega agora).
+    proxima: proximaDe(posicoes),
     totalEtapas: ETAPAS.length,
     posicoes,
     contagem,
+    // Posicoes que ficam sem camera se a fila for encerrada agora.
+    semCamera: contagem.aguardando + contagem.proxima,
   };
+}
+
+function proximaDe(posicoes) {
+  const p = posicoes.find((x) => x.estado === 'proxima');
+  return p ? { posicao: p.posicao, ip: p.ip } : null;
 }
 
 // Cameras sem posicao na fila: na espera do portao e as ja inicializadas que o

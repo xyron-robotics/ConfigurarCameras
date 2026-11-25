@@ -1,9 +1,10 @@
 // Transicao: sai nas frentes 3 a 5 do redesenho.
-// Painel: log, faixa de atualizacao, fita da fila, bancada da retomada
-// manual, vigia e resultado das ferramentas (a tabela mora em tela-painel.js).
+// Painel: log, faixa de atualizacao, bancada da retomada manual (etapas e
+// decisao) e resultado das ferramentas. A tabela, a fita, o cabecalho da fila,
+// o vigia e os estados vazios moram em tela-painel.js.
 import { h } from './dom.js';
 import { icone } from './icones.js';
-import { t, nomeEtapa, motivoVigia, textoDaFalha } from './textos.js';
+import { t, nomeEtapa, textoDaFalha } from './textos.js';
 import { streamsEncoder } from './formato.js';
 import {
   ETAPAS, LOG_FOLGA_FIM, LOG_MAX_LINHAS, LOG_INICIO_HORA, PORTA_HTTP,
@@ -28,8 +29,6 @@ const ICONE_DO_SIGNIFICADO = Object.freeze({
   sucesso: { nome: 'concluido', rotulo: 'log.sucesso' },
   atencao: { nome: 'atencao', rotulo: 'log.atencao' },
 });
-
-function classeLuz(significado) { return significado ? 'luz ' + significado : 'luz'; }
 
 // ------------------------------------------------------------------ log
 export function anexarLog(entrada) {
@@ -94,63 +93,24 @@ export function desenharAtualizacao(a, e) {
 }
 
 // ------------------------------------------------------------------ painel (fila)
-const ESTADO_NA_FITA = { feita: t('fita.instalada'), falhou: t('fita.falhou'), pulada: t('fita.pulada') };
-
+// So a retomada manual pelo IP (C7): etapas em curso ou a decisao dela. O resto
+// do Painel (cabecalho, fita, vigia, estados vazios, tabela) e de tela-painel.js.
 export function desenharFila(e) {
   const fila = e.fila;
   const temFila = !!(fila && fila.itens && fila.itens.length);
-  $('painel-sem-fila').hidden = temFila;
-  $('fita-bloco').hidden = !temFila;
-  $('bancada').hidden = !temFila;
   const ult = $('ultimo');
   // Na falha, a "ultima instalada" so distrai da decisao.
-  ult.hidden = !e.ultimo || e.fase === 'decisao';
+  ult.hidden = !temFila || !e.ultimo || e.fase === 'decisao';
   ult.textContent = e.ultimo || '';
-  const cams = temFila ? listaCameras(e) : [];
-  // Encerrar a fila: botao da fila enquanto ela esta aberta (admitindo).
-  $('btn-encerrar-fila').hidden = !temFila || ['concluida', 'encerrada'].includes(e.fase) ||
-    !!(e.paralelo && e.paralelo.admitindo === false);
-  if (!temFila) { desenharVigia(e, false); return; }
-
+  const blocos = { trabalho: false, decisao: false };
+  if (!temFila) { mostrarBlocos(blocos); return; }
+  const cams = listaCameras(e);
   const itens = fila.itens;
-  const pendentes = itens.filter((i) => i.Estado === 'pendente');
-  const feitas = itens.filter((i) => i.Estado === 'feita').length;
-  // Posicao com camera (cameras[].indice e base 0 em fila.itens).
-  const comCamera = new Set(cams.filter((c) => c.indice >= 0).map((c) => c.indice));
-  const aberta = !['concluida', 'encerrada'].includes(e.fase) && !(e.paralelo && e.paralelo.admitindo === false);
-  // Proxima: a primeira pendente sem camera.
-  const proxima = aberta ? itens.find((i, idx) => i.Estado === 'pendente' && !comCamera.has(idx)) || null : null;
-  // "agora" em toda posicao com camera no portao, conferindo ou em decisao
-  // (varias ao mesmo tempo); sem nenhuma, a retomada manual pela fase legada (C7).
-  const agora = new Set(cams.filter((c) => c.indice >= 0 && ['portao', 'conferindo', 'decisao'].includes(c.fase)).map((c) => c.indice));
-  if (!agora.size && e.atual >= 0 && ['configurando', 'decisao'].includes(e.fase)) agora.add(e.atual);
   // Posicoes que contam para "N de M": as puladas na montagem (gateway, fora
   // da rede, com camera instalada) nao sao lugar para camera nenhuma.
   const usavel = (i) => i.Estado !== 'pulada' || /operador|responde/.test(i.Motivo || '');
   const usaveis = itens.filter(usavel);
   const livres = usaveis.length;
-
-  $('fita-titulo').textContent = t('fita.titulo', { inicio: itens[0].Ip, fim: itens[itens.length - 1].Ip });
-  $('fita-resumo').textContent = t('fita.resumo', { feitas, pendentes: pendentes.length }) +
-    [fila.local, fila.rack, fila.andar].filter(Boolean).map((x) => ', ' + x).join('');
-
-  const fita = $('fita');
-  fita.replaceChildren(...itens.map((i, idx) => {
-    const cls = [i.Estado];
-    // Estado em palavra, nao so na cor.
-    let palavra = ESTADO_NA_FITA[i.Estado] || '';
-    if (agora.has(idx)) { cls.push('atual'); if (i.Estado !== 'falhou') palavra = t('fita.agora'); }
-    else if (i === proxima) { cls.push('proxima'); palavra = t('fita.proxima'); }
-    // Mesma numeracao da bancada: so as posicoes usaveis contam.
-    const n = usaveis.indexOf(i);
-    const rotulo = n >= 0 ? t('fita.camera', { n: n + 1 }) : '';
-    return h('li', { class: cls.join(' '), title: i.Motivo || null }, [
-      h('span', { class: 'pos' }, [rotulo, palavra ? h('span', { class: 'estado' }, (rotulo ? ' ' : '') + palavra) : null]),
-      h('span', null, i.Ip),
-      i.Motivo ? h('span', { class: 'motivo' }, i.Motivo) : null]);
-  }));
-
-  const blocos = { pronta: false, trabalho: false, decisao: false, fim: false };
   const posAtual = e.atual >= 0 ? itens[e.atual] : null;
   const ordinal = (item) => t('bancada.ordinal', { n: usaveis.indexOf(item) + 1, total: livres });
   // Bloco de camera unica (C7): so a retomada manual pelo IP, isto e, fase
@@ -159,7 +119,6 @@ export function desenharFila(e) {
   const temFase = (fases) => cams.some((c) => fases.includes(c.fase));
   const manualConfigurando = e.fase === 'configurando' && !temFase(['portao', 'conferindo']);
   const manualDecisao = e.fase === 'decisao' && !!e.falha && !temFase(['decisao']);
-  const emAndamento = temFase(['espera', 'portao', 'conferindo', 'decisao']);
 
   if (manualConfigurando || (e.ocupado && e.trabalho && e.fase === 'fila')) {
     blocos.trabalho = true;
@@ -182,23 +141,14 @@ export function desenharFila(e) {
     $('decisao-titulo').textContent = t('bancada.decisao-titulo', { etapa: nomeEtapa(e.falha.etapa) || e.falha.etapa, ip: posAtual ? posAtual.Ip : '' });
     $('decisao-erro').textContent = e.falha.erro;
     $('decisao-apoio').textContent = textoDaFalha(e.falha, posAtual ? posAtual.Ip : '');
-  } else if (e.fase === 'concluida' || e.fase === 'encerrada' || (!proxima && !emAndamento)) {
-    blocos.fim = true;
-    $('fim-titulo').textContent = e.fase === 'encerrada' ? t('bancada.fila-encerrada') : t('bancada.fila-concluida');
-    const motivo = e.vigia && !e.vigia.ligado && e.vigia.motivo;
-    $('fim-texto').textContent = t('bancada.fim-texto') + (motivo ? t('bancada.fim-vigia', { motivo: motivoVigia(motivo) }) : '');
-  } else if (proxima) {
-    const vigiando = !!(e.vigia && e.vigia.ligado);
-    blocos.pronta = true;
-    $('bancada-pos').textContent = t('bancada.conecte', { n: usaveis.indexOf(proxima) + 1, total: livres });
-    $('bancada-destino').textContent = proxima.Ip;
-    $('bancada-apoio').textContent = vigiando ? t('bancada.apoio-vigia') : t('bancada.apoio-cabo');
-    // Uma acao principal por vez (C5): com o vigia ligado o destaque e dele;
-    // com camera em decisao, do "Tentar de novo" da linha dela.
-    $('btn-conectada').className = vigiando || temFase(['decisao']) ? 'btn' : 'btn acento';
   }
+  mostrarBlocos(blocos);
+}
+
+// A bancada so aparece com a retomada manual em curso ou em decisao.
+function mostrarBlocos(blocos) {
   for (const [k, v] of Object.entries(blocos)) $('bancada-' + k).hidden = !v;
-  desenharVigia(e, !blocos.fim);
+  $('bancada').hidden = !blocos.trabalho && !blocos.decisao;
 }
 
 function listaCameras(e) {
@@ -208,27 +158,6 @@ function listaCameras(e) {
 
 // IP, MAC, modelo e serial (sempre em .mono) nao passam por tradutor.
 const MONO = { class: 'mono', translate: 'no' };
-
-// ------------------------------------------------------------------ vigia
-// Vigia do modo paralelo (C1, C4): porta e canal nao moram aqui, cada
-// linha da tabela tem os seus. Sem DHIP, o coordenador cai para uma camera por vez.
-export function desenharVigia(e, visivel) {
-  $('vigia').hidden = !visivel;
-  if (!visivel) return;
-  const v = e.vigia || {};
-  const f = $('form-vigia').elements;
-  const ip = S.ipFabrica || t('vigia.ip-generico');
-  $('vigia-luz').className = classeLuz(v.ligado ? 'agora' : '');
-  $('vigia-estado').textContent = v.ligado ? t('vigia.ligado') : t('vigia.desligado');
-  $('btn-vigia').textContent = v.ligado ? t('vigia.desligar') : t('vigia.ligar');
-  f.broadcast.disabled = !!v.ligado;
-  if (v.ligado) f.broadcast.checked = !!v.broadcast;
-  const texto = v.ligado
-    ? t('vigia.texto-ligado', { ip })
-    : (v.motivo ? t('vigia.motivo', { motivo: motivoVigia(v.motivo) }) : '') + t('vigia.texto-desligado', { ip });
-  $('vigia-texto').textContent = texto;
-  $('vigia-dhip').hidden = !(v.ligado && e.paralelo && e.paralelo.dhip === 'sem-resposta');
-}
 
 // ------------------------------------------------------------------ ferramentas
 function tabela(cabecalho, linhas, colunasMono) {

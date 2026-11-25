@@ -14,8 +14,6 @@ export const S = {
   cursorLog: 0,
   estado: null,
   ultimaFase: '',
-  // IP de fabrica da sessao gravada (o app.js copia ao ler a sessao): texto do vigia.
-  ipFabrica: '',
   // Leitor de tela: so as transicoes (instalada, falhou, fim).
   ultimoVisto: null,
   focarTentar: false,
@@ -65,8 +63,8 @@ export async function esperarEstado(cond, ms) {
 }
 
 // ------------------------------------------------------------------ avisos
-// O aviso aparece junto do formulario que o causou (data-aviso-de); se ele
-// nao estiver na tela, na faixa do topo.
+// O aviso aparece junto do formulario que o causou (o primeiro data-aviso-de
+// dele que estiver na tela); se nenhum estiver, na faixa do topo.
 const ORIGEM_DA_ROTA = {
   '/api/fila': 'fila', '/api/fila/conectada': 'conectada',
   '/api/decisao': 'conectada', '/api/vigia': 'vigia', '/api/sondar': 'sondar', '/api/descobrir': 'descobrir',
@@ -91,8 +89,8 @@ export function mostrarAviso(texto, origem, opcoes) {
   S.avisoDoServidor = !!(texto && o.servidor);
   for (const a of [$('aviso'), ...document.querySelectorAll('[data-aviso-de]')]) { a.hidden = true; a.textContent = ''; }
   if (!texto) return;
-  const slot = origem ? document.querySelector('[data-aviso-de="' + origem + '"]') : null;
-  const a = slot && naTela(slot) ? slot : $('aviso');
+  const slot = origem ? [...document.querySelectorAll('[data-aviso-de="' + origem + '"]')].find(naTela) : null;
+  const a = slot || $('aviso');
   a.textContent = texto;
   a.classList.toggle('neutro', !!o.neutro);
   a.hidden = false;
@@ -120,11 +118,11 @@ export async function comando(caminho, corpo, opcoes) {
 
 // Botoes de trabalho ficam desligados enquanto o worker trabalha. Encerrar o
 // painel, encerrar a fila e o vigia (desligar vale no meio de uma camera)
-// ficam sempre ativos. Os botoes de decisao das linhas da tabela tambem ficam
+// ficam sempre ativos; o Configurar sem vigia trava pelo modelo (tela-painel.js). Os botoes de decisao das linhas da tabela tambem ficam
 // fora: o servidor aceita decisao com o worker ocupado, e cada linha trava os seus.
 export function aplicarOcupado(ocupado) {
   const simular = !!(S.estado && S.estado.simular);
-  const sel = '#view-ferramentas .btn, #form-conectada .btn, [data-decisao]';
+  const sel = '#view-ferramentas .btn, [data-decisao]';
   for (const b of document.querySelectorAll(sel)) {
     b.disabled = ocupado || (simular && b.hasAttribute('data-so-real'));
   }

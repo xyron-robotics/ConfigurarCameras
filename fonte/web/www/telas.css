@@ -78,17 +78,13 @@
   .conferir-pede { margin: 0; }
 
   /* ---------------------------------------------------------------- painel */
-  /* Azul-500 = agora: sem fila nada esta em curso, a barra lateral fica em --linha. */
-  .painel-sem-fila {
-    background: var(--superficie); border: var(--traco) solid var(--linha);
-    border-left: var(--barra-mini) solid var(--linha);
-    border-radius: var(--raio-bloco); padding: var(--esp-4) var(--esp-5);
-  }
-  .fita-cabeca {
-    display: flex; align-items: baseline; justify-content: space-between; gap: var(--esp-4); flex-wrap: wrap;
-    margin-bottom: var(--esp-2);
-  }
-  .fita-cabeca-fim { display: flex; align-items: baseline; gap: var(--esp-3); flex-wrap: wrap; }
+  /* Topo do Painel (3.2): cabecalho da fila, fita, aviso e o estado da vez. */
+  .painel-topo { display: grid; gap: var(--esp-4); margin-block-end: var(--esp-4); }
+  .fila-cabeca { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--esp-5); flex-wrap: wrap; }
+  .fila-nome { display: grid; gap: var(--esp-1); }
+  .fila-titulo { margin: 0; }
+  .fila-faixa { display: flex; gap: var(--esp-3); align-items: center; flex-wrap: wrap; margin: 0; }
+  .fila-acoes { display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
   .bancada {
     background: var(--superficie); border: var(--traco) solid var(--linha);
@@ -99,31 +95,20 @@
     font-size: var(--tipo-numero); font-weight: var(--peso-forte); line-height: var(--entrelinha-titulo);
     margin: 0;
   }
-  .bancada-destino { margin: 0 0 var(--esp-2); font-size: var(--tipo-subtitulo); }
-  .bancada-destino .mono { font-size: var(--tipo-titulo); font-weight: var(--peso-forte); }
-  .bancada form { margin-top: var(--esp-4); }
   .falha-titulo { color: var(--falha); }
-  .vigia {
-    margin-bottom: var(--esp-4); padding-bottom: var(--esp-4);
-    border-bottom: var(--traco) solid var(--linha);
-  }
-  .vigia-cabeca { display: flex; align-items: center; gap: var(--esp-2); }
-  .vigia-cabeca h2 { margin: 0; }
-  .vigia .apoio { max-width: var(--medida-texto); }
-  .bancada .vigia form { margin-top: var(--esp-2); }
-  .retomar { margin-top: var(--esp-3); }
+  /* Retomar camera ja inicializada: dentro do estado "Vigia desligado". */
+  .retomar { display: grid; gap: var(--esp-2); }
   .retomar summary { cursor: pointer; color: var(--acao-texto); font-size: var(--tipo-corpo); }
-  .retomar[open] summary { margin-bottom: var(--esp-2); }
-  .retomar label { max-width: calc(var(--campo-ip) + var(--topo-altura)); margin-top: var(--esp-2); }
+  .retomar-linha { display: flex; gap: var(--esp-2); align-items: flex-end; flex-wrap: wrap; }
+  .retomar .campo { inline-size: calc(var(--campo-ip) + var(--topo-altura)); }
   /* Erro cru da camera: le como log, em mono. */
   .decisao-erro {
     font-family: var(--familia-mono); font-size: var(--tipo-corpo); background: var(--falha-fundo);
     padding: var(--esp-2) var(--esp-3); border-radius: var(--raio-controle); overflow-wrap: anywhere;
   }
-  .bancada-fim .btn { margin-top: var(--esp-3); }
   /* Frase corrida do painel le em --texto (7:1); --apoio fica para legenda e
      rotulo curto (decisao do usuario, 24/11). */
-  .bancada p.apoio, .painel-sem-fila p.apoio { color: var(--texto); }
+  .bancada p.apoio { color: var(--texto); }
 
   /* Tabela das cameras (tela-painel.js): abas, tabela e os grupos das cameras
      sem posicao, um embaixo do outro. */

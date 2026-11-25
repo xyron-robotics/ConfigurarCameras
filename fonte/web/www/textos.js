@@ -9,25 +9,10 @@ const TEXTOS = {
   'topo.atualizacao-notas': 'o que mudou',
   'topo.btn-atualizar': 'Atualizar o painel',
   'marca.alt': 'Grupo SmartSeg',
-  'painel.painel-sem-fila.titulo': 'Sem fila montada',
-  'painel.painel-sem-fila.apoio': 'A fila é a sequência de IPs que as câmeras vão receber.',
-  'painel.painel-sem-fila.link': 'Monte uma em Sessão, seção Fila.',
-  'painel.fita-titulo': 'Fila',
-  'painel.btn-encerrar-fila': 'Encerrar a fila',
-  'painel.fita.rotulo-leitor': 'Posições da fila',
-  'painel.vigia.titulo': 'Vigia',
-  'painel.vigia-estado': 'desligado',
-  'painel.vigia-dhip': 'Sem broadcast: uma câmera por vez.',
-  'painel.campo-broadcast.dica': 'Broadcast DHIP (UDP 37810): acha câmera de fábrica mesmo fora do IP de fábrica; a placa recebe um IP temporário na rede dela. Na rede do escritório, só com a bancada isolada.',
-  'painel.campo-broadcast': 'Aceitar câmera de fábrica em qualquer faixa (broadcast)',
-  'painel.btn-vigia': 'Ligar vigia',
-  'painel.bancada-destino.rotulo': 'Destino',
-  'painel.bancada-apoio': 'Ligue uma câmera só no cabo e confirme. A câmera de fábrica é encontrada sozinha, em qualquer faixa de IP.',
-  'painel.campo-porta': 'Porta do switch',
-  'painel.campo-canal': 'Canal no NVR',
-  'painel.btn-conectada': 'Câmera conectada',
+  // O servidor cita este texto no aviso que manda retomar (o bloco abre sozinho).
   'painel.retomar.abrir': 'Retomar câmera já inicializada',
-  'painel.retomar.nota': 'Só para uma câmera que já recebeu a senha desta sessão, como depois de uma falha ou com o painel fechado no meio. Informe o IP em que ela responde agora. Com o campo vazio, o painel procura uma câmera de fábrica.',
+  'painel.retomar.nota': 'Só para uma câmera que já recebeu a senha desta sessão, como depois de uma falha ou com o painel ' +
+    'fechado no meio. Informe o IP em que ela responde agora.',
   'painel.campo-ip': 'IP atual da câmera',
   'painel.etapa-inicializada': 'Inicialização',
   'painel.etapa-encoder': 'Encoder',
@@ -36,7 +21,6 @@ const TEXTOS = {
   'painel.decisao-apoio': 'O que foi concluído fica registrado. Tentar de novo continua da etapa que falhou.',
   'painel.decisao-tentar': 'Tentar de novo',
   'painel.decisao-pular': 'Pular esta posição',
-  'painel.bancada-fim.link': 'Montar outra fila',
   'ferramentas.titulo': 'Ferramentas',
   'ferramentas.apoio': 'Tudo aqui só lê a rede e as câmeras, pela placa escolhida. Nada é alterado. Para voltar uma câmera de fábrica, use a tela dela ou o botão físico de reset.',
   'ferramentas.form-sondar.titulo': 'Sondar uma câmera',
@@ -309,26 +293,72 @@ const TEXTOS = {
   'fila.previa-invertida': 'O primeiro IP vem depois do último: troque os dois.',
   'fila.previa-acima': ({ n }) => n + ' endereços: acima do máximo de 254. Divida em faixas menores.',
 
-  // ---------------------------------------------------------------- painel
-  'fita.instalada': 'instalada',
-  'fita.falhou': 'falhou',
-  'fita.pulada': 'pulada',
-  'fita.agora': 'agora',
-  'fita.proxima': 'próxima',
-  'fita.camera': ({ n }) => 'câmera ' + n,
-  'fita.titulo': ({ inicio, fim }) => 'Fila ' + inicio + ' a ' + fim,
-  'fita.resumo': ({ feitas, pendentes }) => feitas + (feitas === 1 ? ' instalada, ' : ' instaladas, ') +
-    pendentes + (pendentes === 1 ? ' pendente' : ' pendentes'),
+  // ---------------------------------------------------------------- painel (bancada da retomada manual)
   'bancada.ordinal': ({ n, total }) => 'Câmera ' + n + ' de ' + total,
   'bancada.trabalho-titulo': ({ ordinal, ip }) => ordinal + ' → ' + ip,
   'bancada.decisao-titulo': ({ etapa, ip }) => 'Falhou na etapa ' + etapa + (ip ? ' (' + ip + ')' : ''),
-  'bancada.fila-encerrada': 'Fila encerrada',
-  'bancada.fila-concluida': 'Fila concluída',
-  'bancada.fim-texto': 'A aba Registro, abaixo, tem cada câmera; Exportar o relatório gera o CSV.',
-  'bancada.fim-vigia': ({ motivo }) => ' O vigia foi desligado: ' + motivo + '.',
-  'bancada.conecte': ({ n, total }) => 'Conecte a câmera ' + n + ' de ' + total,
-  'bancada.apoio-vigia': 'O vigia configura sozinho. Câmera conectada fica para retomar uma câmera já inicializada, pelo bloco abaixo.',
-  'bancada.apoio-cabo': 'Ligue uma câmera só no cabo e confirme. A câmera de fábrica é encontrada sozinha pela placa escolhida.',
+
+  // ---------------------------------------------------------------- cabecalho da fila, fita e estados (tela-painel.js)
+  'painel.titulo': 'Painel',
+  'painel.fila.titulo': ({ local, rack, andar, total }) => {
+    const partes = [local, rack ? 'rack ' + rack : '', textoAndar(andar)].filter(Boolean);
+    return partes.length ? 'Fila ' + partes.join(', ') : 'Fila de ' + pl(total, 'posição', 'posições');
+  },
+  'painel.fila.faixa': ({ inicio, fim }) => (inicio === fim ? inicio : inicio + ' a ' + fim),
+  'painel.vigia.ligado': 'Vigia ligado',
+  'painel.vigia.desligado': 'Vigia desligado',
+  'painel.vigia.ligar': 'Ligar o vigia',
+  'painel.vigia.desligar': 'Desligar o vigia',
+  'painel.vigia.ligando': 'Ligando o vigia…',
+  'painel.vigia.desligando': 'Desligando o vigia…',
+  'painel.qualquerFaixa': 'Qualquer faixa',
+  'painel.fila.montar': 'Montar a fila',
+  'painel.fila.montarOutra': 'Montar outra fila',
+  'painel.fila.encerrar': 'Encerrar a fila',
+  'painel.fila.encerrando': 'Encerrando a fila…',
+  'painel.vazio.semFila': 'Nenhuma fila montada',
+  'painel.vazio.semFila.texto': 'Monte a fila com a faixa de IPs que as câmeras vão receber, em Sessão, seção Fila.',
+  'painel.vazio.desligado': 'Ligue o vigia para configurar sozinho cada câmera de fábrica que aparecer no switch, na próxima ' +
+    'posição livre.',
+  'painel.vazio.motivo': ({ motivo }) => 'O vigia foi desligado: ' + motivo + '.',
+  'painel.vazio.sequencial': 'Sem vigia: uma câmera por vez',
+  'painel.vazio.sequencial.texto': ({ n, ip }) => 'Ligue a câmera ' + n + ' no switch, só ela, e clique em Configurar. ' +
+    'Ela recebe o IP ' + ip + '.',
+  'painel.vazio.configurar': ({ n }) => 'Configurar a câmera ' + n,
+  'painel.vazio.configurando': 'Procurando a câmera…',
+  'painel.vazio.esperando': 'Esperando câmeras de fábrica',
+  'painel.vazio.esperando.texto': ({ ip, hora, qualquer }) => 'Observando ' + ip +
+    (qualquer ? ' e câmera de fábrica de qualquer faixa' : '') + (hora ? ' desde ' + hora : '') +
+    '. Ligue as câmeras no switch: cada uma entra na próxima posição livre.',
+  'painel.vazio.ipFabrica': 'o IP de fábrica',
+  'painel.concluida': ({ n }) => 'Fila concluída: ' + pl(n, 'instalada', 'instaladas'),
+  'painel.encerrada': ({ inst, sem }) => 'Fila encerrada: ' + pl(inst, 'instalada', 'instaladas') + ', ' +
+    pl(sem, 'posição sem câmera', 'posições sem câmera'),
+  'painel.fim.registro': 'A aba Registro, abaixo, tem cada câmera; Exportar o relatório gera o CSV.',
+  'painel.retomar.enviar': 'Retomar a câmera',
+  'painel.retomar.ipInvalido': 'Digite o IP em que a câmera responde agora, como 192.168.1.108.',
+  // Fita (direcao 5.5): legenda com a contagem de cada estado e a frase do leitor de tela.
+  'fita.leitor': ({ total, c }) => 'Fila de ' + pl(total, 'posição', 'posições') + ': ' + juntar([
+    pl(c.instalada, 'instalada', 'instaladas'),
+    c.falha ? t('fita.falha', { n: c.falha }) : '',
+    c.curso ? t('fita.curso', { n: c.curso }) : '',
+    c.proxima ? t('fita.proxima', { n: c.proxima }) : '',
+    c.aguardando ? t('fita.aguardando', { n: c.aguardando }) : '',
+    c.pulada ? t('fita.puladas', { n: c.pulada }) : '',
+  ].filter(Boolean)) + '.',
+  'fita.instaladas': ({ n }) => pl(n, 'instalada', 'instaladas'),
+  'fita.falha': ({ n }) => n + (n === 1 ? ' pede você' : ' pedem você'),
+  'fita.curso': ({ n }) => n + ' em curso',
+  'fita.proxima': ({ n }) => n + ' próxima',
+  'fita.aguardando': ({ n }) => n + ' aguardando',
+  'fita.puladas': ({ n }) => pl(n, 'pulada', 'puladas'),
+  // Faixa do modo de reserva (direcao 3.6 e 5.7).
+  'faixa.reserva': 'O broadcast não respondeu: o vigia está no modo de reserva. Ligue uma câmera de fábrica por vez no ' +
+    'switch. Para voltar ao modo normal, libere a porta UDP 37810 no firewall do Windows.',
+  'dialogo.encerrarFila.titulo': 'Encerrar a fila?',
+  'dialogo.encerrarFila.texto': ({ sem }) => 'O vigia para de aceitar câmeras e as câmeras em curso terminam antes.' +
+    (sem ? ' ' + pl(sem, 'posição fica', 'posições ficam') + ' sem câmera.' : ''),
+  'dialogo.encerrarFila.confirmar': 'Encerrar a fila',
 
   // ---------------------------------------------------------------- tabela do painel (tela-painel.js)
   'painel.abas': 'Vistas do painel',
@@ -354,7 +384,6 @@ const TEXTOS = {
   'estado.pulada': 'Pulada',
   'estado.espera': 'Na espera',
   'estado.ignorada': 'Já inicializada',
-  'painel.semFila': 'Sem fila montada. As posições aparecem aqui quando houver uma.',
   'painel.espera.titulo': ({ n }) => 'Na espera do portão (' + n + ')',
   'painel.espera.texto': 'Câmeras que o vigia achou e que esperam vaga no portão. Cada uma recebe a próxima posição livre.',
   'painel.ignoradas.titulo': ({ n }) => 'Já inicializadas, não tocadas (' + n + ')',
@@ -412,18 +441,6 @@ const TEXTOS = {
     'espera ela responder lá e confere. Se ela não voltar, confira o cabo e a máscara e o gateway em Sessão, seção Rede.',
   'falha.outra': 'O que foi concluído fica registrado. Tentar de novo continua da etapa que falhou.',
 
-  'vigia.ip-generico': 'o IP de fábrica',
-  'vigia.ligado': 'ligado',
-  'vigia.desligado': 'desligado',
-  'vigia.desligar': 'Desligar vigia',
-  'vigia.ligar': 'Ligar vigia',
-  'vigia.motivo': ({ motivo }) => 'Desligado: ' + motivo + '. ',
-  'vigia.texto-desligado': ({ ip }) => 'Ligado, o painel observa ' + ip + ' e configura sozinho cada câmera de fábrica que ' +
-    'aparecer, na próxima posição livre. Com a caixa marcada, aceita também câmera de fábrica em qualquer faixa (broadcast): só ' +
-    'com a bancada isolada da rede do escritório.',
-  'vigia.texto-ligado': ({ ip }) => 'Observando ' + ip + ' por broadcast. Ligue quantas câmeras quiser no switch: cada uma ' +
-    'entra na próxima posição livre. Digite porta e canal na linha de cada câmera, na tabela abaixo, pelo serial da etiqueta.',
-
   'registro.titulo-simulacao': 'Registro da simulação',
   'registro.concluiu': ({ etapa }) => 'concluiu: ' + etapa,
   'registro.principal': ({ texto }) => 'Principal: ' + texto,
@@ -440,6 +457,16 @@ const TEXTOS = {
   'sessao.placa.nota': 'Trocar a placa e salvar devolve a placa atual ao que era e prepara a nova. Com fila montada, o painel pede confirmação antes.',
   'sessao.rede.nota': 'Mudar a máscara, o gateway, a faixa de fábrica ou um IP do PC e salvar devolve a placa de rede e a prepara ' +
     'de novo; o DNS não mexe nela. Com fila montada, o painel pede confirmação antes, e a fila continua se couber na rede nova.',
+  // Fora do formulario: vale na hora com o vigia ligado e no proximo Ligar com ele desligado.
+  'sessao.rede.qualquerFaixa': 'Aceitar câmera de fábrica de qualquer faixa',
+  'sessao.rede.qualquerFaixa.risco': 'Ligada, o vigia procura câmera de fábrica por broadcast em toda a rede da placa, não só ' +
+    'no IP de fábrica, e a placa recebe um IP temporário na rede de cada câmera. Use só com a bancada isolada da rede do ' +
+    'escritório: qualquer câmera de fábrica ligada nela pode ser configurada.',
+  'sessao.rede.qualquerFaixa.ligada': ({ agora }) => (agora ? 'O vigia já aceita câmera de fábrica de qualquer faixa.'
+    : 'Qualquer faixa ligada: vale a partir do próximo Ligar o vigia, no Painel.'),
+  'sessao.rede.qualquerFaixa.desligada': ({ agora }) => (agora ? 'O vigia voltou a aceitar só câmera no IP de fábrica.'
+    : 'Qualquer faixa desligada: o próximo Ligar o vigia aceita só câmera no IP de fábrica.'),
+  'sessao.rede.qualquerFaixa.erro': ({ motivo }) => 'O vigia não mudou. ' + motivo,
   'sessao.fila.nota': 'Salvar alterações só guarda a faixa. Montar a fila troca agora a fila da bancada e também guarda a faixa.',
   'sessao.fila.montar': 'Montar a fila',
   'sessao.fila.montando': 'Montando a fila…',
@@ -476,8 +503,6 @@ const TEXTOS = {
   // ---------------------------------------------------------------- confirmacoes
   'decisao.confirmar-pular': 'Pular esta posição? A câmera fica como está agora, registrada como Falhou e fora das ' +
     'instaladas. A fila segue para a próxima posição.',
-  'confirmar.encerrar-fila': ({ pend }) => 'Encerrar a fila? As câmeras em curso terminam antes; as pendentes ficam sem câmera.' +
-    (pend === 0 ? ' Não há posições pendentes.' : (pend === 1 ? ' Há 1 posição pendente.' : ' Há ' + pend + ' posições pendentes.')),
   'confirmar.atualizar': ({ temFila }) => 'Atualizar o painel agora? Ele baixa o instalador do GitHub, confere o SHA-256, ' +
     'fecha e reabre sozinho na versão nova.' +
     (temFila ? '\n\nA fila em memória se perde; o registro e a sessão ficam.' : '\n\nO registro e a sessão ficam.'),
@@ -561,6 +586,18 @@ const CAMPO_REDE = {
   Placa: 'a placa', Mascara: 'a máscara', Gateway: 'o gateway', IpFabrica: 'o IP de fábrica',
   IpPcFabrica: 'o IP do PC na faixa de fábrica', IpPcCameras: 'o IP do PC na rede das câmeras',
 };
+
+// "1 posição", "3 posições".
+function pl(n, um, varios) {
+  return n + ' ' + (n === 1 ? um : varios);
+}
+
+// Andar so com numero vira "3º andar"; o resto vai como foi digitado.
+function textoAndar(andar) {
+  const a = String(andar || '').trim();
+  if (!a) return '';
+  return Number.isNaN(Number(a)) ? a : a + 'º andar';
+}
 
 function juntar(itens) {
   if (itens.length < 2) return itens.join('');

@@ -112,8 +112,6 @@ function desenhar() {
     const daSessao = e.avisoOrigem === 'fila' && lerRota().tela === 'sessao';
     // Recusa de porta e canal: aparece junto dos campos da linha (tela-painel.js).
     if (e.aviso && !daSessao && e.avisoOrigem !== 'camera') mostrarAviso(e.aviso, ORIGEM_DO_COMANDO[e.avisoOrigem], { servidor: true });
-    // Aviso que manda retomar: abre o bloco que ele cita.
-    if (e.aviso && e.aviso.includes(t('painel.retomar.abrir'))) $('retomar').open = true;
   } else if (!e.aviso && S.avisoDoServidor) {
     mostrarAviso('');
   }

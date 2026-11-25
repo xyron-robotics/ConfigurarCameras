@@ -1,6 +1,8 @@
-// Painel, tabela das cameras (direcao.md, secoes 5.3 e 5.4): abas "Fila agora"
-// e "Registro", uma linha por posicao da fila, os grupos das cameras sem posicao
-// e o registro gravado. So desenha o modelo do estado.js (decisao P1); o que a
+// Painel (direcao.md, secoes 3.2, 3.6, 5.3, 5.4, 5.5 e 5.7). Topo: cabecalho da
+// fila (nome, faixa, vigia, Montar outra fila, Encerrar a fila), a fita e o
+// estado vazio da vez; faixa do modo de reserva. Embaixo, a tabela das cameras:
+// abas "Fila agora" e "Registro", uma linha por posicao da fila, os grupos das
+// cameras sem posicao e o registro gravado. So desenha o modelo do estado.js (decisao P1); o que a
 // tela guarda e o que e dela: o que o operador digitou, o envio em curso e o
 // resultado junto dos campos.
 //
@@ -9,15 +11,29 @@
 // publicado e o erro fica junto dos campos; reenviar o mesmo valor envia de novo.
 import { h, focar } from './dom.js';
 import { icone } from './icones.js';
-import { t, nomeEtapa, textoDaFalha, traduzirServidor } from './textos.js';
-import { botao, ocupar, selo, barraEtapas } from './componentes.js';
-import { dataHora, mac as formatarMac, streamsEncoder } from './formato.js';
-import { CONSULTA_MS, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS, NOTA_SALVO_MS, TRAVA_DECISAO_MS } from './constantes.js';
+import { t, nomeEtapa, textoDaFalha, traduzirServidor, motivoVigia } from './textos.js';
+import { botao, ocupar, selo, barraEtapas, chip, lugarAviso } from './componentes.js';
+import { dataHora, hora, mac as formatarMac, streamsEncoder } from './formato.js';
+import {
+  CONSULTA_MS, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS, NOTA_SALVO_MS, TRAVA_DECISAO_MS,
+  DESTAQUE_LINHA_MS, FITA_MAX_NUMEROS, FITA_PASSO_NUMERO,
+} from './constantes.js';
 
 const COLUNAS_FILA = ['pos', 'estado', 'ip', 'modelo', 'serial', 'mac', 'porta', 'canal'];
 const COLUNAS_REGISTRO = ['ip', 'mac', 'modelo', 'situacao', 'encoder', 'local', 'rackPorta', 'canal', 'data'];
 const ESTADO_DO_STATUS = { Instalada: 'instalada', Falhou: 'falha', 'Em andamento': 'curso', Resetada: 'pulada' };
 const COM_CAMPOS = ['instalada', 'curso', 'falha'];
+const ROTA_FILA = '#/sessao/fila';
+// Fita: a ordem da legenda e o rotulo de cada estado (contagem junto).
+const LEGENDA = ['instalada', 'falha', 'curso', 'proxima', 'aguardando', 'pulada'];
+const ROTULO_LEGENDA = {
+  instalada: 'fita.instaladas', falha: 'fita.falha', curso: 'fita.curso',
+  proxima: 'fita.proxima', aguardando: 'fita.aguardando', pulada: 'fita.puladas',
+};
+// A casa da falha e mais alta e leva a marca: forma, alem da cor (dataviz).
+const MARCA_FALHA = '!';
+// Motivos do vigia que o estado da tela ja diz (nao repete na frase).
+const MOTIVO_JA_DITO = ['', 'pelo operador', 'fila concluida', 'fila encerrada'];
 
 function textoEstado(p, totalEtapas) {
   if (p.estado === 'curso') return p.etapaN ? t('estado.curso', { n: p.etapaN, total: totalEtapas, etapa: p.etapa }) : t('estado.portao');
@@ -213,13 +229,14 @@ export function telaPainel(ctx, parte) {
   // ------------------------------------------------------------ Fila agora
   function tabelaFila(m) {
     const f = m.fila;
-    if (!f) return h('div', { class: 'tabela-vazio' }, h('p', null, t('painel.semFila')));
+    if (!f) return null;
     const corpo = [];
     for (const p of f.posicoes) {
       const c = p.camera;
       const n = p.posicao;
       const comCampos = c && COM_CAMPOS.includes(p.estado);
-      corpo.push(h('tr', { class: [p.estado === 'falha' ? 'linha-falha' : null, novas.has(n) ? 'linha-nova' : null], dados: { linha: String(n) } }, [
+      const classes = [p.estado === 'falha' ? 'linha-falha' : null, novas.has(n) ? 'linha-nova' : null, alvo === n ? 'linha-alvo' : null];
+      corpo.push(h('tr', { class: classes, dados: { linha: String(n) } }, [
         h('td', { class: 'coluna-pos', id: `painel-pos-${n}` }, String(n)),
         h('td', { class: 'coluna-estado' }, h('span', { class: 'estado-linha' }, [
           selo(p.estado, textoEstado(p, f.totalEtapas)),
@@ -354,6 +371,229 @@ export function telaPainel(ctx, parte) {
     ]);
   }
 
+  // ------------------------------------------------------------ topo: cabecalho, fita e estados
+  // Nos que vivem entre redesenhos: os lugares do aviso do servidor (o legado
+  // mostrarAviso escreve no que estiver na tela) e o erro do pedido.
+  const topo = h('section', { class: 'painel-topo', 'aria-label': t('painel.titulo') });
+  const faixa = h('div', { class: ['faixa', 'faixa-atencao'], role: 'status', hidden: true },
+    h('div', { class: 'faixa-conteudo' }, [icone('atencao'), h('p', { class: 'faixa-texto' }, t('faixa.reserva'))]));
+  const avisoVigia = h('p', { class: 'aviso-legado', role: 'alert', hidden: true, dados: { avisoDe: 'vigia' } });
+  const avisoConectada = h('p', { class: 'aviso-legado', role: 'alert', hidden: true, dados: { avisoDe: 'conectada' } });
+  const erroTopo = lugarAviso();
+  let assinaturaTopo = '';
+  let enviando = '';
+  let retomarAberto = null;
+  let ipRetomar = '';
+  let alvo = 0;
+  let alvoTimer = 0;
+
+  async function enviarTopo(qual, rota, corpo) {
+    if (enviando) return;
+    enviando = qual;
+    erroTopo.limpar();
+    atualizarTopo(ctx.modelo());
+    const r = await ctx.api.comando(rota, corpo);
+    enviando = '';
+    if (!r.ok) {
+      const falha = traduzirServidor(r);
+      erroTopo.mostrar('erro', falha.texto, falha.cru);
+    }
+    await ctx.consultarNova();
+    atualizarTopo(ctx.modelo());
+  }
+
+  // Botao do topo: com o pedido em curso troca o rotulo; o redesenho nao perde isso.
+  function botaoTopo(qual, rotulo, rotuloOcupado, aoClicar, o) {
+    const ocupado = enviando === qual;
+    const b = botao(ocupado ? rotuloOcupado : rotulo, aoClicar, {
+      tipo: o.tipo, desabilitado: !!enviando || !!o.desabilitado, dados: { foco: qual },
+    });
+    if (ocupado) b.setAttribute('aria-busy', 'true');
+    return b;
+  }
+
+  async function encerrar() {
+    const f = ctx.modelo().fila;
+    const ok = await ctx.confirmar({
+      titulo: t('dialogo.encerrarFila.titulo'), texto: t('dialogo.encerrarFila.texto', { sem: f ? f.semCamera : 0 }),
+      confirmar: t('dialogo.encerrarFila.confirmar'), perigo: true,
+    });
+    if (ok) enviarTopo('encerrar', '/api/decisao', { acao: 'encerrar' });
+  }
+
+  function cabecalho(m) {
+    const f = m.fila;
+    const v = m.vigia;
+    const aberta = !f.concluida && !f.encerrada;
+    const acoes = [];
+    if (aberta) {
+      // Vigia ligado: chip em --agora, sem pulso (UI-15).
+      acoes.push(v.ligado ? chip(t('painel.vigia.ligado'), 'agora', 'agora') : chip(t('painel.vigia.desligado'), 'neutro'));
+      acoes.push(botaoTopo('vigia', t(v.ligado ? 'painel.vigia.desligar' : 'painel.vigia.ligar'),
+        t(v.ligado ? 'painel.vigia.desligando' : 'painel.vigia.ligando'),
+        () => enviarTopo('vigia', '/api/vigia', { ligado: !v.ligado, porta: '', canal: '', broadcast: v.qualquerFaixa }),
+        { tipo: m.painel === 'vigiaDesligado' ? 'primario' : 'secundario' }));
+    }
+    acoes.push(botaoTopo('montar', t('painel.fila.montarOutra'), t('painel.fila.montarOutra'), () => ctx.ir(ROTA_FILA),
+      { tipo: aberta ? 'secundario' : 'primario' }));
+    if (aberta) acoes.push(botaoTopo('encerrar', t('painel.fila.encerrar'), t('painel.fila.encerrando'), encerrar, { tipo: 'discreto' }));
+    return h('div', { class: 'fila-cabeca' }, [
+      h('div', { class: 'fila-nome' }, [
+        h('h1', { class: 'fila-titulo' }, t('painel.fila.titulo', f)),
+        h('p', { class: 'fila-faixa' }, [
+          h('span', { class: 'mono', translate: 'no' }, t('painel.fila.faixa', f)),
+          v.qualquerFaixa ? chip(t('painel.qualquerFaixa'), 'atencao', 'atencao') : null,
+        ]),
+      ]),
+      h('div', { class: 'fila-acoes' }, acoes),
+    ]);
+  }
+
+  // Fita (5.5): uma casa por posicao, forma alem da cor; a legenda conta cada
+  // estado. Para o leitor de tela vale a frase; a tabela e o caminho do teclado.
+  function fita(m) {
+    const f = m.fila;
+    const c = f.contagem;
+    const todos = f.total <= FITA_MAX_NUMEROS;
+    const casas = f.posicoes.map((p) => {
+      const casa = h('span', { class: ['fita-casa', 'fita-' + p.estado], onclick: () => irParaLinha(p.posicao) },
+        p.estado === 'falha' ? MARCA_FALHA : null);
+      if (p.estado === 'curso') casa.style.setProperty('--fracao', String(f.totalEtapas ? p.etapaN / f.totalEtapas : 0));
+      return casa;
+    });
+    const numeros = f.posicoes.map((p) => h('span', { class: 'fita-numero' },
+      todos || p.posicao === 1 || p.posicao % FITA_PASSO_NUMERO === 0 ? String(p.posicao) : ''));
+    const legenda = LEGENDA.filter((e) => c[e] > 0 || e === 'instalada').map((e) => h('span', { class: 'legenda-item', dados: { estado: e } }, [
+      h('span', { class: ['legenda-amostra', 'legenda-' + e] }),
+      t(ROTULO_LEGENDA[e], { n: c[e] }),
+    ]));
+    return h('div', { class: 'fita-bloco' }, [
+      h('p', { class: 'so-leitor' }, t('fita.leitor', { total: f.total, c })),
+      h('div', { class: 'fita', 'aria-hidden': 'true' }, casas),
+      h('div', { class: 'fita-numeros', 'aria-hidden': 'true' }, numeros),
+      h('div', { class: 'fita-legenda', 'aria-hidden': 'true' }, legenda),
+    ]);
+  }
+
+  function irParaLinha(n) {
+    if (aba !== 'fila') trocarAba('fila');
+    alvo = n;
+    clearTimeout(alvoTimer);
+    alvoTimer = setTimeout(() => { alvo = 0; mudouLocal(); }, DESTAQUE_LINHA_MS);
+    mudouLocal();
+    const tr = raiz.querySelector(`tr[data-linha="${n}"]`);
+    if (tr) tr.scrollIntoView({ block: 'center' });
+  }
+
+  function retomarBloco(m) {
+    // O servidor cita "Retomar camera ja inicializada" no aviso que pede isso: o bloco abre.
+    const pedido = !!(m.aviso.texto && m.aviso.texto.includes(t('painel.retomar.abrir')));
+    const enviar = () => {
+      if (!ipRetomar.trim()) { erroTopo.mostrar('erro', t('painel.retomar.ipInvalido')); return; }
+      enviarTopo('retomar', '/api/fila/conectada', { porta: '', canal: '', ip: ipRetomar.trim() });
+    };
+    return h('details', {
+      class: 'retomar', open: retomarAberto === null ? pedido : retomarAberto,
+      ontoggle: (ev) => { retomarAberto = ev.currentTarget.open; },
+    }, [
+      h('summary', null, t('painel.retomar.abrir')),
+      h('p', { class: 'campo-ajuda' }, t('painel.retomar.nota')),
+      h('div', { class: 'retomar-linha' }, [
+        h('label', { class: 'campo' }, [
+          h('span', { class: 'campo-rotulo' }, t('painel.campo-ip')),
+          h('input', {
+            class: ['campo-entrada', 'mono'], type: 'text', inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false',
+            translate: 'no', value: ipRetomar, dados: { foco: 'retomar-ip' },
+            oninput: (ev) => { ipRetomar = ev.currentTarget.value; },
+            onkeydown: (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); enviar(); } },
+          }),
+        ]),
+        botaoTopo('retomar', t('painel.retomar.enviar'), t('painel.retomando'), enviar, { tipo: 'secundario', desabilitado: m.ocupado }),
+      ]),
+    ]);
+  }
+
+  function tituloBloco(texto, nomeIcone) {
+    return h('h2', { class: 'bloco-titulo' }, [nomeIcone ? icone(nomeIcone, 'm') : null, h('span', null, texto)]);
+  }
+
+  // Estados do Painel (3.6), um por vez, do estado.js.
+  function blocoEstado(m) {
+    const f = m.fila;
+    const v = m.vigia;
+    const motivo = MOTIVO_JA_DITO.includes(v.motivo) ? '' : motivoVigia(v.motivo);
+    const textoMotivo = motivo ? h('p', null, t('painel.vazio.motivo', { motivo })) : null;
+    if (m.painel === 'semFila') {
+      return h('section', { class: 'bloco' }, [
+        tituloBloco(t('painel.vazio.semFila')),
+        h('p', null, t('painel.vazio.semFila.texto')),
+        botao(t('painel.fila.montar'), () => ctx.ir(ROTA_FILA), { tipo: 'primario', dados: { foco: 'montar-fila' } }),
+      ]);
+    }
+    if (m.painel === 'concluida' || m.painel === 'encerrada') {
+      const c = f.contagem;
+      const titulo = m.painel === 'concluida' ? t('painel.concluida', { n: c.instalada })
+        : t('painel.encerrada', { inst: c.instalada, sem: f.total - c.instalada - c.pulada });
+      return h('section', { class: ['bloco', m.painel === 'concluida' ? 'bloco-sucesso' : null] }, [
+        tituloBloco(titulo, m.painel === 'concluida' ? 'concluido' : null),
+        textoMotivo,
+        h('p', null, t('painel.fim.registro')),
+      ]);
+    }
+    if (m.painel === 'vigiaDesligado') {
+      const p = f.proxima;
+      return h('section', { class: 'bloco' }, [
+        tituloBloco(t('painel.vigia.desligado')),
+        textoMotivo,
+        h('p', null, t('painel.vazio.desligado')),
+        h('h3', { class: 'bloco-subtitulo' }, t('painel.vazio.sequencial')),
+        p ? h('p', null, t('painel.vazio.sequencial.texto', { n: p.posicao, ip: p.ip })) : null,
+        p ? botaoTopo('configurar', t('painel.vazio.configurar', { n: p.posicao }), t('painel.vazio.configurando'),
+          () => enviarTopo('configurar', '/api/fila/conectada', { porta: '', canal: '', ip: '' }),
+          { tipo: 'secundario', desabilitado: m.ocupado }) : null,
+        avisoConectada,
+        retomarBloco(m),
+      ]);
+    }
+    if (m.painel === 'esperando') {
+      return h('section', { class: 'bloco' }, [
+        tituloBloco(t('painel.vazio.esperando'), 'espera'),
+        h('p', null, t('painel.vazio.esperando.texto', {
+          ip: v.ipFabrica || t('painel.vazio.ipFabrica'), hora: v.desde ? hora(v.desde) : '', qualquer: v.qualquerFaixa,
+        })),
+      ]);
+    }
+    return null;
+  }
+
+  function desenharTopo(m) {
+    const f = m.fila;
+    // replaceChildren escreveria "null" como texto: so os nos que existem.
+    topo.replaceChildren(...[
+      f ? cabecalho(m) : h('h1', { class: 'fila-titulo' }, t('painel.titulo')),
+      f ? fita(m) : null,
+      avisoVigia,
+      erroTopo.el,
+      blocoEstado(m),
+    ].filter(Boolean));
+    faixa.hidden = !m.vigia.reserva;
+  }
+
+  function atualizarTopo(m) {
+    const nova = JSON.stringify([m.fila, m.vigia, m.painel, m.ocupado, m.aviso.texto, enviando, retomarAberto]);
+    if (nova === assinaturaTopo) return;
+    assinaturaTopo = nova;
+    const ativo = document.activeElement;
+    const chave = ativo && topo.contains(ativo) && ativo.dataset ? ativo.dataset.foco : null;
+    const cursor = chave && ativo.tagName === 'INPUT' ? [ativo.selectionStart, ativo.selectionEnd] : null;
+    desenharTopo(m);
+    if (!chave) return;
+    const el = topo.querySelector(`[data-foco="${chave}"]`);
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (cursor && el.tagName === 'INPUT') el.setSelectionRange(cursor[0], cursor[1]);
+  }
+
   // ------------------------------------------------------------ abas e desenho
   function trocarAba(nome, focarAba) {
     if (nome !== aba) {
@@ -413,6 +653,7 @@ export function telaPainel(ctx, parte) {
 
   function atualizar(m) {
     compararEstados(m);
+    atualizarTopo(m);
     const nova = JSON.stringify([m.fila, m.espera, m.ignoradas, m.registro, m.simular, aba, versaoLocal, [...novas]]);
     if (nova === assinatura) return;
     assinatura = nova;
@@ -427,10 +668,10 @@ export function telaPainel(ctx, parte) {
       redesenhando = false;
     }
     if (!chave) return;
-    const alvo = raiz.querySelector(`[data-foco="${chave}"]`);
-    if (!alvo) return;
-    alvo.focus({ preventScroll: true });
-    if (cursor && alvo.tagName === 'INPUT') alvo.setSelectionRange(cursor[0], cursor[1]);
+    const foco = raiz.querySelector(`[data-foco="${chave}"]`);
+    if (!foco) return;
+    foco.focus({ preventScroll: true });
+    if (cursor && foco.tagName === 'INPUT') foco.setSelectionRange(cursor[0], cursor[1]);
   }
 
   function abrirAba(nome) {
@@ -438,5 +679,5 @@ export function telaPainel(ctx, parte) {
   }
 
   atualizar(ctx.modelo());
-  return { el: raiz, atualizar, abrirAba };
+  return { el: raiz, topo, faixa, atualizar, abrirAba };
 }

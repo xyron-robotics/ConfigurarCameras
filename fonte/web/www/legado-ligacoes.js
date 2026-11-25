@@ -12,21 +12,8 @@ function temFila() {
 }
 
 export function ligar() {
-  // Painel.
-  $('form-conectada').addEventListener('submit', (ev) => {
-    ev.preventDefault();
-    const f = ev.target.elements;
-    comando('/api/fila/conectada', { porta: f.porta.value, canal: f.canal.value, ip: f.ip.value });
-    f.porta.value = ''; f.canal.value = ''; f.ip.value = '';
-    $('retomar').open = false;
-  });
-  $('form-vigia').addEventListener('submit', (ev) => {
-    ev.preventDefault();
-    const f = ev.target.elements;
-    const ligado = !(S.estado && S.estado.vigia && S.estado.vigia.ligado);
-    comando('/api/vigia', { ligado, broadcast: f.broadcast.checked });
-  });
-  // Bloco legado (retomada manual pelo IP, C7): decisao sem MAC, como antes.
+  // Painel: o vigia, o Configurar sem vigia, a retomada pelo IP e o Encerrar a
+  // fila sao de tela-painel.js. Bloco legado (retomada manual pelo IP, C7): decisao sem MAC, como antes.
   for (const b of document.querySelectorAll('[data-decisao]')) {
     b.addEventListener('click', () => {
       const acao = b.dataset.decisao;
@@ -34,13 +21,6 @@ export function ligar() {
       comando('/api/decisao', { acao });
     });
   }
-  // Encerrar a fila (botao da fila): sem MAC; quem esta em curso termina.
-  $('btn-encerrar-fila').addEventListener('click', () => {
-    const itens = (S.estado && S.estado.fila && S.estado.fila.itens) || [];
-    const pend = itens.filter((i) => i.Estado === 'pendente').length;
-    if (!confirm(t('confirmar.encerrar-fila', { pend }))) return;
-    comando('/api/decisao', { acao: 'encerrar' });
-  });
 
   // Ferramentas.
   $('form-sondar').addEventListener('submit', (ev) => { ev.preventDefault(); comando('/api/sondar', { ip: ev.target.elements.ip.value }); });

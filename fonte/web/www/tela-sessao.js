@@ -155,6 +155,38 @@ function secaoFormulario(ctx, modelo, secao, est, resposta) {
   ]);
 }
 
+// ------------------------------------------------------------------ secao Rede: qualquer faixa
+// Escolha do vigia, fora do formulario (nao passa pelo Salvar alteracoes): vale
+// na hora com o vigia ligado e no proximo Ligar com ele desligado. O risco fica
+// escrito embaixo, sem title (UX-10, UI-11).
+function blocoQualquerFaixa(ctx, modelo, est) {
+  const resultado = lugarAviso();
+  const riscoId = novoId('qualquer-faixa-risco');
+  async function trocar(ev) {
+    const caixa = ev.target;
+    resultado.limpar();
+    est.ocupada = true;
+    caixa.disabled = true;
+    let r;
+    try { r = await ctx.definirQualquerFaixa(caixa.checked); } finally { est.ocupada = false; caixa.disabled = false; }
+    if (!r.ok) {
+      const falha = traduzirServidor(r);
+      resultado.mostrar('erro', t('sessao.rede.qualquerFaixa.erro', { motivo: falha.texto }), falha.cru);
+      return;
+    }
+    const chave = caixa.checked ? 'ligada' : 'desligada';
+    resultado.mostrar('sucesso', t('sessao.rede.qualquerFaixa.' + chave, { agora: !!r.agora }));
+  }
+  return h('div', { class: 'sessao-bloco' }, [
+    h('label', { class: 'check' }, [
+      h('input', { type: 'checkbox', name: 'qualquerFaixa', checked: modelo.vigia.qualquerFaixa, 'aria-describedby': riscoId, onchange: trocar }),
+      t('sessao.rede.qualquerFaixa'),
+    ]),
+    h('p', { class: 'campo-ajuda', id: riscoId }, t('sessao.rede.qualquerFaixa.risco')),
+    resultado.el,
+  ]);
+}
+
 // ------------------------------------------------------------------ secao Painel
 function blocoTema(ctx) {
   const avisoTema = lugarAviso();
@@ -253,7 +285,7 @@ export function telaSessao(ctx, parte, avisoAntes) {
   const lead = secao === 'painel' ? t('sessao.painel.lead') : t(secao + '.lead');
   const corpo = secao === 'painel'
     ? [blocoTema(ctx), blocoVersao(modelo), blocoRefazer(ctx, est), blocoSobre()]
-    : secaoFormulario(ctx, modelo, secao, est, resposta);
+    : [secaoFormulario(ctx, modelo, secao, est, resposta), secao === 'rede' ? blocoQualquerFaixa(ctx, modelo, est) : null];
   const el = h('div', { class: 'sessao-tela' }, [
     h('div', { class: 'sessao-cabeca' }, [h('h1', null, t('sessao.titulo')), h('p', { class: 'lead' }, t('sessao.lead'))]),
     h('div', { class: 'sessao-grade' }, [

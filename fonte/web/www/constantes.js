@@ -24,6 +24,11 @@ export const NOTA_SALVO_MS = 4000;
 export const AVISO_NEUTRO_MS = 4000;
 // Pausa entre limpar e escrever o anuncio, para o leitor de tela falar de novo.
 export const ANUNCIO_ATRASO_MS = 60;
+// Linha da tabela destacada depois de um clique na fita.
+export const DESTAQUE_LINHA_MS = 3000;
+// Fita (direcao 5.5): ate 24 casas, numero em todas; acima, a cada 5.
+export const FITA_MAX_NUMEROS = 24;
+export const FITA_PASSO_NUMERO = 5;
 
 export const HTTP = {
   OK: 200,

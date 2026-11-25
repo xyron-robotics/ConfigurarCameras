@@ -18,13 +18,15 @@ import { telaPasso, telaConferir } from './tela-inicio.js';
 import { telaSessao, aplicarTema } from './tela-sessao.js';
 import { telaPainel } from './tela-painel.js';
 import { montarMarcacao } from './legado-marcacao.js';
-import { S, usarApi, ganchos, anunciar } from './legado-estado.js';
+import { usarApi, ganchos, anunciar } from './legado-estado.js';
 import { receberEstado, semResposta, trocarView } from './legado-navegacao.js';
 import { ligar, telaEncerrado } from './legado-ligacoes.js';
 
 const api = criarApi(transporteFetch());
 let bruto = null;
-const extras = { sessao: null, placas: null, registro: null, registroLeitura: null };
+// qualquerFaixa: escolha da Sessao > Rede para o proximo Ligar o vigia (sem
+// escolha, vale a do servidor). vigiaDesde: quando este painel viu o vigia ligar.
+const extras = { sessao: null, placas: null, registro: null, registroLeitura: null, qualquerFaixa: undefined, vigiaDesde: null };
 let versaoExtras = 0;
 let modelo = derivar(null);
 let cursor = 0;
@@ -33,7 +35,24 @@ let emVoo = null;
 const topo = criarTopo({ api, recarregar: consultar, encerrado: telaEncerrado });
 
 function remodelar() {
+  const v = bruto && bruto.estado && bruto.estado.vigia;
+  if (!(v && v.ligado)) extras.vigiaDesde = null;
+  else if (!extras.vigiaDesde) extras.vigiaDesde = new Date();
   modelo = derivar(bruto, extras);
+}
+
+// Sessao > Rede, "Aceitar camera de fabrica de qualquer faixa". Com o vigia
+// desligado, a escolha vai junto no proximo Ligar; ligado, vale ja (o servidor
+// troca porta, canal e broadcast do vigia em curso). agora: valeu ja.
+async function definirQualquerFaixa(valor) {
+  extras.qualquerFaixa = !!valor;
+  remodelar();
+  desenharPainel();
+  const v = modelo.vigia;
+  if (!v.ligado) return { ok: true, agora: false };
+  const r = await api.comando('/api/vigia', { ligado: true, porta: v.porta, canal: v.canal, broadcast: !!valor });
+  await consultarNova();
+  return { ...r, agora: true };
 }
 
 // Topo e titulo da janela seguem o modelo e a rota.
@@ -90,8 +109,6 @@ function recarregarSessao() {
     if (s.ok) {
       extras.sessao = s.dados;
       geracaoLida = g;
-      // Texto do vigia no Painel legado ("procura a camera em <IP de fabrica>").
-      S.ipFabrica = (s.dados && s.dados.sessao && s.dados.sessao.IpFabrica) || '';
     }
     if (reg.ok) guardarRegistro(reg.dados);
     versaoExtras++;
@@ -166,6 +183,7 @@ const ctx = {
   recarregarSessao,
   lerPlacas,
   consultarNova,
+  definirQualquerFaixa,
   lerRegistro,
   anunciar,
   redesenhar: (foco) => desenharTelas({ forcar: true, focarAcao: foco === 'acao' }),
@@ -309,6 +327,8 @@ ganchos.buscarEstado = consultar;
 document.getElementById('app').replaceChildren(...montarMarcacao(topo.el));
 painel = telaPainel(ctx, lerRota().parte);
 document.getElementById('painel-tabela').replaceChildren(painel.el);
+document.getElementById('painel-topo').replaceChildren(painel.topo);
+document.getElementById('faixa-painel').replaceChildren(painel.faixa);
 ligar();
 aplicarTema(document.documentElement.dataset.tema);
 aoMudarRota(aoTrocarDeTela);

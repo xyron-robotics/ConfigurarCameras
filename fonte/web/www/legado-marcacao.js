@@ -26,86 +26,17 @@ export function montarMarcacao(topo) {
       h('button', { type: 'button', class: 'btn', id: 'btn-atualizar' }, t('topo.btn-atualizar')),
     ]),
     topo,
+    // Faixa do modo de reserva do vigia (direcao 3.6 e 5.7): o app.js monta aqui a de tela-painel.js.
+    h('div', { id: 'faixa-painel' }),
       h('main', { id: 'conteudo', tabindex: '-1' }, [
         h('div', { id: 'aviso', class: 'aviso-legado', role: 'alert', hidden: true }),
         h('div', { id: 'anuncio', class: 'so-leitor', role: 'status', 'aria-live': 'polite' }),
         // Passo a passo e Conferir: o app.js desenha aqui a tela de tela-inicio.js.
         h('section', { id: 'inicio', class: 'view inicio', hidden: true }),
         h('section', { id: 'view-painel', class: 'view', hidden: true }, [
-          h('div', { id: 'painel-sem-fila', class: 'painel-sem-fila', hidden: true }, [
-            h('h1', null, t('painel.painel-sem-fila.titulo')),
-            h('p', { class: 'apoio' }, [
-              t('painel.painel-sem-fila.apoio'),
-              ' ',
-              h('a', { href: '#/sessao/fila' }, t('painel.painel-sem-fila.link')),
-            ]),
-          ]),
-          h('div', { id: 'fita-bloco', hidden: true }, [
-            h('div', { class: 'fita-cabeca' }, [
-              h('h1', { id: 'fita-titulo' }, t('painel.fita-titulo')),
-              h('div', { class: 'fita-cabeca-fim' }, [
-                h('span', { id: 'fita-resumo', class: 'apoio' }),
-                ' ',
-                h('button', { type: 'button', class: 'btn discreto', id: 'btn-encerrar-fila', hidden: true }, t('painel.btn-encerrar-fila')),
-              ]),
-            ]),
-            h('ol', { id: 'fita', class: 'fita', translate: 'no', 'aria-label': t('painel.fita.rotulo-leitor') }),
-          ]),
+          // Cabecalho da fila, fita e estados vazios: o app.js monta aqui o topo de tela-painel.js.
+          h('div', { id: 'painel-topo' }),
           h('div', { id: 'bancada', class: 'bancada', hidden: true }, [
-            h('div', { id: 'vigia', class: 'vigia', hidden: true }, [
-              h('div', { class: 'vigia-cabeca' }, [
-                h('span', { class: 'luz', id: 'vigia-luz' }),
-                ' ',
-                h('h2', null, t('painel.vigia.titulo')),
-                ' ',
-                h('span', { class: 'apoio', id: 'vigia-estado', role: 'status', 'aria-live': 'polite' }, t('painel.vigia-estado')),
-              ]),
-              h('p', { class: 'apoio', id: 'vigia-texto', 'aria-live': 'polite' }),
-              h('p', { class: 'apoio', id: 'vigia-dhip', hidden: true }, t('painel.vigia-dhip')),
-              h('form', { id: 'form-vigia', class: 'linha-campos' }, [
-                h('label', { class: 'check largo', title: t('painel.campo-broadcast.dica') }, [
-                  h('input', { type: 'checkbox', name: 'broadcast' }),
-                  ' ',
-                  t('painel.campo-broadcast'),
-                ]),
-                ' ',
-                h('button', { class: 'btn', type: 'submit', id: 'btn-vigia' }, t('painel.btn-vigia')),
-              ]),
-              h('p', { class: 'aviso-legado', 'data-aviso-de': 'vigia', role: 'alert', hidden: true }),
-            ]),
-            h('div', { id: 'bancada-pronta' }, [
-              h('p', { class: 'bancada-pos', id: 'bancada-pos' }),
-              h('p', { class: 'bancada-destino' }, [
-                t('painel.bancada-destino.rotulo'),
-                ' ',
-                h('span', { class: 'mono', translate: 'no', id: 'bancada-destino' }),
-              ]),
-              h('p', { class: 'apoio', id: 'bancada-apoio' }, t('painel.bancada-apoio')),
-              h('form', { id: 'form-conectada' }, [
-                h('div', { class: 'linha-campos' }, [
-                  h('label', null, [
-                    t('painel.campo-porta'),
-                    h('input', { name: 'porta', autocomplete: 'off' }),
-                  ]),
-                  ' ',
-                  h('label', null, [
-                    t('painel.campo-canal'),
-                    h('input', { name: 'canal', autocomplete: 'off' }),
-                  ]),
-                  ' ',
-                  h('button', { class: 'btn acento', type: 'submit', id: 'btn-conectada' }, t('painel.btn-conectada')),
-                ]),
-                h('details', { id: 'retomar', class: 'retomar' }, [
-                  h('summary', null, t('painel.retomar.abrir')),
-                  h('p', { class: 'nota' }, t('painel.retomar.nota')),
-                  ' ',
-                  h('label', null, [
-                    t('painel.campo-ip'),
-                    h('input', { name: 'ip', class: 'mono', translate: 'no', 'data-ip': true, spellcheck: 'false', autocomplete: 'off' }),
-                  ]),
-                ]),
-              ]),
-            ]),
             h('div', { id: 'bancada-trabalho', hidden: true }, [
               h('p', { class: 'bancada-pos', id: 'trabalho-titulo' }),
               h('ol', { class: 'etapas', id: 'etapas' }, [
@@ -127,12 +58,6 @@ export function montarMarcacao(topo) {
                 ' ',
                 h('button', { type: 'button', class: 'btn', 'data-decisao': 'pular' }, t('painel.decisao-pular')),
               ]),
-            ]),
-            h('div', { id: 'bancada-fim', class: 'bancada-fim', hidden: true }, [
-              h('p', { class: 'bancada-pos', id: 'fim-titulo' }),
-              h('p', { class: 'apoio', id: 'fim-texto' }),
-              ' ',
-              h('a', { class: 'btn', href: '#/sessao/fila' }, t('painel.bancada-fim.link')),
             ]),
             h('p', { class: 'aviso-legado', 'data-aviso-de': 'conectada', role: 'alert', hidden: true }),
           ]),
