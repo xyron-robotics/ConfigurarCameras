@@ -91,7 +91,7 @@ senha na primeira linha.
    painel a placa volta ao DHCP sozinha**.
 
 Depois disso o painel tem um topo fixo com três abas, **Painel** (fila,
-bancada, vigia e o registro), **Sessão** e **Ferramentas**, os chips da
+vigia, Pede você e registro), **Sessão** e **Ferramentas**, os chips da
 placa e da internet (e o de simulação, quando é o caso) e **Encerrar o
 painel**. Cada chip abre um quadro com o detalhe; o da placa tem **Preparar
 a placa** e **Restaurar o DHCP**. A aba **Sessão** (antes chamada Opções)
@@ -110,62 +110,94 @@ no registro ficam de fora (câmera que falhou não ocupa a posição; se ela
 ainda responde no IP, o ping na hora de usar a posição pula); uma faixa sem
 posição livre é recusada.
 
-1. **Ligue o vigia** (desligado por padrão). Ligado, ele mostra: "Observando
-   <IP> por broadcast. Ligue quantas câmeras quiser no switch: cada uma entra
-   na próxima posição livre. Digite porta e canal no cartão de cada câmera,
-   pelo serial da etiqueta." O vigia procura pelo broadcast DHIP na placa
-   escolhida. A caixa **Aceitar câmera de fábrica em qualquer faixa
-   (broadcast)** faz ele aceitar também câmera de fábrica fora do IP de
+O Painel mostra a fila em três partes, de cima para baixo:
+
+- **Cabeçalho da fila**: o nome (local, rack e andar), a faixa de IPs, o
+  vigia (**Ligar o vigia** ou **Desligar o vigia**), **Montar outra fila**,
+  **Encerrar a fila** e a **fita**, uma casa por posição: instalada, em curso
+  (preenchida até a etapa), com falha ("!", mais alta), a próxima
+  (tracejada), aguardando e pulada. Embaixo, a contagem de cada estado ("7
+  instaladas", "1 pede você"). Clicar numa casa leva à linha da câmera. A
+  falha nunca some da fita nem da contagem.
+- **Pede você**: só aparece com câmera em falha (passo 5).
+- **Tabela**, com as abas **Fila agora** e **Registro**: uma linha por
+  câmera.
+
+1. **Ligue o vigia** (desligado por padrão). Ligado e ainda sem câmera, o
+   Painel mostra "Esperando câmeras de fábrica", com o IP de fábrica
+   observado e a hora. O vigia procura pelo broadcast DHIP na placa
+   escolhida. A caixa **Aceitar câmera de fábrica de qualquer faixa**, em
+   **Sessão > Rede**, faz ele aceitar também câmera de fábrica fora do IP de
    fábrica (a placa recebe um IP temporário na rede dela e, se a faixa for de
    outra placa do PC, uma rota de host): use só com a bancada isolada da rede
    do escritório, senão qualquer câmera de fábrica da rede entra na fila.
+   Ligada, o cabeçalho da fila mostra o chip "Qualquer faixa"; ela vale na
+   hora com o vigia ligado e, com ele desligado, no próximo **Ligar o vigia**.
 2. **Ligue as câmeras no switch**, quantas quiser. Cada uma recebe a próxima
    posição livre quando entra no portão do IP de fábrica, na ordem em que
    aparece no broadcast, que não é a ordem do cabo. Uma câmera recém-ligada
    pode levar cerca de um minuto para responder ao broadcast.
-3. **Cada câmera tem um cartão** na bancada, com posição, modelo, serial,
-   MAC, destino e o estado: "Na espera", "No portão", "Conferindo",
-   "Falhou", "Instalada", "Pulada" ou "Já inicializada: não tocada". Digite
-   "Porta" e "Canal" no cartão da câmera certa, conferindo o serial da
-   etiqueta; o cartão mostra "Salvo" quando o painel recebe. Os dois campos
-   ficam editáveis até a fila fechar, inclusive depois de "Instalada" (o
-   registro é atualizado); câmera pulada ou já inicializada não tem porta nem
-   canal.
+3. **Cada câmera tem uma linha** na tabela, com posição, estado, IP de
+   destino, modelo, serial, MAC, **Porta do switch** e **Canal no NVR**. O
+   estado é a etapa real da câmera: "No portão", "2 de 4: encoder", "4 de 4:
+   conferindo", "Falhou no encoder", "Instalada" ou "Pulada". Câmera que o
+   vigia achou e que ainda espera vaga no portão fica no grupo **Na espera do
+   portão**, embaixo da tabela, sem posição. Digite porta e canal na linha da
+   câmera certa, conferindo o serial da etiqueta; "Salvo." aparece junto dos
+   campos quando o painel confirma. Se o painel recusa, a linha volta ao
+   valor que ele tem, com o erro junto dos campos, e o mesmo valor pode ser
+   mandado de novo. Os dois campos ficam editáveis até a fila fechar,
+   inclusive depois de "Instalada" (o registro é atualizado); posição ainda
+   sem câmera, câmera pulada ou já inicializada não tem porta nem canal.
 4. **Portão e conferência.** Uma câmera por vez passa pelo portão do IP de
    fábrica: o painel a prende pelo MAC (um vizinho estático na placa
    escolhida, que sai quando ela sai) e faz, nesta ordem, inicialização →
    encoder → rede. Ao gravar a rede, a câmera reinicia no IP novo e o portão
    passa à próxima. A conferência no IP novo (espera do boot até 120 s, com
-   contagem no cartão) roda em paralelo, para quantas câmeras houver, e nunca
-   consulta o IP de fábrica. Câmera com porta HTTP diferente de 80 (anunciada
+   "4 de 4: conferindo" na linha) roda em paralelo, para quantas câmeras
+   houver, e nunca consulta o IP de fábrica. Câmera com porta HTTP diferente de 80 (anunciada
    no broadcast) é atendida nela.
-5. **Falha** numa câmera abre a decisão só no cartão dela, com a etapa e o
-   motivo, e os botões "Tentar de novo" e "Pular esta posição"; as outras
-   seguem, e o vigia continua. "Tentar de novo" continua da etapa que falhou
-   (quem falhou na conferência volta direto a ela, sem passar pelo portão).
-   Pular deixa a câmera como está, registrada como falha, e a posição fica
-   pulada. Se a câmera recusou a senha, "Tentar de novo" fica travado até uma
-   senha nova: repetir a senha errada bloqueia o `admin` da câmera por
-   minutos.
-6. **"Encerrar a fila"**, botão da fila, para de admitir câmeras: as que
-   estão no portão ou conferindo terminam, e as que estão em decisão ainda
-   podem tentar de novo. As posições pendentes ficam sem câmera.
+5. **Falha** numa câmera marca a linha dela, entra na fita com "!" e no
+   bloco **Pede você**, acima da tabela: a etapa, o que houve e o conserto,
+   com os botões **Tentar de novo**, **Mudar o encoder** (só em falha no
+   encoder) e **Pular esta posição**; a resposta crua da câmera fica em
+   "Detalhe técnico". O painel anuncia a falha ao leitor de tela, mas não
+   tira o foco de onde você está (você pode estar digitando porta e canal de
+   outra câmera): **Ir para o que pede você**, no cabeçalho da fila, leva até
+   ela. As outras câmeras seguem, e o vigia continua. "Tentar de novo"
+   continua da etapa que falhou (quem falhou na conferência volta direto a
+   ela, sem passar pelo portão). **Mudar o encoder** abre um painel lateral
+   com o encoder dos dois streams, sem sair do Painel: o valor novo vale para
+   a sessão inteira, não só para esta câmera, e **Salvar e tentar de novo**
+   grava e tenta a câmera de novo. **Pular esta posição** pede confirmação
+   ("Pular a câmera 9?"), deixa a câmera como está, registrada como falha, e
+   a posição fica pulada. Se a câmera recusou a senha, "Tentar de novo" fica
+   desabilitado, com o motivo embaixo, até uma senha nova em **Sessão >
+   Senha**: repetir a senha errada bloqueia o `admin` da câmera por minutos.
+6. **Encerrar a fila**, no cabeçalho da fila, pede confirmação e para de
+   admitir câmeras: as que estão no portão ou conferindo terminam, e as que
+   estão em decisão ainda podem tentar de novo. As posições pendentes ficam
+   sem câmera, e o Painel mostra "Fila encerrada: 1 instalada, 2 posições
+   sem câmera".
 
-Uma câmera **já inicializada** que aparece no broadcast fica no cartão como
-"Já inicializada: não tocada": o painel não faz login nela. O vigia desliga
+Uma câmera **já inicializada** que aparece no broadcast fica no grupo **Já
+inicializadas, não tocadas**, embaixo da tabela: o painel não faz login nela.
+**Retomar esta câmera** serve só para a que for desta sessão. O vigia desliga
 sozinho quando a fila acaba ou é encerrada, e depois de 5 rodadas seguidas
 vendo câmera sem poder configurar (sem posição livre, por exemplo).
 
 **Modo de reserva: uma câmera por vez.** Sem resposta do broadcast (em geral,
 a porta UDP 37810 fechada no firewall do PC), o painel não distingue as
 câmeras de fábrica, todas no mesmo IP: passa a configurar uma por vez, pelo IP
-de fábrica, e o vigia mostra "Sem broadcast: uma câmera por vez.". Sem
-Administrador, o painel não põe o vizinho estático e também fica numa câmera
-por vez desde a montagem da fila. Nos dois casos o painel avisa; ligue uma
-câmera de fábrica por vez no switch até resolver.
+de fábrica, e uma faixa de atenção sob o topo diz "O broadcast não respondeu:
+o vigia está no modo de reserva.", com o conserto. Sem Administrador, o
+painel não põe o vizinho estático e também fica numa câmera por vez desde a
+montagem da fila. Nos dois casos o painel avisa; ligue uma câmera de fábrica
+por vez no switch até resolver.
 
-**Sem o vigia:** **Câmera conectada** procura câmeras de fábrica uma vez, na
-hora; as que aparecem seguem como com o vigia. **Retomar câmera já
+**Sem o vigia:** o Painel mostra a próxima posição. Ligue só essa câmera no
+switch e clique em **Configurar a câmera N**: o painel procura a câmera de
+fábrica uma vez, na hora, e ela segue como com o vigia. **Retomar câmera já
 inicializada** serve para uma câmera que já recebeu a senha desta sessão (por
 exemplo, depois de uma falha com o painel fechado): informe o IP em que ela
 responde agora. A retomada é uma câmera por vez e só começa com nenhuma
@@ -178,9 +210,10 @@ novo a entrada antiga do registro é substituída e o IP antigo fica livre.
 
 ## Registro e relatório
 
-O **Registro**, embaixo da fila no Painel, lista cada câmera que passou pelo
-painel (pelo MAC): IP, modelo, situação (em andamento, instalada, falhou),
-encoder, local, rack/porta e data. **Exportar relatório** gera o CSV. Os
+O **Registro**, aba ao lado de Fila agora no Painel, lista cada câmera que
+passou pelo painel (pelo MAC): IP, MAC, modelo, situação (em andamento,
+instalada, falhou), encoder, local, rack / porta, canal e data. **Ler o
+registro de novo** relê a lista; **Exportar o relatório** gera o CSV. Os
 dados ficam em `%ProgramData%\ConfigurarCameras` (`registro.json`,
 `sessao.json`, `log.txt` e, enquanto a placa está preparada,
 `placa-sessao.json`, o rastro do que o painel fez nela): é a única cópia,
@@ -263,7 +296,7 @@ Se o SHA-256 não conferir, nada é instalado e a faixa diz o motivo.
 | Câmera na bancada não aparece, mas responde pelo Wi-Fi | a placa escolhida é a errada, ou a câmera está numa faixa que o Wi-Fi também tem: confira a placa em **Sessão > Placa**. Se o IP dela cai na faixa de outra placa, o painel põe um IP temporário e uma rota de host na placa escolhida ao configurar |
 | Câmera não responde ao ping | cabo, injetor PoE sem energia ou porta errada do injetor (saída **P+D**) |
 | Procurar diz "0 respostas" ao broadcast | um firewall no PC está barrando UDP de entrada (porta 37810). O painel ainda acha pelo IP de fábrica e pela varredura; libere o `powershell.exe` no firewall para o broadcast voltar |
-| Aviso de que o broadcast não responde, e o vigia em "Sem broadcast: uma câmera por vez." | o firewall do PC barra a porta UDP 37810, ou a placa perdeu o IP da faixa de fábrica (clique em **Preparar a placa**, no chip da placa). Enquanto isso o painel fica no modo de reserva: ligue uma câmera de fábrica por vez no switch. Libere o `powershell.exe` no firewall para UDP 37810; com o broadcast de volta, as câmeras voltam a andar em paralelo sozinhas |
+| Faixa "O broadcast não respondeu: o vigia está no modo de reserva." sob o topo | o firewall do PC barra a porta UDP 37810, ou a placa perdeu o IP da faixa de fábrica (clique em **Preparar a placa**, no chip da placa). Enquanto isso o painel fica no modo de reserva: ligue uma câmera de fábrica por vez no switch. Libere o `powershell.exe` no firewall para UDP 37810; com o broadcast de volta, as câmeras voltam a andar em paralelo sozinhas |
 | Aviso de que duas câmeras respondem em 192.168.1.108 | há mais de uma câmera de fábrica no switch e o broadcast não responde, então o painel não sabe qual está atendendo. Deixe ligada só a câmera de fábrica que vai ser configurada agora (as já instaladas podem ficar) e libere a porta UDP 37810, como na linha acima |
 | Aviso de que o painel está sem Administrador e vai uma câmera por vez | o pedido do Windows foi recusado: sem Administrador o painel não põe o vizinho estático nem prepara a placa, e fica no modo de reserva. Encerre o painel e abra pelo atalho aceitando o pedido |
 | "fora das faixas do PC" na lista | a câmera está noutra rede; ao configurar, a placa recebe um IP temporário nessa rede (sai no **Restaurar o DHCP** / ao encerrar) |

@@ -313,19 +313,20 @@ const TEXTOS = {
   'painel.fila.encerrar': 'Encerrar a fila',
   'painel.fila.encerrando': 'Encerrando a fila…',
   'painel.vazio.semFila': 'Nenhuma fila montada',
-  'painel.vazio.semFila.texto': 'Monte a fila com a faixa de IPs que as câmeras vão receber, em Sessão, seção Fila.',
+  'painel.vazio.semFila.texto': 'Monte a fila em Sessão > Fila, com a faixa de IPs que as câmeras vão receber.',
   'painel.vazio.desligado': 'Ligue o vigia para configurar sozinho cada câmera de fábrica que aparecer no switch, na próxima ' +
     'posição livre.',
   'painel.vazio.motivo': ({ motivo }) => 'O vigia foi desligado: ' + motivo + '.',
   'painel.vazio.sequencial': 'Sem vigia: uma câmera por vez',
-  'painel.vazio.sequencial.texto': ({ n, ip }) => 'Ligue a câmera ' + n + ' no switch, só ela, e clique em Configurar. ' +
-    'Ela recebe o IP ' + ip + '.',
+  'painel.vazio.sequencial.texto': ({ n, ip }) => 'Ligue a câmera ' + n + ' no switch, só ela, e clique em Configurar a ' +
+    'câmera ' + n + '. Ela recebe o IP ' + ip + '.',
   'painel.vazio.configurar': ({ n }) => 'Configurar a câmera ' + n,
   'painel.vazio.configurando': 'Procurando a câmera…',
   'painel.vazio.esperando': 'Esperando câmeras de fábrica',
   'painel.vazio.esperando.texto': ({ ip, hora, qualquer }) => 'Observando ' + ip +
     (qualquer ? ' e câmera de fábrica de qualquer faixa' : '') + (hora ? ' desde ' + hora : '') +
-    '. Ligue as câmeras no switch: cada uma entra na próxima posição livre.',
+    '. Ligue as câmeras no switch: cada uma entra na próxima posição livre. A primeira costuma levar cerca de 1 minuto ' +
+    'depois de ligada.',
   'painel.vazio.ipFabrica': 'o IP de fábrica',
   'painel.concluida': ({ n }) => 'Fila concluída: ' + pl(n, 'instalada', 'instaladas'),
   'painel.encerrada': ({ inst, sem }) => 'Fila encerrada: ' + pl(inst, 'instalada', 'instaladas') + ', ' +
@@ -433,11 +434,11 @@ const TEXTOS = {
   'registro.status.curso': 'Em andamento',
   'registro.status.pulada': 'Resetada',
 
-  'falha.bloqueada': 'A câmera bloqueou o admin por senhas erradas. Espere alguns minutos, confirme a senha certa em Sessão, ' +
-    'seção Senha, e só então tente de novo.',
-  'falha.senha-recusada': 'A câmera recusou a senha da sessão. Troque a senha em Sessão, seção Senha, antes de tentar de novo: ' +
+  'falha.bloqueada': 'A câmera bloqueou o admin por senhas erradas. Espere alguns minutos, confirme a senha certa em ' +
+    'Sessão > Senha e só então tente de novo.',
+  'falha.senha-recusada': 'A câmera recusou a senha da sessão. Troque a senha em Sessão > Senha antes de tentar de novo: ' +
     'cada tentativa com a senha errada conta para o bloqueio da câmera.',
-  'falha.recusa': 'A câmera recusou um valor. Confira a seção Câmera em Sessão antes de tentar de novo; o que já foi concluído ' +
+  'falha.recusa': 'A câmera recusou um valor. Confira Sessão > Câmera antes de tentar de novo; o que já foi concluído ' +
     'fica registrado.',
   // A camera nao diz qual valor recusou (o passo grava varios juntos): o conserto aponta o encoder inteiro.
   'falha.recusa-encoder': 'A câmera recusou um valor do encoder. Mude o encoder e tente de novo; o que já foi concluído ' +
@@ -450,7 +451,7 @@ const TEXTOS = {
   'falha.rede': ({ destino }) => 'A câmera já tem a senha e o encoder. Tentar de novo grava a rede; se ela já tiver mudado para ' +
     destino + ', só confere.',
   'falha.conferida': ({ destino }) => 'A rede já foi gravada: a câmera deve estar reiniciando em ' + destino + '. Tentar de novo ' +
-    'espera ela responder lá e confere. Se ela não voltar, confira o cabo e a máscara e o gateway em Sessão, seção Rede.',
+    'espera ela responder lá e confere. Se ela não voltar, confira o cabo e a máscara e o gateway em Sessão > Rede.',
   'falha.outra': 'O que foi concluído fica registrado. Tentar de novo continua da etapa que falhou.',
 
   'registro.titulo-simulacao': 'Registro da simulação',

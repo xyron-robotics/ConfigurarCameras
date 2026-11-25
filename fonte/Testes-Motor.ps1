@@ -2970,7 +2970,7 @@ T 'Tema: data-tema entra so no <html> do index.html real, e o servidor tem as ro
     foreach ($rota in @("'GET /api/tema'", "'PUT /api/tema'", 'Add-TemaNoHtml')) { Assert-Verdade ($txt.Contains($rota)) ('servidor tem ' + $rota) }
 }
 
-T 'Front paralelo: .js e .html reais do www sem textos do modo serial, da fase escolher nem os rotulos trocados pela navegacao; cartao manda /api/camera' {
+T 'Front paralelo: .js e .html reais do www sem textos do modo serial, da fase escolher nem os rotulos trocados pela navegacao e pelo painel; linha da camera manda /api/camera' {
     # Todos os modulos do www (app.js, textos.js, legado-*.js...) e o index.html, juntos.
     $www = Join-Path $raiz 'web\www'
     $lerTodos = { param($filtro) (@(Get-ChildItem -LiteralPath $www -File -Filter $filtro | Sort-Object Name |
@@ -2988,12 +2988,17 @@ T 'Front paralelo: .js e .html reais do www sem textos do modo serial, da fase e
                     ('Preparar placa e come' + $cedilha + 'ar'), 'Salvar placa', 'Salvar rede', 'Salvar faixa',
                     ('Salvar c' + [char]0xE2 + 'mera'), 'Montar fila', 'Montar depois', ('Montar a fila ao come' + $cedilha + 'ar'),
                     'Atualizar lista', 'Senha definida.', ('Usar essa sess' + [char]0xE3 + 'o'))
+    # Os que a frente redesenho-painel trocou: posicao, vigia, modo sequencial e registro.
+    $proibidos += @(('Sem posi' + $cedilha + [char]0xE3 + 'o'), 'Ligar vigia', ('C' + [char]0xE2 + 'mera conectada'),
+                    'Atualizar registro')
     foreach ($p in $proibidos) {
         Assert-Falso ($js.Contains($p)) ('.js do www sem ' + $p)
         Assert-Falso ($html.Contains($p)) ('.html do www sem ' + $p)
     }
     Assert-Verdade ($js.Contains('/api/camera')) '.js do www manda /api/camera'
-    Assert-Verdade ($js.Contains('por broadcast')) '.js do www tem o texto do vigia paralelo'
+    # "Broadcast" saiu da tela principal (direcao 6, regra 5): o vigia paralelo se
+    # reconhece pelo estado "vigia ligado, sem camera" da direcao 3.6.
+    Assert-Verdade ($js.Contains(('Esperando c' + [char]0xE2 + 'meras de f' + [char]0xE1 + 'brica'))) '.js do www tem o texto do vigia paralelo'
 }
 
 # ------------------------------------------------------------------- resultado

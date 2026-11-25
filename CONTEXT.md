@@ -67,11 +67,11 @@ Segundo fluxo de vídeo da câmera (stream 2), de menor qualidade.
 _Avoid_: sub stream, extra stream, ExtraFormat
 
 **Painel**:
-Console web local onde a operação é controlada e onde vive o registro das câmeras; é a fonte de verdade. Também é o nome da tela principal, com a fila, a bancada e o registro.
+Console web local onde a operação é controlada e onde vive o registro das câmeras; é a fonte de verdade. Também é o nome da tela principal, com o cabeçalho da fila (fita e vigia), o "Pede você" e a tabela das câmeras, nas abas Fila agora e Registro.
 _Avoid_: dashboard, interface, sistema
 
 **Registro**:
-Lista, guardada pelo painel neste PC, de cada câmera que passou pela configuração: uma entrada por câmera (pelo MAC), com o IP definitivo, a etapa concluída e o estado (em andamento, instalada, falhou). É a única cópia do que foi feito. Fica na tela Painel, embaixo da fila.
+Lista, guardada pelo painel neste PC, de cada câmera que passou pela configuração: uma entrada por câmera (pelo MAC), com o IP definitivo, a etapa concluída e o estado (em andamento, instalada, falhou). É a única cópia do que foi feito. Fica na tela Painel, na aba Registro.
 _Avoid_: inventário, banco, histórico, cameras.csv
 
 **Relatório**:
@@ -91,11 +91,11 @@ Etapa obrigatória da configuração que grava resolução, quadros por segundo 
 _Avoid_: configurar vídeo, alterar qualidade
 
 **Fila**:
-Sequência de IPs de destino montada a partir de uma faixa início–fim antes de começar; cada posição recebe uma câmera. As posições recebem câmeras em paralelo: uma câmera em falha espera a decisão no cartão dela e não para as outras. Uma faixa sem nenhuma posição livre não vira fila. A faixa montada fica na sessão e volta preenchida na próxima abertura, só como sugestão. Montar é no passo a passo ou na tela Sessão, seção Fila.
+Sequência de IPs de destino montada a partir de uma faixa início–fim antes de começar; cada posição recebe uma câmera. As posições recebem câmeras em paralelo: uma câmera em falha espera a decisão na linha dela e não para as outras. Uma faixa sem nenhuma posição livre não vira fila. A faixa montada fica na sessão e volta preenchida na próxima abertura, só como sugestão. Montar é no passo a passo ou na tela Sessão, seção Fila.
 _Avoid_: plano, lote, lista
 
 **Posição**:
-Um IP de destino da fila. As que podem receber câmera são numeradas "câmera N" (câmera 1, câmera 2…), no mesmo número na fita e na bancada; as deixadas de fora na montagem (gateway, fora da rede, já no registro) não recebem número. A câmera recebe a próxima posição livre ao entrar no portão do IP de fábrica, na ordem em que apareceu no broadcast, que não é a ordem do cabo; por isso porta e canal se digitam no cartão da câmera.
+Um IP de destino da fila. As que podem receber câmera são numeradas "câmera N" (câmera 1, câmera 2…), no mesmo número na fita e na tabela; as deixadas de fora na montagem (gateway, fora da rede, já no registro) não recebem número. A câmera recebe a próxima posição livre ao entrar no portão do IP de fábrica, na ordem em que apareceu no broadcast, que não é a ordem do cabo; por isso porta e canal se digitam na linha da câmera.
 _Avoid_: slot, item, vaga
 
 **Vigia**:
@@ -114,13 +114,17 @@ _Avoid_: ARP estático, entrada ARP, NetNeighbor
 Conferência de várias câmeras ao mesmo tempo, sem limite de quantas, cada uma no seu IP de destino. Não toca o IP de fábrica, por isso não espera o portão.
 _Avoid_: conferência simultânea, verificação em lote
 
-**Cartão da câmera**:
-Bloco da bancada de cada câmera da fila, com posição, modelo, serial, MAC, destino, estado da câmera, Porta e Canal e, em falha, os botões Tentar de novo e Pular esta posição. Porta e Canal ficam editáveis até a fila fechar, inclusive com a câmera instalada, menos em câmera pulada ou já inicializada.
-_Avoid_: linha, item, card, ficha
+**Linha da câmera**:
+Linha da tabela do Painel para cada câmera, antes chamada cartão da câmera: posição, estado da câmera, IP de destino, modelo, serial, MAC, porta do switch e canal no NVR e, em falha, a decisão. Porta e canal ficam editáveis até a fila fechar, inclusive com a câmera instalada, menos em câmera pulada ou já inicializada; o que vale é o que o painel confirmou. Câmera ainda sem posição fica fora da fila, no grupo "Na espera do portão".
+_Avoid_: cartão da câmera, card, item, ficha
 
 **Estado da câmera**:
-Palavra que o cartão mostra para a fase da câmera: "Na espera", "No portão", "Conferindo", "Falhou" (espera a decisão do operador), "Instalada", "Pulada" e "Já inicializada: não tocada".
+Palavra que a linha da câmera mostra para onde a câmera está: "Na espera", "No portão" e "Conferindo" (com a etapa real, como "2 de 4: encoder" e "4 de 4: conferindo"), "Falhou" (com a etapa, espera a decisão), "Instalada", "Pulada" e "Já inicializada: não tocada".
 _Avoid_: status, fase (é o nome no código), situação
+
+**Decisão**:
+O que o operador escolhe para uma câmera que falhou: Tentar de novo (a retomada), Mudar o encoder (falha no encoder; muda a sessão inteira, não só esta câmera) ou Pular esta posição (com confirmação). Aparece na linha da câmera e no bloco "Pede você", que reúne toda falha à espera. A falha se anuncia sem tirar o operador do que está fazendo: o foco fica onde está, porque ele pode estar digitando porta e canal de outra câmera; ir até a decisão é gesto dele ("Ir para o que pede você").
+_Avoid_: pausa, erro (é a causa, não a escolha), popup
 
 **Modo de reserva**:
 Sem resposta do broadcast (em geral, a porta UDP 37810 fechada no firewall) ou sem Administrador, o painel configura uma câmera por vez e avisa. Sem Administrador também não há vizinho estático.
