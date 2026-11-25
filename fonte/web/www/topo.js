@@ -66,7 +66,10 @@ export function criarTopo(ctx) {
     el,
     atualizar(m, tela) {
       modelo = m;
-      el.hidden = !m.carregado || m.inicio;
+      // Abrindo (antes do 1o estado): o topo ja ocupa a altura final, so com a
+      // marca, para a tela nao saltar quando o estado chega (UI-06).
+      el.hidden = m.carregado && m.inicio;
+      el.classList.toggle('topo-abrindo', !m.carregado);
       for (const a of links) {
         if (a.dataset.aba === tela) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
       }

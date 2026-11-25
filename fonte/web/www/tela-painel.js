@@ -1,6 +1,6 @@
 // Painel (direcao.md, secoes 3.2, 3.6, 5.3, 5.4, 5.5 e 5.7). Topo: cabecalho da
 // fila (nome, faixa, vigia, Montar outra fila, Encerrar a fila), a fita e o
-// estado vazio da vez; faixa do modo de reserva. Embaixo, a tabela das cameras:
+// estado vazio da vez (a faixa do modo de reserva e global, no app.js). Embaixo, a tabela das cameras:
 // abas "Fila agora" e "Registro", uma linha por posicao da fila, os grupos das
 // cameras sem posicao e o registro gravado. So desenha o modelo do estado.js (decisao P1); o que a
 // tela guarda e o que e dela: o que o operador digitou, o envio em curso e o
@@ -11,10 +11,9 @@
 // publicado e o erro fica junto dos campos; reenviar o mesmo valor envia de novo.
 import { h, focar } from './dom.js';
 import { icone } from './icones.js';
-import { t, nomeEtapa, textoDaFalha, traduzirServidor, motivoVigia } from './textos.js';
+import { t, nomeEtapa, textoDaFalha, traduzirServidor, traduzirRecusaPortaCanal, motivoVigia } from './textos.js';
 import { botao, ocupar, selo, barraEtapas, chip, lugarAviso, aviso, detalhe, lateral } from './componentes.js';
-import { montarFormulario } from './formularios.js';
-import { salvarParcial } from './tela-inicio.js';
+import { montarFormulario, salvarParcial } from './formularios.js';
 import { dataHora, hora, mac as formatarMac, streamsEncoder } from './formato.js';
 import {
   CONSULTA_MS, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS, NOTA_SALVO_MS, TRAVA_DECISAO_MS,
@@ -37,6 +36,8 @@ const ROTULO_LEGENDA = {
 const MARCA_FALHA = '!';
 // Motivos do vigia que o estado da tela ja diz (nao repete na frase).
 const MOTIVO_JA_DITO = ['', 'pelo operador', 'fila concluida', 'fila encerrada'];
+// Comandos do topo cujo aviso do servidor esta tela mostra (lugarDoAviso).
+const ORIGEM_AVISO_PAINEL = ['vigia', 'conectada', 'decisao'];
 
 function textoEstado(p, totalEtapas) {
   if (p.estado === 'curso') return p.etapaN ? t('estado.curso', { n: p.etapaN, total: totalEtapas, etapa: p.etapa }) : t('estado.portao');
@@ -63,6 +64,7 @@ export function telaPainel(ctx, parte) {
   let estadosAntes = null;
   let novas = new Set();
   let redesenhando = false;
+  let filaAtual = null;
 
   function linha(n) {
     if (!linhas.has(n)) linhas.set(n, { rascunho: null, enviando: false, nota: null, decidindo: null, decisao: null, trava: 0, timer: 0 });
@@ -87,10 +89,10 @@ export function telaPainel(ctx, parte) {
     return { porta: ler('porta'), canal: ler('canal') };
   }
 
-  function mostrarNota(n, tipo, texto) {
+  function mostrarNota(n, tipo, texto, cru) {
     const l = linha(n);
     clearTimeout(l.timer);
-    l.nota = tipo ? { tipo, texto } : null;
+    l.nota = tipo ? { tipo, texto, cru: cru || '' } : null;
     if (tipo === 'sucesso') l.timer = setTimeout(() => { if (l.nota && l.nota.tipo === 'sucesso') { l.nota = null; mudouLocal(); } }, NOTA_SALVO_MS);
   }
 
@@ -102,44 +104,55 @@ export function telaPainel(ctx, parte) {
     const { porta, canal } = valoresDaLinha(n);
     const pub = p.camera;
     if (porta === pub.porta && canal === pub.canal) {
-      // Igual ao publicado: nada a gravar; um erro antigo deixa de valer.
+      // Igual ao publicado: nada a gravar. Um erro antigo so deixa de valer se
+      // o operador mexeu nos campos depois dele; sair do campo logo apos a
+      // recusa (ir ao "Detalhe tecnico" da nota, H8) nao apaga a nota.
+      const mexeu = !!l.rascunho;
       l.rascunho = null;
-      if (l.nota && l.nota.tipo === 'erro') { mostrarNota(n, null); mudouLocal(); }
+      if (mexeu && l.nota && l.nota.tipo === 'erro') { mostrarNota(n, null); mudouLocal(); }
       return;
     }
     const mac = pub.macBruto;
-    const n0 = ctx.modelo().aviso.n;
+    const m0 = ctx.modelo();
+    const n0 = m0.aviso.n;
+    const aviso0 = pub.aviso;
     l.enviando = true;
     l.rascunho = { porta, canal };
     mostrarNota(n, 'info', t('painel.portaCanal.salvando'));
     mudouLocal();
-    let erro = '';
+    let erro = null;
     const r = await ctx.api.comando('/api/camera', { mac, porta, canal });
     if (!r.ok) {
-      erro = traduzirServidor(r).texto;
+      erro = traduzirServidor(r);
     } else {
       // O comando vai para a fila do worker: espera ele publicar o valor novo ou
       // recusar. "Worker livre" nao resolve: o estado publicado pode vir antes do
       // comando ser lido e daria "nao confirmou" com o valor ja gravado.
+      // H1: o aviso geral do servidor e o do ultimo comando de camera, de
+      // qualquer linha. A recusa desta camera vem no aviso dela (c.aviso); o
+      // aviso geral so vale aqui quando nao e de nenhuma camera da fila (fila
+      // ausente, camera fora da fila).
       const fim = Date.now() + ESPERA_ESTADO_MS;
+      const novoGeral = (x) => x.aviso.n > n0 && x.aviso.origem === 'camera';
+      const salvo = (c) => c && c.porta === porta && c.canal === canal;
+      const recusada = (x, c) => c && c.aviso && (c.aviso !== aviso0 || (novoGeral(x) && x.aviso.texto === c.aviso));
+      const geral = (x) => novoGeral(x) && !(x.fila && x.fila.posicoes.some((q) => q.camera && q.camera.aviso === x.aviso.texto));
+      const resolvido = (x) => { const c = camera(x, mac); return salvo(c) || recusada(x, c) || geral(x); };
       let m = await ctx.consultarNova();
-      const resolvido = (x) => {
-        const c = camera(x, mac);
-        return (c && c.porta === porta && c.canal === canal) || (x.aviso.n > n0 && x.aviso.origem === 'camera');
-      };
       while (!resolvido(m) && Date.now() < fim) {
         await pausa(ESPERA_ESTADO_PASSO_MS);
         m = await ctx.consultarNova();
       }
       const c = camera(m, mac);
-      if (c && c.porta === porta && c.canal === canal) erro = '';
-      else if (m.aviso.n > n0 && m.aviso.origem === 'camera') erro = m.aviso.texto;
-      else erro = t('painel.portaCanal.semConfirmacao');
+      if (recusada(m, c)) erro = traduzirRecusaPortaCanal(c.aviso);
+      else if (salvo(c)) erro = null;
+      else if (geral(m)) erro = traduzirRecusaPortaCanal(m.aviso.texto);
+      else erro = { texto: t('painel.portaCanal.semConfirmacao'), cru: '' };
     }
     // A partir daqui vale o publicado: o rascunho sai, com ou sem erro.
     l.enviando = false;
     l.rascunho = null;
-    mostrarNota(n, erro ? 'erro' : 'sucesso', erro || t('painel.portaCanal.salvo'));
+    if (erro) mostrarNota(n, 'erro', erro.texto, erro.cru); else mostrarNota(n, 'sucesso', t('painel.portaCanal.salvo'));
     mudouLocal();
   }
 
@@ -333,10 +346,13 @@ export function telaPainel(ctx, parte) {
     const nota = linha(n).nota;
     if (!nota) return null;
     const nomeIcone = { erro: 'falha', sucesso: 'concluido', info: 'espera' }[nota.tipo];
-    return h('tr', { class: ['linha-detalhe', 'linha-nota', nota.tipo === 'erro' ? 'linha-falha' : null] }, h('td', { colspan: String(colunas) },
+    return h('tr', { class: ['linha-detalhe', 'linha-nota', nota.tipo === 'erro' ? 'linha-falha' : null] }, h('td', { colspan: String(colunas) }, [
       h('p', { class: ['nota', 'nota-' + nota.tipo], id: `painel-nota-${n}`, role: nota.tipo === 'erro' ? 'alert' : 'status' }, [
         icone(nomeIcone), h('span', null, nota.texto),
-      ])));
+      ]),
+      // A resposta crua do servidor (H8): recolhida, como na falha.
+      nota.cru ? detalheFalha(`nota-${n}`, nota.cru) : null,
+    ]));
   }
 
   // ------------------------------------------------------------ Fila agora
@@ -485,13 +501,11 @@ export function telaPainel(ctx, parte) {
   }
 
   // ------------------------------------------------------------ topo: cabecalho, fita e estados
-  // Nos que vivem entre redesenhos: os lugares do aviso do servidor (o legado
-  // mostrarAviso escreve no que estiver na tela) e o erro do pedido.
+  // Nos que vivem entre redesenhos: o aviso do servidor dos comandos do topo
+  // (vigia, Configurar, decisao) e o erro do pedido.
   const topo = h('section', { class: 'painel-topo', 'aria-label': t('painel.titulo') });
-  const faixa = h('div', { class: ['faixa', 'faixa-atencao'], role: 'status', hidden: true },
-    h('div', { class: 'faixa-conteudo' }, [icone('atencao'), h('p', { class: 'faixa-texto' }, t('faixa.reserva'))]));
-  const avisoVigia = h('p', { class: 'aviso-legado', role: 'alert', hidden: true, dados: { avisoDe: 'vigia' } });
-  const avisoConectada = h('p', { class: 'aviso-legado', role: 'alert', hidden: true, dados: { avisoDe: 'conectada' } });
+  const avisoServidor = lugarAviso();
+  let textoAvisoServidor = '';
   const erroTopo = lugarAviso();
   let assinaturaTopo = '';
   let enviando = '';
@@ -666,7 +680,7 @@ export function telaPainel(ctx, parte) {
         p ? botaoTopo('configurar', t('painel.vazio.configurar', { n: p.posicao }), t('painel.vazio.configurando'),
           () => enviarTopo('configurar', '/api/fila/conectada', { porta: '', canal: '', ip: '' }),
           { tipo: 'secundario', desabilitado: m.ocupado }) : null,
-        avisoConectada,
+        lugarDoAviso(m) === 'bloco' ? avisoServidor.el : null,
         retomarBloco(m),
       ]);
     }
@@ -703,23 +717,37 @@ export function telaPainel(ctx, parte) {
     focar(destino);
   }
 
+  // Aviso do servidor dos comandos do topo: o do vigia fica no topo; o do
+  // Configurar e o da decisao, no bloco "vigia desligado" quando e ele que esta
+  // na tela (junto do botao), senao no topo. Os demais o app.js mostra.
+  function lugarDoAviso(m) {
+    if (!m.aviso.texto || !ORIGEM_AVISO_PAINEL.includes(m.aviso.origem)) return '';
+    return m.aviso.origem !== 'vigia' && m.painel === 'vigiaDesligado' ? 'bloco' : 'topo';
+  }
+
   function desenharTopo(m) {
     const f = m.fila;
+    const lugar = lugarDoAviso(m);
+    // O lugar em aria-live so muda de conteudo quando o texto muda (sem repetir no leitor).
+    const texto = lugar ? m.aviso.texto : '';
+    if (texto !== textoAvisoServidor) {
+      textoAvisoServidor = texto;
+      if (texto) avisoServidor.mostrar('atencao', texto); else avisoServidor.limpar();
+    }
     // replaceChildren escreveria "null" como texto: so os nos que existem.
     topo.replaceChildren(...[
       f ? cabecalho(m) : h('h1', { class: 'fila-titulo' }, t('painel.titulo')),
       f ? fita(m) : null,
       pedeVoce(m),
-      avisoVigia,
+      lugar === 'topo' ? avisoServidor.el : null,
       erroTopo.el,
       blocoEstado(m),
     ].filter(Boolean));
-    faixa.hidden = !m.vigia.reserva;
   }
 
   function atualizarTopo(m) {
     // versaoLocal: a trava, a decisao em curso e o erro dela vivem na tela.
-    const nova = JSON.stringify([m.fila, m.vigia, m.painel, m.ocupado, m.aviso.texto, enviando, retomarAberto, versaoLocal]);
+    const nova = JSON.stringify([m.fila, m.vigia, m.painel, m.ocupado, m.aviso.texto, m.aviso.origem, enviando, retomarAberto, versaoLocal]);
     if (nova === assinaturaTopo) return;
     assinaturaTopo = nova;
     const ativo = document.activeElement;
@@ -795,7 +823,24 @@ export function telaPainel(ctx, parte) {
     }
   }
 
+  // H5: outra fila montada = outras posicoes; nota, rascunho, trava e erro da
+  // retomada da fila anterior nao valem mais. A fila nao tem id: a identidade e
+  // a faixa, o local e o total (montar de novo a mesma fila guarda as notas).
+  function trocouDeFila(m) {
+    const f = m.fila;
+    const id = JSON.stringify(f ? [f.inicio, f.fim, f.local, f.rack, f.andar, f.total] : null);
+    if (id === filaAtual) return;
+    const tinha = filaAtual !== null;
+    filaAtual = id;
+    if (!tinha) return;
+    for (const l of linhas.values()) clearTimeout(l.timer);
+    linhas.clear();
+    retomadas.clear();
+    estadosAntes = null;
+  }
+
   function atualizar(m) {
+    trocouDeFila(m);
     compararEstados(m);
     atualizarTopo(m);
     const nova = JSON.stringify([m.fila, m.espera, m.ignoradas, m.registro, m.simular, aba, versaoLocal, [...novas]]);
@@ -824,5 +869,5 @@ export function telaPainel(ctx, parte) {
   }
 
   atualizar(ctx.modelo());
-  return { el: raiz, topo, faixa, atualizar, abrirAba };
+  return { el: raiz, topo, atualizar, abrirAba };
 }

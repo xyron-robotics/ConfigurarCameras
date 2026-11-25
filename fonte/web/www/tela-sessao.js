@@ -7,8 +7,7 @@ import { h, novoId } from './dom.js';
 import { t, traduzirServidor } from './textos.js';
 import { logo } from './marca.js';
 import { botao, ocupar, lugarAviso } from './componentes.js';
-import { montarFormulario } from './formularios.js';
-import { mostrarFalha, salvarSenha, salvarParcial } from './tela-inicio.js';
+import { montarFormulario, mostrarFalha, salvarSenha, salvarParcial } from './formularios.js';
 import { rotaDoPasso } from './rotas.js';
 import { dataHora } from './formato.js';
 import { SECOES_SESSAO, TEMAS, ESPERA_ESTADO_MS, ESPERA_SESSAO_MS } from './constantes.js';
@@ -170,6 +169,8 @@ function blocoQualquerFaixa(ctx, modelo, est) {
     let r;
     try { r = await ctx.definirQualquerFaixa(caixa.checked); } finally { est.ocupada = false; caixa.disabled = false; }
     if (!r.ok) {
+      // Recusada: a caixa volta ao que o vigia em curso usa (H2).
+      caixa.checked = ctx.modelo().vigia.qualquerFaixa;
       const falha = traduzirServidor(r);
       resultado.mostrar('erro', t('sessao.rede.qualquerFaixa.erro', { motivo: falha.texto }), falha.cru);
       return;

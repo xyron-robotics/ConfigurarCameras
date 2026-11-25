@@ -7,11 +7,12 @@
 import { h, focar, novoId } from './dom.js';
 import { botao, campo, chip, aviso } from './componentes.js';
 import { icone } from './icones.js';
-import { t } from './textos.js';
+import { t, traduzirServidor } from './textos.js';
 import { resolucao, ipParaNumero } from './formato.js';
 import { conflitoDaFaixa } from './estado.js';
 import {
   RE_IP, RE_EMAIL, BITRATE_MIN, BITRATE_MAX, FILA_MAX_ENDERECOS, OCTETO_PC_FABRICA, NBSP, ETAPA_DO_PASSO,
+  HTTP, ESPERA_ESTADO_MS, ESPERA_SESSAO_MS,
 } from './constantes.js';
 
 const MONTADORES = { senha: formSenha, placa: formPlaca, rede: formRede, camera: formCamera, fila: formFila };
@@ -412,4 +413,51 @@ function formFila(modelo) {
       return { ok, parcial: { Fila: { Inicio: inicio.valor(), Fim: fim.valor(), Local: local.valor(), Rack: rack.valor(), Andar: andar.valor() } } };
     },
   };
+}
+
+// ------------------------------------------------------------------ salvar
+// Quem salva e a tela; o como (PUT da sessao, senha, falha do servidor) e um
+// so para o passo a passo, a Sessao e o Painel (H3 da frente redesenho-verificacao).
+// ctx: { api, modelo(), confirmar(o), esperar(cond, ms), recarregarSessao() }.
+// Falha de salvar: erro por campo no campo (400), recusa conhecida em atencao
+// (409) e o resto por traduzirServidor. Devolve nada; quem chama so para.
+export function mostrarFalha(res, resposta, form) {
+  const d = (!res.semResposta && res.detalhe) || {};
+  if (res.codigo === HTTP.REQUISICAO_INVALIDA && Array.isArray(d.campos) && d.campos.length) {
+    // Validacao por campo do servidor: frases do painel, uma por campo.
+    const resto = form ? mostrarErrosServidor(form, d.campos) : d.campos.map((c) => c.msg);
+    const marcados = d.campos.length - resto.length;
+    resposta.mostrar('erro', resto.length ? resto.join(' ') : t('form.nada-salvo', { marcados }));
+    return;
+  }
+  const falha = traduzirServidor(res);
+  resposta.mostrar(res.codigo === HTTP.CONFLITO && !falha.cru ? 'atencao' : 'erro', falha.texto, falha.cru);
+}
+
+// Senha nova: comando e espera o estado dizer que ela chegou ao worker.
+export async function salvarSenha(ctx, senha, resposta, form) {
+  const res = await ctx.api.comando('/api/senha', { senha });
+  if (!res.ok) { mostrarFalha(res, resposta, form); return false; }
+  if (await ctx.esperar((m) => m.senhaDefinida, ESPERA_ESTADO_MS)) return true;
+  resposta.mostrar('atencao', t('inicio.demorou'));
+  return false;
+}
+
+// PUT /api/sessao e a espera da gravacao (a geracao sobe). Rede trocada com fila
+// na memoria volta 409 pedindo confirmacao: o dialogo pergunta e reenvia.
+export async function salvarParcial(ctx, parcial, resposta, form) {
+  const g = ctx.modelo().geracao;
+  let res = await ctx.api.salvarSessao(parcial);
+  if (!res.ok && res.codigo === HTTP.CONFLITO && res.detalhe && res.detalhe.precisaConfirmar) {
+    const sim = await ctx.confirmar({ titulo: t('rede.confirmar.titulo'), texto: traduzirServidor(res).texto, confirmar: t('rede.confirmar.botao') });
+    if (!sim) return false;
+    res = await ctx.api.salvarSessao({ ...parcial, confirmar: true });
+  }
+  if (!res.ok) { mostrarFalha(res, resposta, form); return false; }
+  if (!await ctx.esperar((m) => m.geracao > g, ESPERA_SESSAO_MS)) {
+    resposta.mostrar('atencao', t('inicio.demorou'));
+    return false;
+  }
+  await ctx.recarregarSessao();
+  return true;
 }

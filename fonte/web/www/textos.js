@@ -4,20 +4,16 @@
 import { NBSP } from './constantes.js';
 
 const TEXTOS = {
-  // ---------------------------------------------------------------- marcacao (legado-marcacao.js)
+  // ---------------------------------------------------------------- casca e telas cheias (app.js)
   'topo.pular': 'Pular para o conteúdo',
   'topo.atualizacao-notas': 'o que mudou',
-  'topo.btn-atualizar': 'Atualizar o painel',
   'marca.alt': 'Grupo SmartSeg',
+  'app.abrindo': 'Abrindo o painel…',
   // O servidor cita este texto no aviso que manda retomar (o bloco abre sozinho).
   'painel.retomar.abrir': 'Retomar câmera já inicializada',
   'painel.retomar.nota': 'Só para uma câmera que já recebeu a senha desta sessão, como depois de uma falha ou com o painel ' +
     'fechado no meio. Informe o IP em que ela responde agora.',
   'painel.campo-ip': 'IP atual da câmera',
-  'painel.etapa-inicializada': 'Inicialização',
-  'painel.etapa-encoder': 'Encoder',
-  'painel.etapa-rede': 'Rede',
-  'painel.etapa-conferida': 'Conferência',
   // Nome acessivel do icone da linha do log (a mensagem nem sempre traz a palavra do estado).
   'log.falha': 'Falha',
   'log.sucesso': 'Concluído',
@@ -273,10 +269,6 @@ const TEXTOS = {
   'fila.previa-invertida': 'O primeiro IP vem depois do último: troque os dois.',
   'fila.previa-acima': ({ n }) => n + ' endereços: acima do máximo de 254. Divida em faixas menores.',
 
-  // ---------------------------------------------------------------- painel (bancada da retomada manual)
-  'bancada.ordinal': ({ n, total }) => 'Câmera ' + n + ' de ' + total,
-  'bancada.trabalho-titulo': ({ ordinal, ip }) => ordinal + ' → ' + ip,
-
   // ---------------------------------------------------------------- cabecalho da fila, fita e estados (tela-painel.js)
   'painel.titulo': 'Painel',
   'painel.fila.titulo': ({ local, rack, andar, total }) => {
@@ -335,6 +327,11 @@ const TEXTOS = {
   // Faixa do modo de reserva (direcao 3.6 e 5.7).
   'faixa.reserva': 'O broadcast não respondeu: o vigia está no modo de reserva. Ligue uma câmera de fábrica por vez no ' +
     'switch. Para voltar ao modo normal, libere a porta UDP 37810 no firewall do Windows.',
+  'faixa.perdida': 'O painel parou de responder. Veja se a janela do servidor ainda está aberta e recarregue.',
+  'faixa.perdida.acao': 'Recarregar a página',
+  'faixa.perdida.ultima': ({ hora }) => 'Última resposta às ' + hora,
+  'faixa.atualizacao': ({ versao }) => 'Versão ' + versao + ' disponível.',
+  'faixa.atualizacao.acao': 'Atualizar o painel',
   'dialogo.encerrarFila.titulo': 'Encerrar a fila?',
   'dialogo.encerrarFila.texto': ({ sem }) => 'O vigia para de aceitar câmeras e as câmeras em curso terminam antes.' +
     (sem ? ' ' + pl(sem, 'posição fica', 'posições ficam') + ' sem câmera.' : ''),
@@ -374,6 +371,8 @@ const TEXTOS = {
   'painel.portaCanal.salvando': 'Salvando…',
   'painel.portaCanal.salvo': 'Salvo.',
   'painel.portaCanal.semConfirmacao': 'O painel não confirmou a porta e o canal. Tente de novo.',
+  'painel.portaCanal.registroTravado': 'O registro não aceitou a porta e o canal: o arquivo está somente leitura ou aberto em ' +
+    'outro programa. Feche o arquivo ou tire o somente leitura e salve de novo.',
   'painel.decisao.tentar': 'Tentar de novo',
   'painel.decisao.tentando': 'Tentando…',
   'painel.decisao.pular': 'Pular esta posição',
@@ -497,9 +496,10 @@ const TEXTOS = {
   'sessao.painel.sobre.texto': 'Painel de bancada do Grupo SmartSeg que leva câmeras Intelbras e Dahua de fábrica a câmeras instaladas: senha, rede, encoder e registro, uma fila por vez.',
 
   // ---------------------------------------------------------------- confirmacoes
-  'confirmar.atualizar': ({ temFila }) => 'Atualizar o painel agora? Ele baixa o instalador do GitHub, confere o SHA-256, ' +
-    'fecha e reabre sozinho na versão nova.' +
-    (temFila ? '\n\nA fila em memória se perde; o registro e a sessão ficam.' : '\n\nO registro e a sessão ficam.'),
+  'dialogo.atualizar.titulo': ({ versao }) => 'Atualizar o painel para a ' + versao + '?',
+  'dialogo.atualizar.texto': ({ temFila }) => 'O painel baixa o instalador do GitHub, confere o SHA-256, fecha e reabre ' +
+    'sozinho na versão nova.' + (temFila ? ' A fila em memória se perde; o registro e a sessão ficam.' : ' O registro e a sessão ficam.'),
+  'dialogo.atualizar.confirmar': 'Atualizar o painel',
   'fim.encerrado-restaurando': 'Painel encerrado. A placa de rede está voltando ao DHCP (leva alguns segundos). Pode fechar ' +
     'esta janela.',
 
@@ -651,6 +651,17 @@ export function traduzirServidor(res) {
   if (m) return { texto: t('servidor.emCurso', { n: Number(m[1]), acao: ACAO_RECUSADA[m[2]] || m[2] }), cru: '' };
   if (RE_TEMA_INVALIDO.test(msg)) return { texto: t('servidor.temaInvalido'), cru: '' };
   return { texto: t('servidor.recusou'), cru: msg || textoCru || t('erro.http', { codigo: res.codigo }) };
+}
+
+// Recusa da porta e do canal que o servidor deixa na camera (cameras[].aviso)
+// -> { texto, cru }. Registro somente leitura ou aberto em outro programa tem
+// conserto; o resto vira "O painel recusou a ação." com o original no detalhe.
+const RE_PORTA_CANAL = /^Não deu para gravar a porta e o canal novos no registro:/;
+const RE_REGISTRO_TRAVADO = /negad|denied|somente leitura|read-only|usado por outro processo|used by another process/i;
+export function traduzirRecusaPortaCanal(texto) {
+  const msg = String(texto || '').trim();
+  if (RE_PORTA_CANAL.test(msg) && RE_REGISTRO_TRAVADO.test(msg)) return { texto: t('painel.portaCanal.registroTravado'), cru: msg };
+  return { texto: t('servidor.recusou'), cru: msg };
 }
 
 // Avisos dos comandos sondar, verificar e descobrir (Servidor-Painel.ps1), pelo

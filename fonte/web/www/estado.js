@@ -5,11 +5,14 @@
 // passo a passo e conflito da fila com o registro moram so aqui; as telas leem o
 // modelo. Cresce com o uso (decisao N2): a frente 4 trouxe a fila por posicao
 // (estado, etapa, falha e camera de cada linha), as cameras sem posicao e o registro.
-import { ETAPAS, PASSOS, ETAPA_DO_PASSO, SESSAO_PADRAO, FILA_MAX_ENDERECOS, OCTETO_MAX, OCTETO_MAX_FILA, RE_IP } from './constantes.js';
+import {
+  ETAPAS, PASSOS, ETAPA_DO_PASSO, SESSAO_PADRAO, FILA_MAX_ENDERECOS, OCTETO_MAX, OCTETO_MAX_FILA, RE_IP, FALHAS_ATE_PERDER_CONEXAO,
+} from './constantes.js';
 import { ipParaNumero, numeroParaIp, mac as formatarMac } from './formato.js';
 
 // extras (do app.js): { sessao: dados do GET /api/sessao, placas: { dados, erro, lendo },
-// registro: cameras do GET /api/registro, registroLeitura: { lendo, erro, simulado } }.
+// registro: cameras do GET /api/registro, registroLeitura: { lendo, erro, simulado },
+// conexao: { falhas: consultas seguidas sem resposta, ultima: Date da ultima resposta } }.
 // Sem extras, o modelo sai sem essas partes.
 export function derivar(bruto, extras) {
   const e = (bruto && bruto.estado) || {};
@@ -26,6 +29,7 @@ export function derivar(bruto, extras) {
   const cams = listaCameras(e);
   const fila = derivarFila(e, cams);
   const vigia = derivarVigia(e, valores, x);
+  const conexao = x.conexao || { falhas: 0, ultima: null };
   const modelo = {
     carregado,
     simular: !!e.simular,
@@ -76,7 +80,10 @@ export function derivar(bruto, extras) {
     ferramenta: e.ferramenta || null,
     trabalho: e.trabalho || '',
     progresso: e.progresso && e.progresso.total ? e.progresso : null,
-    atualizacao: derivarAtualizacao(bruto && bruto.atualizacao),
+    atualizacao: derivarAtualizacao(bruto && bruto.atualizacao, e, !!e.ocupado || !!(bruto && bruto.comandos > 0)),
+    // Conexao (direcao 3.6, V3): consultas seguidas sem resposta, contadas pelo app.js.
+    conexaoPerdida: conexao.falhas >= FALHAS_ATE_PERDER_CONEXAO,
+    ultimaResposta: conexao.ultima,
   };
   modelo.painel = estadoDoPainel(modelo);
   return modelo;
@@ -168,7 +175,8 @@ function etapaEmCurso(etapa, fase) {
 // Posicao que pode receber camera (CONTEXT.md, Posicao): as puladas na
 // montagem (gateway, rede/broadcast, fora da rede, ja no registro) ficam de
 // fora; as puladas depois, pelo operador ou porque o IP ja responde, eram
-// lugar de camera e continuam numeradas. Mesma regra do "N de M" legado.
+// lugar de camera e continuam numeradas. A regra mora so aqui: a fita, a
+// tabela e o "N de M" do cabecalho leem o numero da posicao deste modelo.
 function posicaoUsavel(item) {
   return item.Estado !== 'pulada' || /operador|responde/.test(item.Motivo || '');
 }
@@ -276,9 +284,24 @@ function derivarRegistro(lista, leitura) {
 }
 
 // Procura automatica de versao nova (o servidor procura uma vez por dia).
-function derivarAtualizacao(a) {
+// Atualizacao do painel: a faixa aparece com versao nova conhecida; o botao so
+// ativa com o painel parado (o servidor tambem recusa com 409 e diz o motivo).
+// motivo: a chave do texto que explica o botao desabilitado ('' = pode atualizar).
+const ESTADOS_ATUALIZANDO = Object.freeze(['baixando', 'verificando', 'instalando']);
+function derivarAtualizacao(a, e, ocupado) {
   const x = a || {};
-  return { estado: x.estado || 'nenhuma', versao: x.versao || '', ultimaChecagem: x.ultimaChecagem || '' };
+  const estado = x.estado || 'nenhuma';
+  const atualizando = ESTADOS_ATUALIZANDO.includes(estado);
+  let motivo = '';
+  if (atualizando) motivo = 'atualizacao.em-andamento';
+  else if (ocupado) motivo = 'atualizacao.motivo-ocupado';
+  else if ((e.paralelo && e.paralelo.emCurso > 0) || ['configurando', 'decisao'].includes(e.fase)) motivo = 'atualizacao.motivo-em-curso';
+  else if (e.vigia && e.vigia.ligado) motivo = 'atualizacao.motivo-vigia';
+  else if (e.admin === false) motivo = 'atualizacao.motivo-admin';
+  return {
+    estado, versao: x.versao || '', versaoAtual: x.versaoAtual || '', erro: x.erro || '', pagina: x.pagina || '',
+    ultimaChecagem: x.ultimaChecagem || '', atualizando, motivo,
+  };
 }
 
 // Sessao completa: o Conferir (a senha que faltar entra na linha dele). Sem

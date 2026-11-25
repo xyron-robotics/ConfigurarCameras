@@ -9,6 +9,8 @@ export const CONSULTA_RAPIDA_MS = 600;
 // Consulta logo depois de um comando e depois de pedir a atualizacao.
 export const CONSULTA_APOS_COMANDO_MS = 150;
 export const CONSULTA_APOS_ATUALIZAR_MS = 300;
+// Conexao perdida (direcao 3.6, V3): consultas seguidas sem resposta ate a faixa de alarme.
+export const FALHAS_ATE_PERDER_CONEXAO = 3;
 // Espera do estado publicado: padrao, intervalo entre consultas e as esperas longas.
 export const ESPERA_ESTADO_MS = 6000;
 export const ESPERA_ESTADO_PASSO_MS = 250;
@@ -53,10 +55,9 @@ export const BASE_DECIMAL = 10;
 export const COLUNAS_MONO_DESCOBRIR = [0, 1, 2, 4];
 export const COLUNAS_MONO_VERIFICAR = [0, 1];
 
-// Limites do bitrate digitado e a barra de progresso antes do primeiro dado.
+// Limites do bitrate digitado.
 export const BITRATE_MIN = 64;
 export const BITRATE_MAX = 16384;
-export const PROGRESSO_MAX = 120;
 
 // Secoes da Sessao (direcao.md, secao 3.5), na ordem do menu; Painel vem separado.
 export const SECOES_SESSAO = Object.freeze(['senha', 'placa', 'rede', 'camera', 'fila', 'painel']);

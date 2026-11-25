@@ -305,6 +305,8 @@ Se o SHA-256 não conferir, nada é instalado e a faixa diz o motivo.
 |---|---|
 | O painel não abre, ou abre uma caixa de erro | a caixa diz o motivo. Para o detalhe, abra pelo `INICIAR-PAINEL-COM-CONSOLE.bat`: a mensagem fica na tela até apertar Enter |
 | O atalho não faz nada | o painel já está aberto: a janela dele é reaberta. Se não aparecer, apague `painel.json` na pasta de dados e tente de novo (ou a empresa bloqueia o `wscript.exe`: use o `.bat`) |
+| Faixa vermelha "O painel parou de responder" sob o topo, com "Última resposta às…" | o navegador ficou três consultas seguidas sem resposta do servidor do painel: ele foi fechado, travou ou o PC suspendeu. O resto da tela fica parado de propósito, para nenhum clique se perder. Se o servidor voltar, a faixa some sozinha; senão, abra o painel pelo atalho e clique em **Recarregar a página** |
+| "Painel encerrado. Pode fechar esta janela." | o painel foi encerrado pelo **Encerrar o painel** do topo e esta página não consulta mais nada. Para voltar, abra pelo atalho |
 | Chip "Placa sem as faixas" no topo | abra o chip e clique em **Preparar a placa**; se não resolver, o painel está sem Administrador (feche e abra de novo aceitando o UAC) |
 | Chip "Placa ausente" ("não está mais neste PC") | a placa escolhida sumiu (USB desconectado, renumerada): escolha outra em **Sessão > Placa** |
 | Câmera na bancada não aparece, mas responde pelo Wi-Fi | a placa escolhida é a errada, ou a câmera está numa faixa que o Wi-Fi também tem: confira a placa em **Sessão > Placa**. Se o IP dela cai na faixa de outra placa, o painel põe um IP temporário e uma rota de host na placa escolhida ao configurar |

@@ -6,6 +6,7 @@ const LOCALE = 'pt-BR';
 const FMT_DIA_HORA = new Intl.DateTimeFormat(LOCALE, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const FMT_DATA_HORA = new Intl.DateTimeFormat(LOCALE, { dateStyle: 'short', timeStyle: 'short' });
 const FMT_HORA = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' });
+const FMT_HORA_SEGUNDOS = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const FMT_NUMERO = new Intl.NumberFormat(LOCALE);
 
 // Data do servidor (hora local da maquina) vira Date; fora do formato, null.
@@ -32,6 +33,11 @@ export function dataHora(q) {
 
 export function hora(data) {
   return FMT_HORA.format(data);
+}
+
+// Com os segundos ("Ultima resposta as 14:07:31", conexao perdida).
+export function horaSegundos(data) {
+  return FMT_HORA_SEGUNDOS.format(data);
 }
 
 export function numero(v) {

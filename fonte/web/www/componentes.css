@@ -1,7 +1,6 @@
 /* Componentes do painel: os da casca (botao, chip, popover, aviso, detalhe,
-   dialogo e campo, de componentes.js) e os de transicao dos legado-*.js
-   (luz, icone, marca, campo, botao, aviso, trilha de passos, selo, fita,
-   etapas, tabela, controle segmentado e log). Uma classe por peca; a tela so
+   dialogo, campo e faixa, de componentes.js), a marca, a trilha de passos,
+   o selo, a fita, a tabela, o controle segmentado e o log. Uma classe por peca; a tela so
    posiciona (telas.css). Cores pelo significado (direcao 4.2): --acao acao,
    --agora em curso, --sucesso concluido, --falha pede voce, --atencao
    atencao, cinza o resto. */
@@ -208,9 +207,6 @@
   }
   /* Simbolo no topo, ao lado do nome do painel (o vao vem do gap da marca). */
   .simbolo { block-size: var(--simbolo-altura); inline-size: auto; }
-  /* Logo acima do texto, centrada (tela de encerrado). */
-  .fim-marca { display: grid; justify-items: center; gap: var(--esp-5); }
-  .fim-marca .logo { margin-inline-start: 0; }
 
   /* ---------------------------------------------------------------- campos */
   /* Rotulo visivel acima, 13 com peso 600, nunca caixa alta (direcao 4.3). */
@@ -255,61 +251,9 @@
     font-weight: var(--peso-forte); font-size: var(--tipo-corpo);
     padding: 0 var(--esp-1);
   }
-  .erros, .avisos-leves, .aviso-legado { overflow-wrap: anywhere; }
-  .erros {
-    margin: 0; padding: var(--esp-2) var(--esp-4) var(--esp-2) var(--esp-6);
-    background: var(--falha-fundo); border-radius: var(--raio-controle);
-  }
-  .avisos-leves {
-    margin: 0; padding: var(--esp-2) var(--esp-4) var(--esp-2) var(--esp-6);
-    background: var(--atencao-fundo); border-radius: var(--raio-controle);
-  }
   /* Faixa usual do bitrate, embaixo dos campos do stream. */
   .faixa-encoder { margin: var(--esp-2) 0 0; font-size: var(--tipo-meta); color: var(--apoio); }
   .faixa-encoder:empty { display: none; }
-
-  /* ---------------------------------------------------------------- botao */
-  /* Direcao 5.1. .btn e o secundario (contorno, texto de acao); .btn.acento e
-     o primario, um por area; .btn.discreto e o link de acao. Hover nao
-     levanta; o press desce 1 px. */
-  .btn {
-    font: inherit; font-size: var(--tipo-corpo); font-weight: var(--peso-forte);
-    display: inline-flex; align-items: center; justify-content: center;
-    padding: var(--esp-1) var(--esp-4); min-height: var(--controle-altura);
-    color: var(--acao-texto); background: var(--superficie);
-    border: var(--traco) solid var(--linha-forte); border-radius: var(--raio-controle);
-    cursor: pointer; text-decoration: none; white-space: nowrap;
-    transition:
-      background-color var(--dur-rapida) var(--curva),
-      border-color var(--dur-rapida) var(--curva),
-      color var(--dur-rapida) var(--curva);
-  }
-  .btn:hover { background: var(--acao-fraco); }
-  .btn:active { transform: translateY(var(--pressionado)); }
-  .btn.acento { background: var(--acao); border-color: var(--acao); color: var(--acao-rotulo); }
-  .btn.acento:hover { background: var(--acao-hover); border-color: var(--acao-hover); }
-  .btn.discreto { background: transparent; border-color: transparent; padding-left: var(--esp-2); padding-right: var(--esp-2); }
-  .btn.discreto:hover { background: transparent; text-decoration: underline; text-underline-offset: var(--foco-recuo); }
-  /* Desabilitado com a mesma cara do campo desabilitado (apoio, superficie-2,
-     borda tracejada), sem opacidade: o texto continua legivel e nada reage ao ponteiro. */
-  .btn:disabled, .btn:disabled:hover, .btn:disabled:active,
-  .btn.acento:disabled, .btn.acento:disabled:hover, .btn.acento:disabled:active,
-  .btn.discreto:disabled, .btn.discreto:disabled:hover, .btn.discreto:disabled:active {
-    color: var(--apoio); background: var(--superficie-2);
-    border-color: var(--linha-forte); border-style: dashed;
-    cursor: not-allowed; transform: none; text-decoration: none;
-  }
-  .acoes { display: flex; gap: var(--esp-3); align-items: center; flex-wrap: wrap; }
-
-  /* ---------------------------------------------------------------- aviso de transicao */
-  .aviso-legado {
-    padding: var(--esp-2) var(--esp-4); border-radius: var(--raio-controle);
-    background: var(--falha-fundo); color: var(--texto); border-left: var(--barra-mini) solid var(--falha);
-  }
-  /* "Aguarde": nao e erro, some sozinho. */
-  .aviso-legado.neutro { background: var(--superficie-2); border-left-color: var(--apoio); }
-  /* Aviso junto do formulario que o causou. */
-  [data-aviso-de] { margin: var(--esp-3) 0 0; align-self: stretch; }
 
   /* ---------------------------------------------------------------- trilha (UI-10) */
   /* Numero, palavra e, nos feitos, o icone. Nao e botao: e um link de texto
@@ -466,7 +410,10 @@
     padding: var(--esp-3) var(--esp-5);
   }
   .faixa-texto { flex: 1 1 0; min-inline-size: 0; margin: 0; color: var(--texto); }
+  .faixa-extra { font-size: var(--tipo-meta); }
+  .faixa-alarme { background: var(--falha-fundo); color: var(--falha); }
   .faixa-atencao { background: var(--atencao-fundo); color: var(--atencao); }
+  .faixa-info { background: var(--superficie-2); color: var(--acao-texto); }
 
   /* ---------------------------------------------------------------- bloco (estados do Painel, 3.6) */
   .bloco {
@@ -482,33 +429,6 @@
   .bloco-titulo { margin: 0; font-size: var(--tipo-subtitulo); display: flex; gap: var(--esp-2); align-items: center; }
   .bloco-subtitulo { margin: var(--esp-2) 0 0; }
   .bloco-sucesso .bloco-titulo .icone { color: var(--sucesso); }
-
-  /* ---------------------------------------------------------------- etapas */
-  /* Etapas: sequencia real, por isso numerada. Uma coluna por etapa (4). */
-  .etapas {
-    list-style: none; counter-reset: etapa;
-    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--esp-2);
-    padding: 0; margin: var(--esp-3) 0;
-  }
-  .etapas li {
-    counter-increment: etapa;
-    padding: var(--esp-2) var(--esp-3); border-radius: var(--raio-controle);
-    background: var(--superficie-2); border: var(--traco) solid var(--linha); color: var(--apoio);
-  }
-  .etapas li::before { content: counter(etapa) "  "; }
-  .etapas li.feita { background: var(--superficie); color: var(--texto); border-color: var(--sucesso); }
-  /* Etapa atual: contorno e fundo de "agora", parada (sem pulso, UI-15). */
-  .etapas li.agora {
-    background: var(--acao-fraco); color: var(--texto); border-color: var(--agora);
-    box-shadow: inset 0 0 0 var(--traco) var(--agora); font-weight: var(--peso-forte);
-  }
-  /* Movimento reduzido: as duracoes ja vao a 0 nos tokens; o botao nao se mexe. */
-  @media (prefers-reduced-motion: reduce) {
-    .btn:active { transform: none; }
-  }
-  @media (max-width: 760px) {
-    .etapas { grid-auto-flow: row; grid-template-columns: var(--grade-2); }
-  }
 
   /* ---------------------------------------------------------------- tabela */
   /* 5.4: cabecalho fixo na rolagem, linha de altura fixa, dado de maquina em
@@ -639,14 +559,4 @@
   .log-linhas .falha .log-sinal { color: var(--falha); }
   .log-linhas .sucesso .log-sinal { color: var(--sucesso); }
   .log-linhas .atencao .log-sinal { color: var(--atencao); }
-
-  /* ---------------------------------------------------------------- faixa de atualizacao */
-  /* Versao nova no GitHub: informacao, em --superficie-2 (direcao 5.7). */
-  .atualizacao {
-    display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
-    padding: var(--esp-2) var(--esp-4); font-size: var(--tipo-corpo);
-    background: var(--superficie-2); border-bottom: var(--traco) solid var(--linha);
-  }
-  .atualizacao.falha { background: var(--falha-fundo); }
-  .atualizacao .btn { padding: var(--esp-1) var(--esp-3); }
 }

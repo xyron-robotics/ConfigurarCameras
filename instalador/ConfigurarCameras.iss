@@ -76,11 +76,6 @@ Source: "{#Raiz}\fonte\web\www\tela-inicio.js"; DestDir: "{app}\web\www"; Flags:
 Source: "{#Raiz}\fonte\web\www\tela-sessao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\tela-painel.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\tela-ferramentas.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
-Source: "{#Raiz}\fonte\web\www\legado-estado.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
-Source: "{#Raiz}\fonte\web\www\legado-ligacoes.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
-Source: "{#Raiz}\fonte\web\www\legado-marcacao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
-Source: "{#Raiz}\fonte\web\www\legado-navegacao.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
-Source: "{#Raiz}\fonte\web\www\legado-painel.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\marca.js"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\logo.png"; DestDir: "{app}\web\www"; Flags: ignoreversion
 Source: "{#Raiz}\fonte\web\www\simbolo.png"; DestDir: "{app}\web\www"; Flags: ignoreversion
@@ -93,6 +88,11 @@ Source: "{#Raiz}\fonte\API-INTELBRAS.md"; DestDir: "{app}"; Flags: ignoreversion
 Type: files; Name: "{app}\INICIAR-PAINEL.bat"
 Type: files; Name: "{app}\web\www\app.css"
 Type: files; Name: "{app}\web\www\legado-formularios.js"
+Type: files; Name: "{app}\web\www\legado-estado.js"
+Type: files; Name: "{app}\web\www\legado-ligacoes.js"
+Type: files; Name: "{app}\web\www\legado-marcacao.js"
+Type: files; Name: "{app}\web\www\legado-navegacao.js"
+Type: files; Name: "{app}\web\www\legado-painel.js"
 
 [Icons]
 Name: "{group}\{#Nome}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\INICIAR-PAINEL.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icone.ico"; Comment: "Abre o painel (pede Administrador)"

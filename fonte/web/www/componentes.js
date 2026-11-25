@@ -98,6 +98,21 @@ export function lugarAviso() {
   };
 }
 
+// Faixa global sob o topo (5.7): uma por vez, sempre com acao ou instrucao.
+// tipo: 'alarme' (alert) | 'atencao' | 'info' (status). acoes: nos depois do
+// texto. extraId: id do extra, para o botao travado apontar o motivo (aria-describedby).
+export function faixa(tipo, texto, acoes, extra, extraId) {
+  const nomeIcone = { alarme: 'falha', atencao: 'atencao', info: 'informacao' }[tipo];
+  return h('div', { class: ['faixa', 'faixa-' + tipo], role: tipo === 'alarme' ? 'alert' : 'status' }, [
+    h('div', { class: 'faixa-conteudo' }, [
+      icone(nomeIcone, 'm'),
+      h('p', { class: 'faixa-texto' }, texto),
+      ...(acoes || []),
+      extra ? h('span', { class: 'faixa-extra', id: extraId }, extra) : null,
+    ]),
+  ]);
+}
+
 // Campo com rotulo visivel acima, ajuda embaixo e erro com o conserto (5.2).
 // o: { rotulo, id?, nome?, tipo?, valor?, ajuda?, exemplo?, mono?, curto?, inputmode?, autocomplete?, opcoes?, classe? }
 export function campo(o) {

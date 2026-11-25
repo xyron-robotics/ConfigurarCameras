@@ -1,6 +1,6 @@
 /* Telas do painel: topo (marca, abas, chips), estrutura (conteudo centrado),
-   passo a passo, painel (fita, bancada, tabela das cameras), ferramentas,
-   sessao e tela de encerrado. So posiciona e compoe os componentes; seletor
+   passo a passo, painel (fita, tabela das cameras), ferramentas, sessao e as
+   telas Abrindo e Encerrado. So posiciona e compoe os componentes; seletor
    por classe. Medida que a direcao nao tem sai de calc() de token. */
 
 @layer telas {
@@ -105,23 +105,11 @@
   .pede-item > p { margin: 0; max-inline-size: var(--medida-texto); }
   .pede-item-titulo { margin: 0; font-size: var(--tipo-leitura); font-weight: var(--peso-forte); }
 
-  .bancada {
-    background: var(--superficie); border: var(--traco) solid var(--linha);
-    border-left: var(--barra-mini) solid var(--agora);
-    border-radius: var(--raio-bloco); padding: var(--esp-4) var(--esp-5);
-  }
-  .bancada-pos {
-    font-size: var(--tipo-numero); font-weight: var(--peso-forte); line-height: var(--entrelinha-titulo);
-    margin: 0;
-  }
   /* Retomar camera ja inicializada: dentro do estado "Vigia desligado". */
   .retomar { display: grid; gap: var(--esp-2); }
   .retomar summary { cursor: pointer; color: var(--acao-texto); font-size: var(--tipo-corpo); }
   .retomar-linha { display: flex; gap: var(--esp-2); align-items: flex-end; flex-wrap: wrap; }
   .retomar .campo { inline-size: calc(var(--campo-ip) + var(--topo-altura)); }
-  /* Frase corrida do painel le em --texto (7:1); --apoio fica para legenda e
-     rotulo curto (decisao do usuario, 24/11). */
-  .bancada p.apoio { color: var(--texto); }
 
   /* Tabela das cameras (tela-painel.js): abas, tabela e os grupos das cameras
      sem posicao, um embaixo do outro. */
@@ -132,11 +120,6 @@
   .grupo { display: grid; gap: var(--esp-2); min-inline-size: 0; }
   .grupo-titulo { margin: 0; font-size: var(--tipo-subtitulo); }
   .grupo > p { margin: 0; }
-  .ultimo {
-    margin: 0; padding: var(--esp-2) var(--esp-3);
-    border-left: var(--barra-mini) solid var(--sucesso); background: var(--superficie-2);
-    border-radius: var(--raio-controle);
-  }
 
   /* ---------------------------------------------------------------- ferramentas */
   /* Direcao 3.4: uma linha por ferramenta (nome, o que faz, acao), um Resultado
@@ -209,9 +192,21 @@
   .sessao-bloco h3 { margin: 0; }
   .sessao-bloco .tema { margin: 0; }
 
-  /* ---------------------------------------------------------------- telas cheias */
-  .encerrado {
-    position: fixed; inset: 0; background: var(--fundo);
-    display: grid; place-items: center; font-size: var(--tipo-subtitulo); z-index: calc(var(--z-topo) + 1);
+  /* ---------------------------------------------------------------- Abrindo e Encerrado (3.6) */
+  /* Logo e uma frase, na coluna de leitura. Encerrado ocupa a janela; o
+     Abrindo fica sob o topo, que ja tem a altura final (UI-06). */
+  .fim {
+    min-block-size: var(--altura-tela);
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    gap: var(--esp-4);
+    max-inline-size: var(--coluna-form);
+    margin-inline: auto;
+    padding: var(--esp-5);
   }
+  .fim h1 { margin: 0; }
+  .fim-abrindo { min-block-size: calc(var(--altura-tela) - var(--topo-altura) - var(--esp-5) - var(--esp-6)); }
+  /* Abrindo: o topo so com a marca, na mesma altura. */
+  .topo-abrindo .topo-nav, .topo-abrindo .topo-chips, .topo-abrindo .botao { visibility: hidden; }
 }

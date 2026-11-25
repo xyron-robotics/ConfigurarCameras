@@ -6,10 +6,13 @@
 
     A interface e uma funcao so:
         Test-Front -Www <pasta> -Iss <arquivo .iss> -Servidor <Servidor-Painel.ps1>
-    que devolve a lista de violacoes { regra, arquivo, linha, trecho }. As 10
+    que devolve a lista de violacoes { regra, arquivo, linha, trecho }. As 11
     regras ficam atras dela:
       hex, medida, numero-solto-css, numero-solto-js, estilo-inline,
-      id-no-css, camada, texto-fora, import, servido.
+      id-no-css, camada, texto-fora, import, servido, legado.
+    A regra legado (nenhum legado-*.js no www nem import de um) e a lista dos
+    24 arquivos da direcao 7.3 entraram na Task 2 do plano
+    docs/plans/2026-11-20-frente-redesenho-5-verificacao-plan.md.
 
     Os testes montam, numa pasta de $env:TEMP (apagada no fim), um www minimo
     limpo, um .iss e um servidor minimos. A pasta limpa sozinha espera zero
@@ -42,6 +45,12 @@ $script:ReNumeroCss = '(?<![\w#.]|[\w-]-)-?(?:\d+\.?\d*|\.\d+)(?![\w%.])'
 $script:ReNumeroJs = '(?<![\w$.])(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*)?\.?\d[\d_]*(?:[eE][+-]?\d+)?)n?(?![\w$])'
 $script:ReAcento = '[\u00C0-\u024F]'
 $script:RePalavraMaiuscula = '^[A-Z\u00C0-\u00DE][a-z\u00DF-\u00FF]'
+$script:ReLegado = '^legado-[^/\\]*\.js$'
+# Os 24 arquivos do www (direcao.md, secao 7.3), na ordem da lista.
+$script:ArquivosWww = @('index.html', 'tokens.css', 'base.css', 'componentes.css', 'telas.css',
+    'app.js', 'api.js', 'estado.js', 'rotas.js', 'textos.js', 'formato.js', 'constantes.js', 'dom.js',
+    'icones.js', 'componentes.js', 'formularios.js', 'tela-inicio.js', 'tela-painel.js', 'tela-sessao.js',
+    'tela-ferramentas.js', 'topo.js', 'marca.js', 'logo.png', 'simbolo.png')
 
 function Hide-Trecho {
     param([string]$Texto)
@@ -124,6 +133,11 @@ function Test-Front {
     $todos = @(Get-ChildItem -LiteralPath $Www -File -Recurse)
     $planos = @($todos | Where-Object { $_.DirectoryName.TrimEnd('\') -eq (Get-Item -LiteralPath $Www).FullName.TrimEnd('\') })
     $nomes = @($planos | ForEach-Object { $_.Name })
+
+    # ---- legado: a ponte da fase B saiu (frente redesenho-verificacao, Task 2, V1)
+    foreach ($f in $planos) {
+        if ($f.Name -match $script:ReLegado) { & $add 'legado' $f.Name 0 'arquivo legado-*.js no www' }
+    }
 
     # ---- quebras e ordem das camadas, de tokens.css
     $quebras = @()
@@ -218,7 +232,10 @@ function Test-Front {
             foreach ($re in $reImport) {
                 foreach ($m in [regex]::Matches($js.SemComentario, $re)) {
                     $esp = ($m.Groups['esp'].Value -replace '[?#].*$', '') -replace '^\./', '' -replace '^/', ''
-                    if ($esp -match '[/\\]' -or $nomes -notcontains $esp) {
+                    if ($esp -match $script:ReLegado) {
+                        $n = Get-NumeroLinha $texto $m.Index
+                        & $add 'legado' $nome $n (($texto -split "`n")[$n - 1])
+                    } elseif ($esp -match '[/\\]' -or $nomes -notcontains $esp) {
                         $n = Get-NumeroLinha $texto $m.Index
                         & $add 'import' $nome $n (($texto -split "`n")[$n - 1])
                     }
@@ -521,6 +538,10 @@ $casos = @(
        SourceExtra = @('fantasma.js') }
     @{ Nome = 'extensao sem entrada em $tipos'; Regra = 'servido'; Arquivo = 'logo.png'; Linha = 0
        Mudar = @{ 'logo.png' = 'png' } }
+    @{ Nome = 'arquivo legado-*.js no www'; Regra = 'legado'; Arquivo = 'legado-x.js'; Linha = 0
+       Mudar = @{ 'legado-x.js' = (Join-Linhas @('export const A = 1;')) } }
+    @{ Nome = 'import de um legado-*.js'; Regra = 'legado'; Arquivo = 'app.js'; Linha = 4
+       Mudar = @{ 'app.js' = (Edit-Linha 'app.js' 4 "import { nada } from './legado-x.js';") } }
 )
 
 # ------------------------------------------------------------------ testes
@@ -556,9 +577,9 @@ try {
         }
     }
 
-    T 'as 10 regras tem caso plantado' {
+    T 'as 11 regras tem caso plantado' {
         $regras = @('hex', 'medida', 'numero-solto-css', 'numero-solto-js', 'estilo-inline',
-                    'id-no-css', 'camada', 'texto-fora', 'import', 'servido')
+                    'id-no-css', 'camada', 'texto-fora', 'import', 'servido', 'legado')
         $cobertas = @($casos | ForEach-Object { $_.Regra } | Sort-Object -Unique)
         $faltam = @($regras | Where-Object { $cobertas -notcontains $_ })
         Assert-Igual '' ($faltam -join ', ') 'regras sem caso'
@@ -577,6 +598,17 @@ T 'www real: zero violacoes' {
     }
     $real = @(Test-Front -Www $wwwReal -Iss $issReal -Servidor $srvReal)
     Assert-Igual 0 $real.Count ('violacoes no www real: ' + (Format-Violacoes $real))
+}
+
+# O www real tem os 24 arquivos da direcao 7.3, nem um a mais nem um a menos.
+T 'www real: os 24 arquivos da direcao 7.3, nos dois sentidos' {
+    Assert-Igual 24 $script:ArquivosWww.Count 'tamanho da lista da direcao'
+    $wwwReal = (Get-Item -LiteralPath (Join-Path $raiz 'web\www')).FullName.TrimEnd('\')
+    $reais = @(Get-ChildItem -LiteralPath $wwwReal -File -Recurse | ForEach-Object { $_.FullName.Substring($wwwReal.Length + 1) })
+    $sobram = @($reais | Where-Object { $script:ArquivosWww -notcontains $_ } | Sort-Object)
+    $faltam = @($script:ArquivosWww | Where-Object { $reais -notcontains $_ })
+    Assert-Igual '' ($sobram -join ', ') 'no www e fora da lista'
+    Assert-Igual '' ($faltam -join ', ') 'na lista e fora do www'
 }
 
 # ------------------------------------------------------------------- resultado

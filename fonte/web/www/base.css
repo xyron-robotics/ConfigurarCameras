@@ -49,11 +49,11 @@
   @media (pointer: fine) { html { overscroll-behavior: none; } }
 
   /* Clique sem atraso de toque duplo; o flash de toque e o fundo de selecao. */
-  button, .btn, a, label, summary, select, input[type="radio"], input[type="checkbox"] { touch-action: manipulation; }
+  button, a, label, summary, select, input[type="radio"], input[type="checkbox"] { touch-action: manipulation; }
   html { -webkit-tap-highlight-color: var(--acao-fraco); }
 
   /* Numero que muda ou se compara em coluna: digitos de largura igual. */
-  .mono, .tabela, .fita, .resultado dd, .bancada-pos, .etapas { font-variant-numeric: tabular-nums; }
+  .mono, .tabela, .fita, .resultado dd { font-variant-numeric: tabular-nums; }
   h1, h2, h3, legend { text-wrap: balance; }
 
   /* Ancora e foco por teclado param abaixo do topo fixo (sticky). */
