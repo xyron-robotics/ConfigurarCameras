@@ -1,6 +1,6 @@
 # Frente redesenho-verificacao: Ferramentas, estados globais e verificação final (fase B, 5 de 5)
 
-**Status:** Draft · **Frente:** `redesenho-verificacao`
+**Status:** Ativo · **Frente:** `redesenho-verificacao`
 
 Frente 5 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da frente 4 fechada. Especificação: `docs/design/2026-11-ux/direcao.md`, seções 2.3 (jornada inteira), 3.4, 3.6, 5.7, 7.3 e 7.4. Código de partida: `docs/design/2026-11-ux/prototipo/tela-ferramentas.js`, `app.js`, `componentes.js`.
 
