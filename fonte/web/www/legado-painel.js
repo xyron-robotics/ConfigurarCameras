@@ -4,7 +4,7 @@
 // o vigia e os estados vazios moram em tela-painel.js.
 import { h } from './dom.js';
 import { icone } from './icones.js';
-import { t, nomeEtapa, textoDaFalha } from './textos.js';
+import { t } from './textos.js';
 import { streamsEncoder } from './formato.js';
 import {
   ETAPAS, LOG_FOLGA_FIM, LOG_MAX_LINHAS, LOG_INICIO_HORA, PORTA_HTTP,
@@ -93,8 +93,8 @@ export function desenharAtualizacao(a, e) {
 }
 
 // ------------------------------------------------------------------ painel (fila)
-// So a retomada manual pelo IP (C7): etapas em curso ou a decisao dela. O resto
-// do Painel (cabecalho, fita, vigia, estados vazios, tabela) e de tela-painel.js.
+// So a retomada manual pelo IP (C7): etapas em curso. A decisao dela e o resto
+// do Painel (cabecalho, fita, vigia, estados vazios, Pede voce, tabela) e de tela-painel.js.
 export function desenharFila(e) {
   const fila = e.fila;
   const temFila = !!(fila && fila.itens && fila.itens.length);
@@ -102,7 +102,7 @@ export function desenharFila(e) {
   // Na falha, a "ultima instalada" so distrai da decisao.
   ult.hidden = !temFila || !e.ultimo || e.fase === 'decisao';
   ult.textContent = e.ultimo || '';
-  const blocos = { trabalho: false, decisao: false };
+  const blocos = { trabalho: false };
   if (!temFila) { mostrarBlocos(blocos); return; }
   const cams = listaCameras(e);
   const itens = fila.itens;
@@ -114,11 +114,10 @@ export function desenharFila(e) {
   const posAtual = e.atual >= 0 ? itens[e.atual] : null;
   const ordinal = (item) => t('bancada.ordinal', { n: usaveis.indexOf(item) + 1, total: livres });
   // Bloco de camera unica (C7): so a retomada manual pelo IP, isto e, fase
-  // legada que cameras[] nao explica (com camera em curso ou em decisao, a
-  // fase legada vem dela e quem mostra e a linha da tabela).
+  // legada que cameras[] nao explica (com camera em curso, a fase legada vem
+  // dela e quem mostra e a linha da tabela).
   const temFase = (fases) => cams.some((c) => fases.includes(c.fase));
   const manualConfigurando = e.fase === 'configurando' && !temFase(['portao', 'conferindo']);
-  const manualDecisao = e.fase === 'decisao' && !!e.falha && !temFase(['decisao']);
 
   if (manualConfigurando || (e.ocupado && e.trabalho && e.fase === 'fila')) {
     blocos.trabalho = true;
@@ -136,19 +135,14 @@ export function desenharFila(e) {
       const j = ETAPAS.indexOf(li.dataset.etapa);
       li.className = e.fase !== 'configurando' ? '' : (j < i ? 'feita' : (j === i ? 'agora' : ''));
     }
-  } else if (manualDecisao) {
-    blocos.decisao = true;
-    $('decisao-titulo').textContent = t('bancada.decisao-titulo', { etapa: nomeEtapa(e.falha.etapa) || e.falha.etapa, ip: posAtual ? posAtual.Ip : '' });
-    $('decisao-erro').textContent = e.falha.erro;
-    $('decisao-apoio').textContent = textoDaFalha(e.falha, posAtual ? posAtual.Ip : '');
   }
   mostrarBlocos(blocos);
 }
 
-// A bancada so aparece com a retomada manual em curso ou em decisao.
+// A bancada so aparece com a retomada manual em curso.
 function mostrarBlocos(blocos) {
-  for (const [k, v] of Object.entries(blocos)) $('bancada-' + k).hidden = !v;
-  $('bancada').hidden = !blocos.trabalho && !blocos.decisao;
+  $('bancada-trabalho').hidden = !blocos.trabalho;
+  $('bancada').hidden = !blocos.trabalho;
 }
 
 function listaCameras(e) {

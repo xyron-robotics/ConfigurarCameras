@@ -86,6 +86,25 @@
   .fila-faixa { display: flex; gap: var(--esp-3); align-items: center; flex-wrap: wrap; margin: 0; }
   .fila-acoes { display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
+  /* Pede voce (3.2, P3): a falha que espera decisao, logo abaixo da fita. O
+     vermelho so marca a falha (barra e titulo); a acao continua azul. */
+  .pede { display: grid; gap: var(--esp-3); }
+  .pede-titulo {
+    display: flex; gap: var(--esp-2); align-items: center; margin: 0;
+    color: var(--falha); font-size: var(--tipo-subtitulo);
+    scroll-margin-block-start: calc(var(--topo-altura) + var(--esp-4));
+  }
+  .pede-lista { display: grid; gap: var(--esp-3); margin: 0; padding: 0; list-style: none; }
+  .pede-item {
+    display: grid; gap: var(--esp-2); justify-items: start;
+    padding: var(--esp-3) var(--esp-4);
+    background: var(--superficie); border: var(--traco) solid var(--linha);
+    border-inline-start: var(--barra-mini) solid var(--falha);
+    border-radius: var(--raio-bloco);
+  }
+  .pede-item > p { margin: 0; max-inline-size: var(--medida-texto); }
+  .pede-item-titulo { margin: 0; font-size: var(--tipo-leitura); font-weight: var(--peso-forte); }
+
   .bancada {
     background: var(--superficie); border: var(--traco) solid var(--linha);
     border-left: var(--barra-mini) solid var(--agora);
@@ -95,17 +114,11 @@
     font-size: var(--tipo-numero); font-weight: var(--peso-forte); line-height: var(--entrelinha-titulo);
     margin: 0;
   }
-  .falha-titulo { color: var(--falha); }
   /* Retomar camera ja inicializada: dentro do estado "Vigia desligado". */
   .retomar { display: grid; gap: var(--esp-2); }
   .retomar summary { cursor: pointer; color: var(--acao-texto); font-size: var(--tipo-corpo); }
   .retomar-linha { display: flex; gap: var(--esp-2); align-items: flex-end; flex-wrap: wrap; }
   .retomar .campo { inline-size: calc(var(--campo-ip) + var(--topo-altura)); }
-  /* Erro cru da camera: le como log, em mono. */
-  .decisao-erro {
-    font-family: var(--familia-mono); font-size: var(--tipo-corpo); background: var(--falha-fundo);
-    padding: var(--esp-2) var(--esp-3); border-radius: var(--raio-controle); overflow-wrap: anywhere;
-  }
   /* Frase corrida do painel le em --texto (7:1); --apoio fica para legenda e
      rotulo curto (decisao do usuario, 24/11). */
   .bancada p.apoio { color: var(--texto); }

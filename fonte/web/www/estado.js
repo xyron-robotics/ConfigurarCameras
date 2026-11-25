@@ -214,10 +214,20 @@ function derivarFila(e, cams) {
     proxima: proximaDe(posicoes),
     totalEtapas: ETAPAS.length,
     posicoes,
+    // Bloco "Pede voce" (direcao 3.2): so a falha que espera decisao, a mais
+    // grave primeiro (direcao, tabela de fontes: Genetec). O estado nao traz a
+    // hora da falha; no empate vale a ordem da fila.
+    pedeVoce: posicoes.filter((p) => p.estado === 'falha').sort((a, b) => gravidade(b.falha) - gravidade(a.falha)),
     contagem,
     // Posicoes que ficam sem camera se a fila for encerrada agora.
     semCamera: contagem.aguardando + contagem.proxima,
   };
+}
+
+// Senha recusada (repetir bloqueia o admin) antes de valor recusado, antes do resto.
+function gravidade(f) {
+  if (f.loginRecusado) return 2;
+  return f.recusa ? 1 : 0;
 }
 
 function proximaDe(posicoes) {

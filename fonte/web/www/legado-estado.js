@@ -16,7 +16,6 @@ export const S = {
   ultimaFase: '',
   // Leitor de tela: so as transicoes (instalada, falhou, fim).
   ultimoVisto: null,
-  focarTentar: false,
   avisoN: -1,
   avisoDoServidor: false,
   timerAviso: 0,
@@ -122,14 +121,15 @@ export async function comando(caminho, corpo, opcoes) {
 // fora: o servidor aceita decisao com o worker ocupado, e cada linha trava os seus.
 export function aplicarOcupado(ocupado) {
   const simular = !!(S.estado && S.estado.simular);
-  const sel = '#view-ferramentas .btn, [data-decisao]';
+  const sel = '#view-ferramentas .btn';
   for (const b of document.querySelectorAll(sel)) {
     b.disabled = ocupado || (simular && b.hasAttribute('data-so-real'));
   }
 }
 
-export function anunciar(texto) {
-  const a = $('anuncio');
+// urgente: a regiao assertive (falha nova de camera, P3); o resto vai na polite.
+export function anunciar(texto, urgente) {
+  const a = $(urgente ? 'anuncio-urgente' : 'anuncio');
   a.textContent = '';
   if (texto) setTimeout(() => { a.textContent = texto; }, ANUNCIO_ATRASO_MS);
 }

@@ -179,3 +179,37 @@ export function confirmar(o) {
     focar(o.perigo ? cancelar : ok);
   });
 }
+
+// Painel lateral (5.8, variante): <dialog> modal encostado a direita, para uma
+// correcao que precisa de formulario sem sair da tela. O resto da pagina fica
+// inert enquanto ele esta aberto; Esc e Fechar fecham. Quem abre decide para
+// onde o foco volta (aoFechar), porque o botao que abriu pode ter sumido.
+// o: { titulo, texto?, conteudo(fechar) -> Node, aoFechar? } -> { el, fechar }
+export function lateral(o) {
+  const tituloId = novoId('lateral-titulo');
+  const textoId = o.texto ? novoId('lateral-texto') : undefined;
+  let fechado = false;
+  const d = h('dialog', { class: 'lateral', 'aria-labelledby': tituloId, 'aria-describedby': textoId });
+  const inertes = [];
+  function fechar() {
+    if (fechado) return;
+    fechado = true;
+    d.close();
+    d.remove();
+    inertes.forEach((el) => el.removeAttribute('inert'));
+    if (o.aoFechar) o.aoFechar();
+  }
+  const botaoFechar = h('button', { type: 'button', class: ['botao', 'botao-discreto', 'botao-icone'], 'aria-label': t('lateral.fechar'), onclick: fechar }, icone('fechar'));
+  d.append(
+    h('div', { class: 'lateral-cabeca' }, [h('h2', { id: tituloId, class: 'lateral-titulo' }, o.titulo), botaoFechar]),
+    o.texto ? h('p', { id: textoId, class: 'lateral-texto' }, o.texto) : null,
+    h('div', { class: 'lateral-corpo' }, o.conteudo(fechar)),
+  );
+  d.addEventListener('cancel', (ev) => { ev.preventDefault(); fechar(); });
+  Array.from(document.body.children).forEach((el) => {
+    if (!el.hasAttribute('inert')) { el.setAttribute('inert', ''); inertes.push(el); }
+  });
+  document.body.append(d);
+  d.showModal();
+  return { el: d, fechar };
+}

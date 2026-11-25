@@ -237,35 +237,47 @@ const NOMES_STREAM = {
   secundario: { res: 'ResolucaoSecundario', fps: 'FpsSecundario', br: 'BitRateSecundario', codec: 'CodecSecundario', lista: 'resolucoesSecundario' },
 };
 
-function formCamera(modelo) {
+// opcoes.soEncoder: so os dois streams, sem e-mail nem o "porque" (painel
+// lateral "Mudar o encoder" da tela Painel); o parcial leva so o Encoder.
+function formCamera(modelo, opcoes) {
   const s = modelo.sessao;
   const cat = modelo.catalogo || {};
-  const email = campo({
-    rotulo: t('camera.email'), tipo: 'email', autocomplete: 'email', valor: s.EmailRecuperacao || '',
-    ajuda: t('camera.email.ajuda'), exemplo: 'cameras@empresa.example',
-  });
   // Antes de a secao ser salva, o bitrate recomendado vem marcado; depois, o salvo.
   const recomendado = modelo.etapa < ETAPA_DO_PASSO.camera;
   const principal = montarStream('principal', s.Encoder.Principal, cat, recomendado);
   const secundario = montarStream('secundario', s.Encoder.Secundario, cat, recomendado);
+  const streams = h('div', { class: 'form-streams' }, [principal.el, secundario.el]);
+  const encoder = () => ({ Principal: principal.valor(), Secundario: secundario.valor() });
+  const camposStream = { ...principal.campos, ...secundario.campos };
+  if (opcoes && opcoes.soEncoder) {
+    return {
+      el: h('div', { class: 'form' }, [streams]),
+      campos: camposStream,
+      focarBitrate: () => focar(principal.campos[NOMES_STREAM.principal.br].entrada),
+      coletar() {
+        const ok = conferir([...principal.regras(), ...secundario.regras()]);
+        return ok ? { ok, parcial: { Encoder: encoder() } } : { ok };
+      },
+    };
+  }
+  const email = campo({
+    rotulo: t('camera.email'), tipo: 'email', autocomplete: 'email', valor: s.EmailRecuperacao || '',
+    ajuda: t('camera.email.ajuda'), exemplo: 'cameras@empresa.example',
+  });
   const porque = h('details', { class: 'recolhido' }, [
     h('summary', null, h('span', { class: 'recolhido-titulo' }, t('camera.porque'))),
     h('p', { class: 'recolhido-corpo apoio' }, t('camera.porque.texto')),
   ]);
-  const el = h('div', { class: 'form' }, [
-    email.el,
-    h('div', { class: 'form-streams' }, [principal.el, secundario.el]),
-    porque,
-  ]);
+  const el = h('div', { class: 'form' }, [email.el, streams, porque]);
   return {
     el,
-    campos: { EmailRecuperacao: email, ...principal.campos, ...secundario.campos },
+    campos: { EmailRecuperacao: email, ...camposStream },
     coletar() {
       const v = email.valor();
       const erroEmail = v ? (RE_EMAIL.test(v) ? '' : t('erro.email')) : t('erro.obrigatorio');
       const ok = conferir([[email, erroEmail], ...principal.regras(), ...secundario.regras()]);
       if (!ok) return { ok };
-      return { ok, parcial: { EmailRecuperacao: v, Encoder: { Principal: principal.valor(), Secundario: secundario.valor() } } };
+      return { ok, parcial: { EmailRecuperacao: v, Encoder: encoder() } };
     },
   };
 }

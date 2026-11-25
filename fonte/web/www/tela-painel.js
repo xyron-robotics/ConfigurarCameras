@@ -12,7 +12,9 @@
 import { h, focar } from './dom.js';
 import { icone } from './icones.js';
 import { t, nomeEtapa, textoDaFalha, traduzirServidor, motivoVigia } from './textos.js';
-import { botao, ocupar, selo, barraEtapas, chip, lugarAviso } from './componentes.js';
+import { botao, ocupar, selo, barraEtapas, chip, lugarAviso, aviso, detalhe, lateral } from './componentes.js';
+import { montarFormulario } from './formularios.js';
+import { salvarParcial } from './tela-inicio.js';
 import { dataHora, hora, mac as formatarMac, streamsEncoder } from './formato.js';
 import {
   CONSULTA_MS, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS, NOTA_SALVO_MS, TRAVA_DECISAO_MS,
@@ -24,6 +26,7 @@ const COLUNAS_REGISTRO = ['ip', 'mac', 'modelo', 'situacao', 'encoder', 'local',
 const ESTADO_DO_STATUS = { Instalada: 'instalada', Falhou: 'falha', 'Em andamento': 'curso', Resetada: 'pulada' };
 const COM_CAMPOS = ['instalada', 'curso', 'falha'];
 const ROTA_FILA = '#/sessao/fila';
+const PEDE_TITULO = 'pede-voce-titulo';
 // Fita: a ordem da legenda e o rotulo de cada estado (contagem junto).
 const LEGENDA = ['instalada', 'falha', 'curso', 'proxima', 'aguardando', 'pulada'];
 const ROTULO_LEGENDA = {
@@ -47,8 +50,11 @@ const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 export function telaPainel(ctx, parte) {
   const raiz = h('section', { class: 'vista', 'aria-label': t('painel.abas') });
   // Por posicao: rascunho digitado { porta, canal }, envio em curso, nota junto
-  // dos campos { tipo, texto } e a trava dos botoes da falha.
+  // dos campos { tipo, texto }, a decisao em curso { acao, onde }, o erro dela
+  // { onde, texto, cru } e a trava dos botoes da falha.
   const linhas = new Map();
+  // "Detalhe tecnico" aberto ("onde-n"): o redesenho nao fecha o que o operador abriu.
+  const detalhesAbertos = new Set();
   // Por MAC: erro do "Retomar esta camera".
   const retomadas = new Map();
   let aba = parte === 'registro' ? 'registro' : 'fila';
@@ -59,7 +65,7 @@ export function telaPainel(ctx, parte) {
   let redesenhando = false;
 
   function linha(n) {
-    if (!linhas.has(n)) linhas.set(n, { rascunho: null, enviando: false, nota: null, trava: 0, timer: 0 });
+    if (!linhas.has(n)) linhas.set(n, { rascunho: null, enviando: false, nota: null, decidindo: null, decisao: null, trava: 0, timer: 0 });
     return linhas.get(n);
   }
 
@@ -170,9 +176,24 @@ export function telaPainel(ctx, parte) {
   }
 
   // ------------------------------------------------------------ falha
-  async function decidir(btn, p, acao) {
+  // A decisao (Tentar de novo, Mudar o encoder, Pular) mora so na linha que
+  // falhou e em Pede voce (UX-13), com o mesmo corpo. Botao travado leva
+  // aria-disabled, nao disabled: o foco nao cai para o body no meio do clique e
+  // o motivo da senha recusada continua lido junto do Tentar (UI-14).
+  function corpoDecisao(p, acao) {
+    return p.camera ? { mac: p.camera.macBruto, acao } : { acao };
+  }
+
+  // Aceito: os botoes ficam travados ate a linha mudar ou a trava vencer.
+  function travar(n) {
+    linha(n).trava = Date.now() + TRAVA_DECISAO_MS;
+    setTimeout(mudouLocal, TRAVA_DECISAO_MS);
+  }
+
+  async function decidir(p, acao, onde) {
     const n = p.posicao;
     const l = linha(n);
+    if (l.decidindo || l.trava > Date.now()) return;
     if (acao === 'pular') {
       const ok = await ctx.confirmar({
         titulo: t('painel.pular.titulo', { n }), texto: t('painel.pular.texto', { ip: p.ip }),
@@ -180,40 +201,132 @@ export function telaPainel(ctx, parte) {
       });
       if (!ok) return;
     }
-    const restaurar = ocupar(btn, acao === 'tentar' ? t('painel.decisao.tentando') : t('painel.decisao.pular'));
-    const corpo = p.camera ? { mac: p.camera.macBruto, acao } : { acao };
-    const r = await ctx.api.comando('/api/decisao', corpo);
-    restaurar();
-    if (!r.ok) {
-      mostrarNota(n, 'erro', traduzirServidor(r).texto);
-      mudouLocal();
-      return;
-    }
-    // Aceito: os botoes ficam travados ate a linha mudar ou a trava vencer.
-    mostrarNota(n, null);
-    l.trava = Date.now() + TRAVA_DECISAO_MS;
-    setTimeout(mudouLocal, TRAVA_DECISAO_MS);
+    l.decidindo = { acao, onde };
+    l.decisao = null;
+    mudouLocal();
+    const r = await ctx.api.comando('/api/decisao', corpoDecisao(p, acao));
+    l.decidindo = null;
+    // Recusado: a frase do painel (ou "O painel recusou a acao.") fica onde o
+    // operador clicou, com a resposta crua no Detalhe tecnico.
+    if (r.ok) travar(n); else l.decisao = { onde, ...traduzirServidor(r) };
     mudouLocal();
   }
 
-  function linhaFalha(p, colunas) {
+  const ROTULO_DECISAO = {
+    tentar: ['painel.decisao.tentar', 'painel.decisao.tentando'],
+    encoder: ['painel.decisao.encoder', 'painel.decisao.encoder'],
+    pular: ['painel.decisao.pular', 'painel.decisao.pulando'],
+  };
+
+  function botaoFalha(p, onde, acao, tipo, motivoId) {
+    const n = p.posicao;
+    const l = linha(n);
+    const ocupado = !!(l.decidindo && l.decidindo.acao === acao && l.decidindo.onde === onde);
+    const travado = !!l.decidindo || l.trava > Date.now() || (acao === 'tentar' && p.falha.bloqueiaTentar);
+    const executar = acao === 'encoder' ? () => abrirEncoder(p) : () => decidir(p, acao, onde);
+    const b = botao(t(ROTULO_DECISAO[acao][ocupado ? 1 : 0]), (ev) => {
+      if (ev.currentTarget.getAttribute('aria-disabled') !== 'true') executar();
+    }, { tipo, motivoId, dados: { foco: (onde === 'pede' ? 'pede-' : '') + acao + '-' + n, posicao: String(n) } });
+    if (travado) b.setAttribute('aria-disabled', 'true');
+    if (ocupado) b.setAttribute('aria-busy', 'true');
+    return b;
+  }
+
+  function detalheFalha(chave, cru) {
+    const d = detalhe(cru);
+    d.open = detalhesAbertos.has(chave);
+    d.addEventListener('toggle', () => { if (d.open) detalhesAbertos.add(chave); else detalhesAbertos.delete(chave); });
+    d.querySelector('summary').dataset.foco = 'detalhe-' + chave;
+    return d;
+  }
+
+  // O que aconteceu e o conserto (textos.js), as decisoes, o motivo do Tentar
+  // travado, o erro da ultima decisao e a resposta crua da camera recolhida.
+  // onde: 'linha' | 'pede'. Valor recusado no encoder: "Mudar o encoder" e o primario.
+  function corpoFalha(p, onde) {
     const n = p.posicao;
     const f = p.falha;
-    const travado = linha(n).trava > Date.now();
-    const motivoId = `painel-motivo-${n}`;
-    const tentar = botao(t('painel.decisao.tentar'), (ev) => decidir(ev.currentTarget, p, 'tentar'), {
-      tipo: 'primario', desabilitado: travado || f.bloqueiaTentar, motivoId: f.bloqueiaTentar ? motivoId : undefined,
-      dados: { foco: `tentar-${n}` },
-    });
-    const pular = botao(t('painel.decisao.pular'), (ev) => decidir(ev.currentTarget, p, 'pular'), {
-      tipo: 'secundario', desabilitado: travado, dados: { foco: `pular-${n}` },
-    });
-    return h('tr', { class: ['linha-falha', 'linha-detalhe'] }, h('td', { colspan: String(colunas) }, h('div', { class: 'falha-linha' }, [
-      f.erro ? h('p', { class: 'falha-erro' }, f.erro) : null,
+    const l = linha(n);
+    const motivoId = `${onde}-motivo-${n}`;
+    const noEncoder = f.etapa === 'encoder';
+    const encoderPrimeiro = noEncoder && f.recusa && !f.bloqueiaTentar;
+    return [
       h('p', { class: 'falha-conserto' }, textoDaFalha(f, p.ip)),
-      h('div', { class: 'falha-acoes' }, [tentar, pular]),
+      h('div', { class: 'falha-acoes' }, [
+        botaoFalha(p, onde, 'tentar', encoderPrimeiro ? 'secundario' : 'primario', f.bloqueiaTentar ? motivoId : undefined),
+        noEncoder ? botaoFalha(p, onde, 'encoder', encoderPrimeiro ? 'primario' : 'secundario') : null,
+        botaoFalha(p, onde, 'pular', 'discreto'),
+      ]),
       f.bloqueiaTentar ? h('p', { class: 'falha-motivo', id: motivoId }, [icone('informacao'), h('span', null, t('painel.decisao.senha'))]) : null,
-    ])));
+      l.decisao && l.decisao.onde === onde ? h('div', { role: 'alert' }, aviso('erro', l.decisao.texto, l.decisao.cru)) : null,
+      f.erro ? detalheFalha(`${onde}-${n}`, f.erro) : null,
+    ];
+  }
+
+  function linhaFalha(p, colunas) {
+    return h('tr', { class: ['linha-falha', 'linha-detalhe'] }, h('td', { colspan: String(colunas) },
+      h('div', { class: 'falha-linha' }, corpoFalha(p, 'linha'))));
+  }
+
+  // "Mudar o encoder" (5.8, painel lateral): o formulario da secao Camera, so
+  // os streams. Salvar grava a sessao (vale para as proximas cameras tambem) e
+  // so depois pede "tentar de novo" para esta.
+  function abrirEncoder(p) {
+    const n = p.posicao;
+    const ativo = document.activeElement;
+    const voltar = ativo && ativo.dataset ? ativo.dataset.foco : '';
+    const form = montarFormulario('camera', ctx.modelo(), { soEncoder: true });
+    const resposta = lugarAviso();
+    lateral({
+      titulo: t('lateral.encoder.titulo', { n }),
+      texto: t('lateral.encoder.texto'),
+      conteudo: (fechar) => {
+        const salvar = botao(t('lateral.encoder.salvar'), null, { tipo: 'primario', submit: true });
+        const enviar = async (ev) => {
+          ev.preventDefault();
+          if (salvar.disabled) return;
+          resposta.limpar();
+          const r = form.coletar();
+          if (!r.ok) return;
+          const restaurar = ocupar(salvar, t('lateral.encoder.salvando'));
+          const ok = await salvarParcial(ctx, r.parcial, resposta, form) && await tentarDepoisDoEncoder(p, resposta);
+          restaurar();
+          if (ok) fechar();
+        };
+        return h('form', { class: 'lateral-form', novalidate: true, onsubmit: enviar }, [
+          form.el,
+          resposta.el,
+          h('div', { class: 'lateral-acoes' }, [botao(t('dialogo.cancelar'), fechar, { tipo: 'secundario' }), salvar]),
+        ]);
+      },
+      // O foco volta a quem abriu; se a linha ja mudou, ao que pede voce.
+      aoFechar: () => {
+        const el = voltar ? document.querySelector(`[data-foco="${voltar}"]`) : null;
+        if (el) focar(el); else focarDeVolta(n);
+      },
+    });
+    form.focarBitrate();
+  }
+
+  async function tentarDepoisDoEncoder(p, resposta) {
+    const r = await ctx.api.comando('/api/decisao', corpoDecisao(p, 'tentar'));
+    if (!r.ok) {
+      const falha = traduzirServidor(r);
+      resposta.mostrar('erro', falha.texto, falha.cru);
+      return false;
+    }
+    linha(p.posicao).decisao = null;
+    travar(p.posicao);
+    mudouLocal();
+    ctx.consultarNova();
+    return true;
+  }
+
+  // Foco num botao de decisao que sumiu (a camera saiu da falha): o titulo da
+  // falha em Pede voce, o titulo de Pede voce ou o nome da fila, nunca o body.
+  function focarDeVolta(n) {
+    const destino = topo.querySelector(`[data-pede="${n}"]`) || topo.querySelector('.pede-titulo') || topo.querySelector('.fila-titulo');
+    if (destino) focar(destino);
   }
 
   function linhaNota(n, colunas) {
@@ -437,6 +550,8 @@ export function telaPainel(ctx, parte) {
     acoes.push(botaoTopo('montar', t('painel.fila.montarOutra'), t('painel.fila.montarOutra'), () => ctx.ir(ROTA_FILA),
       { tipo: aberta ? 'secundario' : 'primario' }));
     if (aberta) acoes.push(botaoTopo('encerrar', t('painel.fila.encerrar'), t('painel.fila.encerrando'), encerrar, { tipo: 'discreto' }));
+    // Atalho do anuncio da falha (P3): leva o foco a Pede voce, sem tirar ninguem do lugar sozinho.
+    if (f.pedeVoce.length) acoes.unshift(botao(t('painel.irPedeVoce'), irParaPede, { tipo: 'discreto', icone: 'abrir', dados: { foco: 'ir-pede' } }));
     return h('div', { class: 'fila-cabeca' }, [
       h('div', { class: 'fila-nome' }, [
         h('h1', { class: 'fila-titulo' }, t('painel.fila.titulo', f)),
@@ -566,12 +681,35 @@ export function telaPainel(ctx, parte) {
     return null;
   }
 
+  // Pede voce (direcao 3.2, P3): toda falha que espera decisao, a mais grave
+  // primeiro (estado.js), cada uma com o mesmo corpo da linha da tabela.
+  function pedeVoce(m) {
+    const lista = m.fila ? m.fila.pedeVoce : [];
+    if (!lista.length) return null;
+    return h('section', { class: 'pede', 'aria-labelledby': PEDE_TITULO }, [
+      h('h2', { class: 'pede-titulo', id: PEDE_TITULO, tabindex: '-1' }, [icone('falha', 'm'), h('span', null, t('pede.titulo', { n: lista.length }))]),
+      h('ul', { class: 'pede-lista' }, lista.map((p) => h('li', { class: 'pede-item' }, [
+        h('h3', { class: 'pede-item-titulo', tabindex: '-1', dados: { pede: String(p.posicao) } },
+          t('pede.falhou', { n: p.posicao, ip: p.ip, etapa: p.falha.etapa })),
+        ...corpoFalha(p, 'pede'),
+      ]))),
+    ]);
+  }
+
+  function irParaPede() {
+    const destino = topo.querySelector('.pede-titulo');
+    if (!destino) return;
+    destino.scrollIntoView({ block: 'start' });
+    focar(destino);
+  }
+
   function desenharTopo(m) {
     const f = m.fila;
     // replaceChildren escreveria "null" como texto: so os nos que existem.
     topo.replaceChildren(...[
       f ? cabecalho(m) : h('h1', { class: 'fila-titulo' }, t('painel.titulo')),
       f ? fita(m) : null,
+      pedeVoce(m),
       avisoVigia,
       erroTopo.el,
       blocoEstado(m),
@@ -580,16 +718,18 @@ export function telaPainel(ctx, parte) {
   }
 
   function atualizarTopo(m) {
-    const nova = JSON.stringify([m.fila, m.vigia, m.painel, m.ocupado, m.aviso.texto, enviando, retomarAberto]);
+    // versaoLocal: a trava, a decisao em curso e o erro dela vivem na tela.
+    const nova = JSON.stringify([m.fila, m.vigia, m.painel, m.ocupado, m.aviso.texto, enviando, retomarAberto, versaoLocal]);
     if (nova === assinaturaTopo) return;
     assinaturaTopo = nova;
     const ativo = document.activeElement;
     const chave = ativo && topo.contains(ativo) && ativo.dataset ? ativo.dataset.foco : null;
+    const posicao = chave ? ativo.dataset.posicao : '';
     const cursor = chave && ativo.tagName === 'INPUT' ? [ativo.selectionStart, ativo.selectionEnd] : null;
     desenharTopo(m);
     if (!chave) return;
     const el = topo.querySelector(`[data-foco="${chave}"]`);
-    if (!el) return;
+    if (!el) { if (posicao) focarDeVolta(posicao); return; }
     el.focus({ preventScroll: true });
     if (cursor && el.tagName === 'INPUT') el.setSelectionRange(cursor[0], cursor[1]);
   }
@@ -631,7 +771,8 @@ export function telaPainel(ctx, parte) {
     );
   }
 
-  // Avisa o leitor de tela da falha nova e da camera instalada agora; a linha
+  // Avisa o leitor de tela da falha nova (assertive, P3: o foco fica onde esta;
+  // a falha vai para Pede voce) e da camera instalada agora (polite); a linha
   // instalada agora ganha o fundo de acao por um ciclo de consulta.
   function compararEstados(m) {
     const agora = new Map(m.fila ? m.fila.posicoes.map((p) => [p.posicao, p]) : []);
@@ -640,7 +781,10 @@ export function telaPainel(ctx, parte) {
       for (const [n, p] of agora) {
         const antes = estadosAntes.get(n);
         if (antes === undefined || antes === p.estado) continue;
-        if (p.estado === 'falha') ctx.anunciar(t('painel.anuncio.falha', { n, texto: textoEstado(p, m.fila.totalEtapas) }));
+        // Falha nova ou saida da falha: a trava e o erro da decisao anterior nao valem mais.
+        const l = linhas.get(n);
+        if (l && (antes === 'falha' || p.estado === 'falha')) { l.trava = 0; l.decisao = null; }
+        if (p.estado === 'falha') ctx.anunciar(t('painel.anuncio.falha', { n, etapa: p.falha.etapa }), true);
         if (p.estado === 'instalada') { ctx.anunciar(t('painel.anuncio.instalada', { n })); novasAgora.add(n); }
       }
     }
@@ -660,6 +804,7 @@ export function telaPainel(ctx, parte) {
     // O redesenho troca os nos: o foco (e o cursor do campo) volta ao mesmo controle.
     const ativo = document.activeElement;
     const chave = ativo && raiz.contains(ativo) && ativo.dataset ? ativo.dataset.foco : null;
+    const posicao = chave ? ativo.dataset.posicao : '';
     const cursor = chave && ativo.tagName === 'INPUT' ? [ativo.selectionStart, ativo.selectionEnd] : null;
     redesenhando = true;
     try {
@@ -669,7 +814,7 @@ export function telaPainel(ctx, parte) {
     }
     if (!chave) return;
     const foco = raiz.querySelector(`[data-foco="${chave}"]`);
-    if (!foco) return;
+    if (!foco) { if (posicao) focarDeVolta(posicao); return; }
     foco.focus({ preventScroll: true });
     if (cursor && foco.tagName === 'INPUT') foco.setSelectionRange(cursor[0], cursor[1]);
   }

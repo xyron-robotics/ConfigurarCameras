@@ -31,6 +31,8 @@ export function montarMarcacao(topo) {
       h('main', { id: 'conteudo', tabindex: '-1' }, [
         h('div', { id: 'aviso', class: 'aviso-legado', role: 'alert', hidden: true }),
         h('div', { id: 'anuncio', class: 'so-leitor', role: 'status', 'aria-live': 'polite' }),
+        // Falha nova de camera (P3): interrompe a fala, o foco fica onde esta.
+        h('div', { id: 'anuncio-urgente', class: 'so-leitor', 'aria-live': 'assertive', 'aria-atomic': 'true' }),
         // Passo a passo e Conferir: o app.js desenha aqui a tela de tela-inicio.js.
         h('section', { id: 'inicio', class: 'view inicio', hidden: true }),
         h('section', { id: 'view-painel', class: 'view', hidden: true }, [
@@ -49,16 +51,7 @@ export function montarMarcacao(topo) {
               ' ',
               h('progress', { id: 'trabalho-progresso', max: PROGRESSO_MAX, value: '0', hidden: true }),
             ]),
-            h('div', { id: 'bancada-decisao', hidden: true }, [
-              h('p', { class: 'bancada-pos falha-titulo', id: 'decisao-titulo' }),
-              h('p', { id: 'decisao-erro', class: 'decisao-erro' }),
-              h('p', { class: 'apoio', id: 'decisao-apoio' }, t('painel.decisao-apoio')),
-              h('div', { class: 'acoes' }, [
-                h('button', { type: 'button', class: 'btn acento', 'data-decisao': 'tentar' }, t('painel.decisao-tentar')),
-                ' ',
-                h('button', { type: 'button', class: 'btn', 'data-decisao': 'pular' }, t('painel.decisao-pular')),
-              ]),
-            ]),
+            // A decisao da retomada manual pelo IP mora em Pede voce (tela-painel.js).
             h('p', { class: 'aviso-legado', 'data-aviso-de': 'conectada', role: 'alert', hidden: true }),
           ]),
           h('p', { id: 'ultimo', class: 'ultimo', hidden: true }),

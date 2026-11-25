@@ -12,15 +12,8 @@ function temFila() {
 }
 
 export function ligar() {
-  // Painel: o vigia, o Configurar sem vigia, a retomada pelo IP e o Encerrar a
-  // fila sao de tela-painel.js. Bloco legado (retomada manual pelo IP, C7): decisao sem MAC, como antes.
-  for (const b of document.querySelectorAll('[data-decisao]')) {
-    b.addEventListener('click', () => {
-      const acao = b.dataset.decisao;
-      if (acao === 'pular' && !confirm(t('decisao.confirmar-pular'))) return;
-      comando('/api/decisao', { acao });
-    });
-  }
+  // Painel: o vigia, o Configurar sem vigia, a retomada pelo IP, o Encerrar a
+  // fila e a decisao de toda falha (Pede voce) sao de tela-painel.js.
 
   // Ferramentas.
   $('form-sondar').addEventListener('submit', (ev) => { ev.preventDefault(); comando('/api/sondar', { ip: ev.target.elements.ip.value }); });

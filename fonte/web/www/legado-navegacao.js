@@ -6,7 +6,7 @@ import { t } from './textos.js';
 import { lerRota, hashDe, corrigir } from './rotas.js';
 import { derivar } from './estado.js';
 import {
-  S, $, ORIGEM_DO_COMANDO, naTela, mostrarAviso, aplicarOcupado, anunciar, mostrarTelaFim,
+  S, $, ORIGEM_DO_COMANDO, mostrarAviso, aplicarOcupado, anunciar, mostrarTelaFim,
 } from './legado-estado.js';
 import {
   anexarLog, desenharAtualizacao, desenharFila, desenharFerramenta,
@@ -84,26 +84,16 @@ function desenhar() {
   const falas = [];
   if (S.ultimoVisto !== null && e.ultimo && e.ultimo !== S.ultimoVisto) falas.push(e.ultimo);
   S.ultimoVisto = e.ultimo || '';
+  // Falha de camera (inclusive a da retomada manual): quem anuncia e decide e
+  // Pede voce (tela-painel.js), sem levar o foco (P3).
   if (S.ultimaFase && S.ultimaFase !== e.fase) {
-    // Falha de camera em paralelo: quem anuncia e a tabela (tela-painel.js).
-    if (e.fase === 'decisao' && e.falha && !$('bancada-decisao').hidden) {
-      falas.push($('decisao-titulo').textContent + '. ' + e.falha.erro);
-      S.focarTentar = true;
-    }
-    else if (e.fase === 'concluida') falas.push(t('anuncio.fila-concluida'));
+    if (e.fase === 'concluida') falas.push(t('anuncio.fila-concluida'));
     else if (e.fase === 'encerrada') falas.push(t('anuncio.fila-encerrada'));
   }
   if (falas.length) anunciar(falas.join(' '));
   S.ultimaFase = e.fase;
 
   aplicarOcupado(!!e.ocupado);
-  // Senha recusada: "Tentar de novo" fica travado ate uma senha mais nova
-  // (o servidor tambem recusa; repetir gastaria o lockout da camera).
-  const tentar = document.querySelector('[data-decisao="tentar"]');
-  if (e.fase === 'decisao' && e.falha && e.falha.loginRecusado && e.falha.geracao === e.senhaGeracao) tentar.disabled = true;
-  // O foco vai para "Tentar de novo" quando o botao ja estiver ativo.
-  if (e.fase !== 'decisao') S.focarTentar = false;
-  if (S.focarTentar && !tentar.disabled && naTela(tentar)) { tentar.focus(); S.focarTentar = false; }
 
   // O slot do aviso depende de qual bloco esta na tela.
   if (e.avisoN !== S.avisoN) {

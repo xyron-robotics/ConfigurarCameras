@@ -18,9 +18,6 @@ const TEXTOS = {
   'painel.etapa-encoder': 'Encoder',
   'painel.etapa-rede': 'Rede',
   'painel.etapa-conferida': 'Conferência',
-  'painel.decisao-apoio': 'O que foi concluído fica registrado. Tentar de novo continua da etapa que falhou.',
-  'painel.decisao-tentar': 'Tentar de novo',
-  'painel.decisao-pular': 'Pular esta posição',
   'ferramentas.titulo': 'Ferramentas',
   'ferramentas.apoio': 'Tudo aqui só lê a rede e as câmeras, pela placa escolhida. Nada é alterado. Para voltar uma câmera de fábrica, use a tela dela ou o botão físico de reset.',
   'ferramentas.form-sondar.titulo': 'Sondar uma câmera',
@@ -296,7 +293,6 @@ const TEXTOS = {
   // ---------------------------------------------------------------- painel (bancada da retomada manual)
   'bancada.ordinal': ({ n, total }) => 'Câmera ' + n + ' de ' + total,
   'bancada.trabalho-titulo': ({ ordinal, ip }) => ordinal + ' → ' + ip,
-  'bancada.decisao-titulo': ({ etapa, ip }) => 'Falhou na etapa ' + etapa + (ip ? ' (' + ip + ')' : ''),
 
   // ---------------------------------------------------------------- cabecalho da fila, fita e estados (tela-painel.js)
   'painel.titulo': 'Painel',
@@ -397,11 +393,24 @@ const TEXTOS = {
   'painel.decisao.tentar': 'Tentar de novo',
   'painel.decisao.tentando': 'Tentando…',
   'painel.decisao.pular': 'Pular esta posição',
+  'painel.decisao.pulando': 'Pulando…',
+  'painel.decisao.encoder': 'Mudar o encoder',
   'painel.decisao.senha': 'Repetir a senha recusada bloqueia o admin. Troque a senha em Sessão > Senha.',
   'painel.pular.titulo': ({ n }) => 'Pular a câmera ' + n + '?',
   'painel.pular.texto': ({ ip }) => 'A posição ' + ip + ' fica registrada como falha e a fila segue para a próxima.',
   'painel.pular.confirmar': ({ n }) => 'Pular a câmera ' + n,
-  'painel.anuncio.falha': ({ n, texto }) => 'Câmera ' + n + ': ' + texto + '.',
+  // Falha nova: o leitor de tela fala na hora (aria-live assertive) e o foco fica onde esta.
+  'painel.anuncio.falha': ({ n, etapa }) => 'Câmera ' + n + ' ' + falhouNa(etapa) + '. A decisão está em Pede você.',
+  'painel.irPedeVoce': 'Ir para o que pede você',
+  // Bloco "Pede você" (direcao 3.2 e 3.3): so a falha que espera decisao.
+  'pede.titulo': ({ n }) => 'Pede você (' + n + ')',
+  'pede.falhou': ({ n, ip, etapa }) => 'Câmera ' + n + (ip ? ' (' + ip + ')' : '') + ' ' + falhouNa(etapa),
+  // Painel lateral do encoder (3.3): reusa o formulario de Camera, so os streams.
+  'lateral.fechar': 'Fechar',
+  'lateral.encoder.titulo': ({ n }) => 'Mudar o encoder da câmera ' + n,
+  'lateral.encoder.texto': 'O novo valor vale para a sessão inteira, não só para esta câmera.',
+  'lateral.encoder.salvar': 'Salvar e tentar de novo',
+  'lateral.encoder.salvando': 'Salvando e tentando de novo…',
   'painel.anuncio.instalada': ({ n }) => 'Câmera ' + n + ' instalada.',
   'registro.titulo': 'Registro',
   'registro.lendo': 'Lendo o registro…',
@@ -429,6 +438,9 @@ const TEXTOS = {
   'falha.senha-recusada': 'A câmera recusou a senha da sessão. Troque a senha em Sessão, seção Senha, antes de tentar de novo: ' +
     'cada tentativa com a senha errada conta para o bloqueio da câmera.',
   'falha.recusa': 'A câmera recusou um valor. Confira a seção Câmera em Sessão antes de tentar de novo; o que já foi concluído ' +
+    'fica registrado.',
+  // A camera nao diz qual valor recusou (o passo grava varios juntos): o conserto aponta o encoder inteiro.
+  'falha.recusa-encoder': 'A câmera recusou um valor do encoder. Mude o encoder e tente de novo; o que já foi concluído ' +
     'fica registrado.',
   'falha.o-destino': 'o destino',
   'falha.inicializada': 'A câmera pode ter ficado com o admin já criado. Tentar de novo confere o estado dela: se continuar de ' +
@@ -501,8 +513,6 @@ const TEXTOS = {
   'sessao.painel.sobre.texto': 'Painel de bancada do Grupo SmartSeg que leva câmeras Intelbras e Dahua de fábrica a câmeras instaladas: senha, rede, encoder e registro, uma fila por vez.',
 
   // ---------------------------------------------------------------- confirmacoes
-  'decisao.confirmar-pular': 'Pular esta posição? A câmera fica como está agora, registrada como Falhou e fora das ' +
-    'instaladas. A fila segue para a próxima posição.',
   'confirmar.atualizar': ({ temFila }) => 'Atualizar o painel agora? Ele baixa o instalador do GitHub, confere o SHA-256, ' +
     'fecha e reabre sozinho na versão nova.' +
     (temFila ? '\n\nA fila em memória se perde; o registro e a sessão ficam.' : '\n\nO registro e a sessão ficam.'),
@@ -559,6 +569,10 @@ const ETAPA_EM_CURSO = { inicializada: 'inicialização', encoder: 'encoder', re
 const FALHOU_NA = {
   inicializada: 'Falhou na inicialização', encoder: 'Falhou no encoder', rede: 'Falhou na rede', conferida: 'Falhou na conferência',
 };
+// O mesmo no meio da frase ("Câmera 9 falhou no encoder").
+function falhouNa(etapa) {
+  return (FALHOU_NA[etapa] || 'Falhou').toLowerCase();
+}
 
 // Motivos que o servidor publica ao desligar o vigia sozinho.
 const MOTIVO_VIGIA = {
@@ -644,7 +658,7 @@ export function motivoVigia(motivo) {
 // destino: IP da posicao (vazio vira "o destino").
 export function textoDaFalha(f, destino) {
   if (f.loginRecusado) return f.bloqueada ? t('falha.bloqueada') : t('falha.senha-recusada');
-  if (f.recusa) return t('falha.recusa');
+  if (f.recusa) return t(f.etapa === 'encoder' ? 'falha.recusa-encoder' : 'falha.recusa');
   const ip = destino || t('falha.o-destino');
   const porEtapa = {
     inicializada: () => t('falha.inicializada'),
