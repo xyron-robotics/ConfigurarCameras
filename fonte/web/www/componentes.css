@@ -446,7 +446,7 @@
   }
   .tabela td {
     block-size: var(--linha-tabela); padding: var(--esp-1) var(--esp-3);
-    border-block-end: var(--traco) solid var(--linha); vertical-align: middle; overflow-wrap: anywhere;
+    border-block-end: var(--traco) solid var(--linha); vertical-align: middle; overflow-wrap: break-word;
   }
   .tabela tbody tr:last-child td { border-block-end: 0; }
   .tabela tbody tr:hover { background: var(--superficie-2); }
@@ -469,12 +469,14 @@
     border: var(--traco) solid var(--linha-forte); border-radius: var(--raio-controle);
     font-variant-numeric: tabular-nums;
   }
+  /* Ganha do input de 36 px (UX-22): campo + respiro = a linha de 36 px, como no Registro. */
+  .tabela input.entrada-tabela { height: calc(var(--linha-tabela) - var(--esp-2)); }
   .entrada-tabela[aria-invalid="true"] { border-color: var(--falha); }
   .entrada-tabela[readonly] { background: var(--superficie-2); color: var(--apoio); }
   .tabela-vazio { padding: var(--esp-5); color: var(--apoio); display: grid; gap: var(--esp-3); justify-items: start; }
   .tabela-vazio p { margin: 0; display: inline-flex; align-items: center; gap: var(--esp-2); }
   .situacao-detalhe, .stream { display: block; font-size: var(--tipo-meta); color: var(--apoio); }
-  .tabela .coluna-situacao { white-space: normal; min-inline-size: var(--coluna-estado); }
+  .tabela .coluna-situacao { white-space: normal; }
   .tabela .coluna-encoder { white-space: nowrap; }
   /* Falha na linha: o erro, o conserto e as duas decisoes. */
   .falha-linha { display: grid; gap: var(--esp-2); justify-items: start; white-space: normal; }

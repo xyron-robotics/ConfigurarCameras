@@ -7,26 +7,39 @@ import { icone } from './icones.js';
 import { t } from './textos.js';
 
 // tipo: 'primario' (um por area) | 'secundario' | 'discreto' | 'perigo'
+// travado: aria-disabled, nao disabled. O botao fica no Tab e com o foco (o
+// redesenho e o ocupado nao derrubam o foco para o body); o clique, o Enter e o
+// envio do formulario por ele nao fazem nada enquanto travado.
 export function botao(rotulo, aoClicar, opcoes) {
   const o = opcoes || {};
   return h('button', {
     type: o.submit ? 'submit' : 'button',
     class: ['botao', 'botao-' + (o.tipo || 'secundario'), o.classe],
-    onclick: aoClicar || undefined,
+    onclick: (ev) => {
+      if (ev.currentTarget.getAttribute('aria-disabled') === 'true') { ev.preventDefault(); return; }
+      if (aoClicar) aoClicar(ev);
+    },
     disabled: !!o.desabilitado,
+    'aria-disabled': o.travado ? 'true' : undefined,
     'aria-describedby': o.motivoId,
     dados: o.dados,
   }, [o.icone ? icone(o.icone) : null, h('span', { class: 'botao-rotulo' }, rotulo)]);
 }
 
-// Ocupado: o mesmo verbo no gerundio e aria-busy. Devolve a funcao que restaura.
+// Ocupado: o mesmo verbo no gerundio, aria-busy e travado (o foco fica no
+// botao). Devolve a funcao que restaura.
 export function ocupar(btn, rotuloOcupado) {
   const rotulo = btn.querySelector('.botao-rotulo');
   const antes = rotulo.textContent;
+  const jaTravado = btn.getAttribute('aria-disabled') === 'true';
   btn.setAttribute('aria-busy', 'true');
-  btn.disabled = true;
+  btn.setAttribute('aria-disabled', 'true');
   rotulo.textContent = rotuloOcupado;
-  return () => { btn.removeAttribute('aria-busy'); btn.disabled = false; rotulo.textContent = antes; };
+  return () => {
+    btn.removeAttribute('aria-busy');
+    if (!jaTravado) btn.removeAttribute('aria-disabled');
+    rotulo.textContent = antes;
+  };
 }
 
 // nivel: 'neutro' | 'pronta' | 'alarme' | 'atencao' | 'agora'. Sempre icone e palavra.

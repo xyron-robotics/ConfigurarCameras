@@ -297,7 +297,7 @@ export function telaPainel(ctx, parte) {
         const salvar = botao(t('lateral.encoder.salvar'), null, { tipo: 'primario', submit: true });
         const enviar = async (ev) => {
           ev.preventDefault();
-          if (salvar.disabled) return;
+          if (salvar.getAttribute('aria-busy') === 'true') return;
           resposta.limpar();
           const r = form.coletar();
           if (!r.ok) return;
@@ -337,6 +337,23 @@ export function telaPainel(ctx, parte) {
 
   // Foco num botao de decisao que sumiu (a camera saiu da falha): o titulo da
   // falha em Pede voce, o titulo de Pede voce ou o nome da fila, nunca o body.
+  // Controle que some com a propria acao (Encerrar a fila encerrada, o vigia da
+  // fila concluida, Ler de novo trocado por "Lendo", o titulo da falha que saiu
+  // de Pede voce): o foco vai ao vizinho que continua na tela, nunca ao body.
+  // Os titulos levam data-foco para o redesenho seguinte nao os perder.
+  const RESERVA_FOCO = {
+    encerrar: 'montar', vigia: 'montar', 'registro-ler-erro': 'registro-ler', 'pede-titulo': 'fila-titulo',
+  };
+  function reservaDoFoco(onde, chave) {
+    let outra = /^pede-item-/.test(chave) ? 'pede-titulo' : RESERVA_FOCO[chave];
+    while (outra) {
+      const el = onde.querySelector(`[data-foco="${outra}"]`);
+      if (el) return el;
+      outra = RESERVA_FOCO[outra];
+    }
+    return null;
+  }
+
   function focarDeVolta(n) {
     const destino = topo.querySelector(`[data-pede="${n}"]`) || topo.querySelector('.pede-titulo') || topo.querySelector('.fila-titulo');
     if (destino) focar(destino);
@@ -493,7 +510,7 @@ export function telaPainel(ctx, parte) {
     return h('div', { class: 'vista-cabeca' }, [
       h('h2', { class: 'grupo-titulo' }, m.registro.simulado || m.simular ? t('registro.titulo-simulacao') : t('registro.titulo')),
       h('div', { class: 'vista-acoes' }, [
-        botao(t('registro.ler'), () => ctx.lerRegistro(), { tipo: 'secundario', desabilitado: m.registro.lendo, dados: { foco: 'registro-ler' } }),
+        botao(t('registro.ler'), () => ctx.lerRegistro(), { tipo: 'secundario', travado: m.registro.lendo, dados: { foco: 'registro-ler' } }),
         h('a', { class: ['botao', 'botao-secundario'], href: '/api/relatorio.csv', download: '', dados: { foco: 'registro-exportar' } },
           h('span', { class: 'botao-rotulo' }, t('registro.exportar'))),
       ]),
@@ -533,7 +550,7 @@ export function telaPainel(ctx, parte) {
   function botaoTopo(qual, rotulo, rotuloOcupado, aoClicar, o) {
     const ocupado = enviando === qual;
     const b = botao(ocupado ? rotuloOcupado : rotulo, aoClicar, {
-      tipo: o.tipo, desabilitado: !!enviando || !!o.desabilitado, dados: { foco: qual },
+      tipo: o.tipo, travado: !!enviando || !!o.desabilitado, dados: { foco: qual },
     });
     if (ocupado) b.setAttribute('aria-busy', 'true');
     return b;
@@ -568,7 +585,7 @@ export function telaPainel(ctx, parte) {
     if (f.pedeVoce.length) acoes.unshift(botao(t('painel.irPedeVoce'), irParaPede, { tipo: 'discreto', icone: 'abrir', dados: { foco: 'ir-pede' } }));
     return h('div', { class: 'fila-cabeca' }, [
       h('div', { class: 'fila-nome' }, [
-        h('h1', { class: 'fila-titulo' }, t('painel.fila.titulo', f)),
+        h('h1', { class: 'fila-titulo', tabindex: '-1', dados: { foco: 'fila-titulo' } }, t('painel.fila.titulo', f)),
         h('p', { class: 'fila-faixa' }, [
           h('span', { class: 'mono', translate: 'no' }, t('painel.fila.faixa', f)),
           v.qualquerFaixa ? chip(t('painel.qualquerFaixa'), 'atencao', 'atencao') : null,
@@ -701,9 +718,9 @@ export function telaPainel(ctx, parte) {
     const lista = m.fila ? m.fila.pedeVoce : [];
     if (!lista.length) return null;
     return h('section', { class: 'pede', 'aria-labelledby': PEDE_TITULO }, [
-      h('h2', { class: 'pede-titulo', id: PEDE_TITULO, tabindex: '-1' }, [icone('falha', 'm'), h('span', null, t('pede.titulo', { n: lista.length }))]),
+      h('h2', { class: 'pede-titulo', id: PEDE_TITULO, tabindex: '-1', dados: { foco: 'pede-titulo' } }, [icone('falha', 'm'), h('span', null, t('pede.titulo', { n: lista.length }))]),
       h('ul', { class: 'pede-lista' }, lista.map((p) => h('li', { class: 'pede-item' }, [
-        h('h3', { class: 'pede-item-titulo', tabindex: '-1', dados: { pede: String(p.posicao) } },
+        h('h3', { class: 'pede-item-titulo', tabindex: '-1', dados: { pede: String(p.posicao), foco: 'pede-item-' + p.posicao } },
           t('pede.falhou', { n: p.posicao, ip: p.ip, etapa: p.falha.etapa })),
         ...corpoFalha(p, 'pede'),
       ]))),
@@ -736,7 +753,7 @@ export function telaPainel(ctx, parte) {
     }
     // replaceChildren escreveria "null" como texto: so os nos que existem.
     topo.replaceChildren(...[
-      f ? cabecalho(m) : h('h1', { class: 'fila-titulo' }, t('painel.titulo')),
+      f ? cabecalho(m) : h('h1', { class: 'fila-titulo', tabindex: '-1', dados: { foco: 'fila-titulo' } }, t('painel.titulo')),
       f ? fita(m) : null,
       pedeVoce(m),
       lugar === 'topo' ? avisoServidor.el : null,
@@ -756,7 +773,7 @@ export function telaPainel(ctx, parte) {
     const cursor = chave && ativo.tagName === 'INPUT' ? [ativo.selectionStart, ativo.selectionEnd] : null;
     desenharTopo(m);
     if (!chave) return;
-    const el = topo.querySelector(`[data-foco="${chave}"]`);
+    const el = topo.querySelector(`[data-foco="${chave}"]`) || reservaDoFoco(topo, chave);
     if (!el) { if (posicao) focarDeVolta(posicao); return; }
     el.focus({ preventScroll: true });
     if (cursor && el.tagName === 'INPUT') el.setSelectionRange(cursor[0], cursor[1]);
@@ -858,7 +875,7 @@ export function telaPainel(ctx, parte) {
       redesenhando = false;
     }
     if (!chave) return;
-    const foco = raiz.querySelector(`[data-foco="${chave}"]`);
+    const foco = raiz.querySelector(`[data-foco="${chave}"]`) || reservaDoFoco(raiz, chave);
     if (!foco) { if (posicao) focarDeVolta(posicao); return; }
     foco.focus({ preventScroll: true });
     if (cursor && foco.tagName === 'INPUT') foco.setSelectionRange(cursor[0], cursor[1]);

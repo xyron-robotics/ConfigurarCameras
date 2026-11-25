@@ -59,7 +59,7 @@ export function telaFerramentas(ctx) {
     if (liberar) return;
     const antes = ctx.modelo();
     const restaurar = ocupar(btn, rotuloOcupado);
-    // O botao desligado perde o foco para o body; quando volta, o foco volta para ele.
+    // Se o foco caiu no body no meio do pedido, volta para o botao ao liberar.
     liberar = () => {
       restaurar();
       if (!document.activeElement || document.activeElement === document.body) btn.focus();

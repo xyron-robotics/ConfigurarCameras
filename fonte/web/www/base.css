@@ -58,6 +58,8 @@
 
   /* Ancora e foco por teclado param abaixo do topo fixo (sticky). */
   html { scroll-padding-block-start: calc(var(--topo-altura) + var(--esp-4)); }
+  /* E acima do rodape fixo do passo a passo: o campo focado nao fica sob ele. */
+  html:has(.rodape) { scroll-padding-block-end: calc(var(--rodape-altura) + var(--esp-4)); }
 
   /* Fora da tela, lido pelo leitor de tela. */
   .so-leitor {

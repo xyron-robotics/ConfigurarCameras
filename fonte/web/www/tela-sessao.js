@@ -57,9 +57,9 @@ function menu(secao) {
   ]));
 }
 
-// O botao ocupado fica desabilitado e o navegador tira o foco dele: ao
-// liberar, o foco volta ao botao (se nao foi para um campo com erro), para o
-// redesenho seguinte o manter no lugar.
+// O botao ocupado fica travado com o foco; se o foco caiu no body no meio do
+// pedido, ao liberar ele volta ao botao (se nao foi para um campo com erro),
+// para o redesenho seguinte o manter no lugar.
 function liberar(restaurar, btn) {
   restaurar();
   const ativo = document.activeElement;
