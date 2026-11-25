@@ -160,13 +160,22 @@ function etapaEmCurso(etapa, fase) {
   return { etapa: nome, etapaN: ETAPAS.indexOf(nome) + 1 };
 }
 
+// Posicao que pode receber camera (CONTEXT.md, Posicao): as puladas na
+// montagem (gateway, rede/broadcast, fora da rede, ja no registro) ficam de
+// fora; as puladas depois, pelo operador ou porque o IP ja responde, eram
+// lugar de camera e continuam numeradas. Mesma regra do "N de M" legado.
+function posicaoUsavel(item) {
+  return item.Estado !== 'pulada' || /operador|responde/.test(item.Motivo || '');
+}
+
 // Estado de cada posicao da fila (direcao 5.3), com a camera dela. A camera
 // vem pelo indice (base 0 em fila.itens) ou pelo MAC gravado na posicao; sem
 // camera, a retomada manual pelo IP (e.atual) explica a posicao em curso.
-function derivarPosicao(item, idx, cam, e, livre) {
+// numero: a ordem entre as posicoes usaveis, a mesma na fita e na tabela.
+function derivarPosicao(item, idx, numero, cam, e, livre) {
   const fase = cam ? cam.fase : '';
   const manual = !cam && idx === e.atual;
-  const base = { posicao: Number(item.Posicao) || idx + 1, ip: item.Ip || '', motivo: item.Motivo || '', etapa: '', etapaN: 0, falha: null };
+  const base = { posicao: numero, ip: item.Ip || '', motivo: item.Motivo || '', etapa: '', etapaN: 0, falha: null };
   if (item.Estado === 'feita' || fase === 'feita') return { ...base, estado: 'instalada' };
   if (item.Estado === 'pulada' || fase === 'pulada') return { ...base, estado: 'pulada' };
   if (fase === 'decisao') return { ...base, estado: 'falha', falha: derivarFalha(cam.falha, e.senhaGeracao) };
@@ -188,19 +197,22 @@ function derivarFila(e, cams) {
   const porIndice = new Map(cams.filter((c) => c.indice >= 0).map((c) => [c.indice, c]));
   const porMac = new Map(cams.filter((c) => c.mac).map((c) => [chaveMac(c.mac), c]));
   let proximaDada = false;
-  const posicoes = itens.map((item, idx) => {
+  // O indice da camera e o e.atual apontam para fila.itens: o idx original
+  // fica, so as usaveis viram posicao (sem linha, casa, contagem nem total).
+  const usaveis = itens.map((item, idx) => ({ item, idx })).filter((x) => posicaoUsavel(x.item));
+  const posicoes = usaveis.map(({ item, idx }, i) => {
     const c = porIndice.get(idx) || (item.Mac ? porMac.get(chaveMac(item.Mac)) : null) || null;
     // Proxima: a primeira pendente sem camera, com a fila aberta.
     const livre = aberta && !proximaDada && !c && item.Estado === 'pendente' && idx !== e.atual;
     if (livre) proximaDada = true;
     // Etapa e falha vem da camera crua; a tabela recebe a camera ja formatada.
     const camera = c ? derivarCamera(c) : null;
-    return { ...derivarPosicao(item, idx, c, e, livre), camera };
+    return { ...derivarPosicao(item, idx, i + 1, c, e, livre), camera };
   });
   const contagem = { instalada: 0, falha: 0, curso: 0, proxima: 0, aguardando: 0, pulada: 0 };
   for (const p of posicoes) contagem[p.estado] += 1;
   return {
-    total: itens.length,
+    total: posicoes.length,
     pendentes: itens.filter((i) => i.Estado === 'pendente').length,
     inicio: f.inicio || '',
     fim: f.fim || '',
