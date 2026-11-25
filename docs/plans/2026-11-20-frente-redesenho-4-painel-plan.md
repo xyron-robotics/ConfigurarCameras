@@ -1,6 +1,6 @@
 # Frente redesenho-painel: fila, linha da câmera, "Pede você" e vigia (fase B, 4 de 5)
 
-**Status:** Draft · **Frente:** `redesenho-painel`
+**Status:** Ativo · **Frente:** `redesenho-painel`
 
 Frente 4 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da frente 3 fechada (casca, rotas, `componentes.js` com `confirmar`, `formularios.js`, `estado.js`). Especificação: `docs/design/2026-11-ux/direcao.md`, seções 2.3 (cenários 3, 3' e 4a), 3.2, 3.3, 3.6 (estados do Painel e modo de reserva), 5.3 a 5.7 e 6. Código de partida: `docs/design/2026-11-ux/prototipo/tela-painel.js`, `estado.js`, `componentes.js`, `formularios.js`.
 
