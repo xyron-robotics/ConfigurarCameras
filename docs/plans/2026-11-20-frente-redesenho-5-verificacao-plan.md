@@ -75,6 +75,19 @@ Exceção do `consistency.mjs` e achado MENOR da revisão da frente 2 (commits `
 - **Mono no resultado da sondagem:** o `.resultado dd` perdeu a família mono e o JS não põe `.mono` no `dd`, então serial, MAC e rede saem em fonte proporcional. No bloco "Resultado" novo, mono só em IP, MAC, serial e log (direção 4.3).
 - **Contraste do texto corrido (`text-contrast`):** os parágrafos longos de Ferramentas em `--apoio` dão 6.74:1 no escuro e 6.33:1 no claro, abaixo dos 7:1. Texto corrido longo usa `--texto` (decisão do usuário na frente 2, opção A).
 
+## Herdado da frente 4 (25/11)
+
+Os 7 MENOR da revisão da frente 4 (commit `c9da6ab`) e a mensagem crua de recusa, todos para a Task 2 (decisão do usuário, 25/11). Cada item fecha com a prova no corpo do commit.
+
+- **H1. Recusa de porta e canal de outra linha** (`tela-painel.js:128`): a confirmação aceita qualquer aviso novo com origem `camera` como recusa desta linha. Com duas linhas salvando juntas, a recusa de uma vira o erro da outra. A recusa casa pela câmera, por `cameras[].aviso`, que o `estado.derivar` já guarda.
+- **H2. "Qualquer faixa" fica com o valor recusado** (`app.js:48`): `definirQualquerFaixa` grava `extras.qualquerFaixa` antes da resposta e não desfaz na recusa. Mesma regra da P2 da frente 4: vale o que o servidor publica, e a caixa volta a ele na recusa.
+- **H3. Painel importa de outra tela** (`tela-painel.js:17`): `salvarParcial` vem de `tela-inicio.js`. Vai para `formularios.js` ou para o `ctx`, e as duas telas importam de lá.
+- **H4. Seção vazia em `textos.js:293`**: o cabeçalho "painel (bancada da retomada manual)" sem chave embaixo sai.
+- **H5. Estado local da linha sobrevive à fila nova** (`tela-painel.js:55`): rascunho, nota de erro e trava guardados pelo número da posição e nunca limpos. Limpam ao montar outra fila. Uma nota velha não aparece na linha de mesmo número da fila nova.
+- **H6. Numeração das posições sem guarda** (`estado.js:167`, correção `25c68ab`): o `www` não tem teste unitário de JS, então o caso entra no roteiro Playwright da Task 2 e de novo no da Task 3. O caso usa um bruto montado no `browser_evaluate`, com uma faixa de 7 IPs (gateway, já no registro e IP que já responde no meio). Esperado: total 5, números 1..5, 1 pulada. Um executor de testes de JS no repo fica fora desta frente.
+- **H7. Regra da posição usável repetida** (`estado.js:167` e `legado-painel.js:111`, mesmo regex `/operador|responde/` sobre o `Motivo`): com o `legado-painel.js` apagado, a regra fica só no `estado.js`. Quem mostra "câmera N de M" lê o número do `modelo`.
+- **H8. Mensagem crua na recusa de porta e canal**: o erro junto dos campos mostra o texto do servidor (ex.: "Exceção ao chamar Replace… Acesso negado ao caminho"). Passa pelo `traduzirServidor` de `textos.js`. A recusa conhecida (registro só leitura ou em uso) ganha texto com o conserto. As outras dizem "O painel recusou a ação.", com o original em "Detalhe técnico". Só front. Se pedir mudança no servidor: `BLOQUEADO` com a pergunta.
+
 ## Task 1: Ferramentas
 
 **Files:** `fonte/web/www/tela-ferramentas.js` (novo), `textos.js`, `constantes.js`, `componentes.css`, `telas.css`, `legado-*.js`, `instalador/ConfigurarCameras.iss`, `LEIA-ME.md`
@@ -93,7 +106,7 @@ Exceção do `consistency.mjs` e achado MENOR da revisão da frente 2 (commits `
 
 ## Task 2: estados globais e o fim do `legado-*.js`
 
-**Files:** `fonte/web/www/app.js`, `componentes.js`, `estado.js`, `textos.js`, `constantes.js`, `marca.js`, `componentes.css`, `telas.css`, `legado-*.js` (apagados), `fonte/Testes-Front.ps1`, `instalador/ConfigurarCameras.iss`, `LEIA-ME.md`
+**Files:** `fonte/web/www/app.js`, `componentes.js`, `estado.js`, `textos.js`, `constantes.js`, `marca.js`, `tela-painel.js`, `tela-inicio.js`, `formularios.js`, `componentes.css`, `telas.css`, `legado-*.js` (apagados), `fonte/Testes-Front.ps1`, `instalador/ConfigurarCameras.iss`, `LEIA-ME.md`
 
 **Skills:** `mattpocock-skills:tdd` (RED da regra `legado`), `design-taste-frontend` (`references/system.md`, estados e movimento), `frontend-design` (escrita).
 
@@ -105,11 +118,17 @@ Exceção do `consistency.mjs` e achado MENOR da revisão da frente 2 (commits `
 - O que ainda resta no `legado-*.js` sai. Os arquivos são apagados com `git rm` e saem do `.iss`, com `[InstallDelete]` para eles na instalação por cima.
 - V1, RED antes: a regra `legado` falha na pasta plantada, depois passa no `www` real.
 - `LEIA-ME.md`: tabela de sintomas com conexão perdida e painel encerrado.
+- Herdado da frente 4: H1 a H8.
 
 **Validation:** a régua, com a regra `legado` e a conferência dos 24 arquivos. Playwright:
 - Abrindo, em captura com a rede lenta (`browser_evaluate` atrasando o 1º `/api/estado`);
 - conexão perdida com o servidor parado: faixa, hora e tela `inert`;
-- Encerrado: nenhum pedido sai em 10 s.
+- Encerrado: nenhum pedido sai em 10 s;
+- H1: duas linhas salvando juntas, a recusa de uma não aparece na outra;
+- H2: "Qualquer faixa" recusada volta ao valor publicado;
+- H5: nota de erro na linha 2, montar outra fila, a linha 2 nova sem nota;
+- H6: o caso da numeração com 7 IPs dá total 5, números 1..5, 1 pulada;
+- H8: com o registro só leitura, a recusa de porta e canal mostra o texto traduzido, e o original fica em "Detalhe técnico".
 
 Console sem erro, fora o erro de rede esperado na conexão perdida.
 
@@ -122,7 +141,7 @@ Console sem erro, fora o erro de rede esperado na conexão perdida.
 - **Roteiro de duas filas (V4)**, com `-SimularCameras 3`, nos dois temas:
   1. Primeira abertura, passo a passo inteiro, fila 1 de 3 posições.
   2. Vigia ligado, falha forçada na câmera 2 (`POST /api/simular`), "Tentar de novo", e a fila termina com 3 instaladas.
-  3. Porta e canal salvos em uma linha, que aparecem no Registro.
+  3. Porta e canal salvos em uma linha, que aparecem no Registro. O caso H6 da numeração roda de novo aqui.
   4. Encerrar a fila (diálogo).
   5. Recarregar: abre em Conferir, a linha da Fila oferece "Usar a faixa seguinte".
   6. Fila 2, até concluir.
