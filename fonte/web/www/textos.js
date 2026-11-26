@@ -103,6 +103,16 @@ const TEXTOS = {
   'servidor.temaInvalido': 'Esse tema não existe. Escolha Sistema, Claro ou Escuro.',
   'servidor.trocarRedeConfirmar': ({ campos }) => 'Trocar ' + campos + ' devolve a placa de rede e a prepara de novo. A fila ' +
     'atual continua se couber na rede nova; senão, ela é descartada.',
+  'servidor.excluirVazio': 'Marque ao menos uma câmera para excluir.',
+  'servidor.exportarVazio': 'Marque ao menos uma câmera para exportar, ou exporte o registro inteiro.',
+  'servidor.excluirNaFila': ({ n }) => (n === 1 ? 'Nada saiu do registro: 1 câmera da seleção está na fila aberta. '
+    : 'Nada saiu do registro: ' + n + ' câmeras da seleção estão na fila aberta. ') + 'Tire da seleção ou encerre a fila antes.',
+  'servidor.restaurarComFila': 'Encerre a fila antes de restaurar uma cópia: com a fila aberta, o painel ainda grava no registro.',
+  'servidor.copiaInvalida': 'Essa cópia não está na lista. Escolha uma das cópias do registro em Ferramentas.',
+  'servidor.copiaSumiu': 'Essa cópia não existe mais. O registro não mudou; atualize a lista de cópias.',
+  'servidor.copiaIlegivel': 'Essa cópia está danificada e não pode ser restaurada. O registro não mudou.',
+  'servidor.limparComFila': 'Encerre a fila antes de limpar: com ela aberta, as posições ainda estão em uso.',
+  'servidor.semFilaParaLimpar': 'Não há fila para limpar.',
 
   'dialogo.cancelar': 'Cancelar',
   'dialogo.encerrarPainel.titulo': 'Encerrar o painel?',
@@ -606,7 +616,19 @@ const SERVIDOR_EXATO = {
   'Termine a câmera atual (ou encerre a fila) antes de trocar a placa ou as faixas de rede.': 'servidor.trocarRede',
   'Termine a câmera atual antes de refazer o passo a passo.': 'servidor.refazer',
   'A sessão ainda não está completa: escolha a placa de rede e corrija os campos marcados.': 'servidor.sessaoIncompleta',
+  'Escolha ao menos uma câmera para excluir.': 'servidor.excluirVazio',
+  'Escolha ao menos uma câmera para exportar, ou exporte o registro inteiro.': 'servidor.exportarVazio',
+  'Encerre a fila antes de restaurar uma cópia do registro: com a fila aberta, o painel ainda grava nele.': 'servidor.restaurarComFila',
+  'Encerre a fila antes de limpar: com a fila aberta, as posições ainda estão em uso.': 'servidor.limparComFila',
+  'Não há fila para limpar.': 'servidor.semFilaParaLimpar',
 };
+// Controle do registro (Servidor-Painel.ps1: excluir e restaurar; Restore-CopiaRegistro do motor).
+const RE_EXCLUIR_NA_FILA = /^Nada foi excluído: (?:a câmera|as câmeras) (.+?) (?:está|estão) na fila aberta\./;
+const SERVIDOR_PADRAO = [
+  [/^Cópia do registro (?:inválida|fora da pasta)/, 'servidor.copiaInvalida'],
+  [/^A cópia \S+ não existe mais\./, 'servidor.copiaSumiu'],
+  [/^A cópia \S+ está ilegível\./, 'servidor.copiaIlegivel'],
+];
 // Recusa com câmera em curso (Get-TextoRecusaComando do orquestrador) e tema fora da lista (Save-Tema).
 const RE_EM_CURSO = /^Há (\d+) câmeras? em configuração \(portão ou conferência\)\. Espere .+? para (.+)\.$/;
 const RE_TEMA_INVALIDO = /^Tema inválido/;
@@ -650,6 +672,10 @@ export function traduzirServidor(res) {
   const m = RE_EM_CURSO.exec(msg);
   if (m) return { texto: t('servidor.emCurso', { n: Number(m[1]), acao: ACAO_RECUSADA[m[2]] || m[2] }), cru: '' };
   if (RE_TEMA_INVALIDO.test(msg)) return { texto: t('servidor.temaInvalido'), cru: '' };
+  const naFila = RE_EXCLUIR_NA_FILA.exec(msg);
+  if (naFila) return { texto: t('servidor.excluirNaFila', { n: naFila[1].split(', ').length }), cru: msg };
+  const padrao = SERVIDOR_PADRAO.find(([re]) => re.test(msg));
+  if (padrao) return { texto: t(padrao[1]), cru: msg };
   return { texto: t('servidor.recusou'), cru: msg || textoCru || t('erro.http', { codigo: res.codigo }) };
 }
 

@@ -188,6 +188,10 @@ $arquivos = @{
     UltimaFila     = (Join-Path $PastaDados 'ultima-fila.json')
     Registro       = (Join-Path $PastaDados 'registro.json')
     RegistroSimul  = (Join-Path $PastaDados 'registro-simulado.json')
+    # Copias automaticas do registro antes de excluir, zerar ou restaurar
+    # (Save-CopiaRegistro guarda as 10 mais novas), uma pasta por modo.
+    Copias         = (Join-Path $PastaDados 'copias-registro')
+    CopiasSimul    = (Join-Path $PastaDados 'copias-registro-simulado')
     Log            = (Join-Path $PastaDados 'log.txt')
     Blacklist      = (Join-Path $PastaDados 'nao-cameras.txt')
     # Rastro do que o painel fez na placa (para devolver ao encerrar, mesmo
@@ -243,6 +247,16 @@ $adicionarLog = {
 }.GetNewClosure()
 
 Set-MotorLog -Arquivo $arquivos.Log -Sink $adicionarLog
+
+# Rotacao do log por tamanho (5 MB, log.1 a log.3): aqui na abertura e no laco
+# do listener, nunca no Write-Log (os runspaces gravam em paralelo). Falha
+# fica para a proxima volta; o motivo vai para o log.
+function Invoke-RotacaoLogPainel {
+    if (Invoke-RotacaoLog -Caminho $arquivos.Log -LimiteBytes 5MB -Manter 3) {
+        Write-Log "Log girado: o anterior ficou em log.1.txt (guardo ate log.3.txt)." 'DarkGray'
+    }
+}
+Invoke-RotacaoLogPainel
 
 # Migracao da 1.1.1 (padroes.json + ultima-fila.json -> sessao.json): antes
 # do worker subir, uma vez. Falha aqui nao derruba o painel: fica sem sessao
@@ -313,6 +327,9 @@ $scriptWorker = {
     $TextoSemSenha = 'Informe a senha da sessão antes: em Opções, seção Senha.'
     $TextoAguardeAtualizacao = 'Aguarde a atualização terminar.'
     $TextoSemSessao = 'Conclua o passo a passo antes (placa de rede, rede das câmeras e faixa de fábrica). Para revisar, abra Opções.'
+    # Os mesmos textos da recusa do listener (POST /api/fila/limpar): a pagina traduz pelo texto exato.
+    $TextoSemFilaParaLimpar = 'Não há fila para limpar.'
+    $TextoLimparComFila = 'Encerre a fila antes de limpar: com a fila aberta, as posições ainda estão em uso.'
     # Lockout Dahua: ~5 senhas erradas trancam o admin por minutos. Nunca repetir.
     $TextoSenhaRecusada = 'A câmera recusou a senha da sessão. Troque a senha (Opções, seção Senha) antes de tentar de novo: cada tentativa com a senha errada conta para o bloqueio da câmera.'
     $TextoBloqueada = 'A câmera bloqueou o admin por senhas erradas. Espere alguns minutos, confirme a senha certa em Opções e só então tente de novo.'
@@ -1110,6 +1127,19 @@ $scriptWorker = {
                 if ($null -ne $W.Manual) { $W.Aviso = 'Termine a câmera atual antes de montar outra fila.'; return }
                 $null = Invoke-MontarFila -Inicio ([string]$Cmd.inicio) -Fim ([string]$Cmd.fim) -Local ([string]$Cmd.local) -Rack ([string]$Cmd.rack) -Andar ([string]$Cmd.andar)
             }
+            # Limpar a fila (G6): so encerrada ou concluida. A tabela sai e o
+            # Painel volta a "Sem fila"; o registro e a faixa guardada na
+            # sessao nao mudam. O listener ja conferiu a fase; aqui de novo,
+            # pela corrida entre o retrato publicado e a fila de comandos.
+            'fila-limpar' {
+                $fase = Get-FaseAtual
+                if ($fase -eq 'ocioso') { $W.Aviso = $TextoSemFilaParaLimpar; return }
+                if ($fase -notin @('concluida', 'encerrada')) { $W.Aviso = $TextoLimparComFila; return }
+                $faixa = [string]$W.Fila.Inicio + ' a ' + [string]$W.Fila.Fim
+                Clear-Fila
+                $W.Ultimo = ''; $W.Feitas = @{}
+                Write-Log ("Fila " + $faixa + " limpa pelo operador (" + $fase + "); o registro nao muda.") 'Cyan'
+            }
             'conectada' {
                 if (Test-RecusaAtualizando) { return }
                 Invoke-Conectada $Cmd
@@ -1701,10 +1731,81 @@ function Get-LogDesde {
 # Leitura do registro pelo listener, sob o Mutex (Read-RegistroTravado): o
 # worker e os jobs gravam com File.Replace, e uma leitura sem trava no meio
 # dele veria o arquivo ausente (registro vazio) ou o .bak antigo.
+function Get-ArquivoRegistroAtual {
+    if ($E.Simular) { return $arquivos.RegistroSimul }
+    return $arquivos.Registro
+}
+
 function Read-RegistroAtual {
-    $arq = $arquivos.Registro
-    if ($E.Simular) { $arq = $arquivos.RegistroSimul }
-    return (Read-RegistroTravado -Caminho $arq)
+    return (Read-RegistroTravado -Caminho (Get-ArquivoRegistroAtual))
+}
+
+# Pasta das copias do registro do modo atual (simulacao tem a sua, como o registro).
+function Get-PastaCopiasAtual {
+    if ($E.Simular) { return $arquivos.CopiasSimul }
+    return $arquivos.Copias
+}
+
+# Textos de recusa do controle do registro e da fila. A pagina traduz pelo
+# texto exato (textos.js, SERVIDOR_EXATO); os dois da fila sao os mesmos do worker.
+$TextoExcluirVazio = 'Escolha ao menos uma câmera para excluir.'
+$TextoExportarVazio = 'Escolha ao menos uma câmera para exportar, ou exporte o registro inteiro.'
+$TextoRestaurarComFila = 'Encerre a fila antes de restaurar uma cópia do registro: com a fila aberta, o painel ainda grava nele.'
+$TextoSemFilaParaLimpar = 'Não há fila para limpar.'
+$TextoLimparComFila = 'Encerre a fila antes de limpar: com a fila aberta, as posições ainda estão em uso.'
+
+<#
+    Fila aberta (G5), pelo retrato do worker: fase fila, configurando ou
+    decisao (encerrada e concluida ja nao gravam no registro). Macs: os MACs
+    normalizados que ela ja viu (cameras e posicoes), so com a fila aberta.
+#>
+function Get-FilaPublicada {
+    $est = Get-EstadoPublicado
+    $fase = 'ocioso'
+    if ($null -ne $est -and [string]$est.fase) { $fase = [string]$est.fase }
+    $aberta = ($fase -in @('fila', 'configurando', 'decisao'))
+    $macs = @{}
+    if ($aberta) {
+        $vistos = @(@($est.cameras) | Where-Object { $null -ne $_ } | ForEach-Object { [string]$_.mac })
+        if ($null -ne $est.fila) { $vistos += @(@($est.fila.itens) | Where-Object { $null -ne $_ } | ForEach-Object { [string]$_.Mac }) }
+        foreach ($m in $vistos) { $n = Get-MacNormalizado $m; if ($n) { $macs[$n] = $true } }
+    }
+    return [pscustomobject]@{ Fase = $fase; Aberta = $aberta; Macs = $macs }
+}
+
+# Lista "macs" do corpo JSON: ao menos um, cada um um MAC de 12 digitos hexa
+# (com ou sem separador). Fora disso, 400 com -Vazio ou o MAC recusado.
+function Get-MacsDoCorpo {
+    param($Corpo, [string]$Vazio)
+    $p = $Corpo.PSObject.Properties['macs']
+    $lista = @()
+    if ($null -ne $p -and $null -ne $p.Value) { $lista = @($p.Value) }
+    if ($lista.Count -eq 0) { throw ('HTTP400:' + $Vazio) }
+    foreach ($m in $lista) {
+        if (-not ($m -is [string]) -or $m -notmatch '^[0-9A-Fa-f]{2}([:-]?[0-9A-Fa-f]{2}){5}$') {
+            throw ('HTTP400:MAC inválido na lista: <' + [string]$m + '>. Nada foi feito.')
+        }
+    }
+    return [string[]]$lista
+}
+
+# Copia publicada (Save-CopiaRegistro / Get-CopiasRegistro) no formato da pagina.
+function ConvertTo-CopiaPublicada {
+    param($Copia)
+    if ($null -eq $Copia) { return $null }
+    $legivel = $true
+    if ($null -ne $Copia.PSObject.Properties['Legivel']) { $legivel = [bool]$Copia.Legivel }
+    return [ordered]@{ nome = [string]$Copia.Nome; data = [string]$Copia.Data; acao = [string]$Copia.Acao; cameras = $Copia.Cameras; legivel = $legivel }
+}
+
+# CSV do relatorio para baixar (UTF-8 com BOM). -Sufixo vai no nome do arquivo.
+function Send-RelatorioCsv {
+    param($Ctx, [string]$Texto, [string]$Sufixo = '')
+    $bom = [byte[]](0xEF, 0xBB, 0xBF)
+    $nome = 'relatorio-cameras-' + (Get-Date).ToString('yyyyMMdd-HHmm') + $Sufixo
+    if ($E.Simular) { $nome += '-SIMULADO' }
+    Send-Resposta $Ctx 200 'text/csv; charset=utf-8' ([byte[]]($bom + [Text.Encoding]::UTF8.GetBytes($Texto))) @{
+        'Content-Disposition' = ('attachment; filename="' + $nome + '.csv"') }
 }
 
 function Invoke-Rota {
@@ -1822,6 +1923,13 @@ function Invoke-Rota {
             $b = Read-Corpo $Ctx
             Add-Comando $Ctx @{ tipo = 'fila'; inicio = $b.inicio; fim = $b.fim; local = $b.local; rack = $b.rack; andar = $b.andar }
         }
+        # Limpar a fila (G6): so encerrada ou concluida; o worker confere de novo.
+        'POST /api/fila/limpar' {
+            $fila = Get-FilaPublicada
+            if ($fila.Aberta) { Send-Json $Ctx @{ erro = $TextoLimparComFila } 409; return }
+            if ($fila.Fase -notin @('concluida', 'encerrada')) { Send-Json $Ctx @{ erro = $TextoSemFilaParaLimpar } 409; return }
+            Add-Comando $Ctx @{ tipo = 'fila-limpar' }
+        }
         # Sem IP = procurar agora (passa); com IP = retomada serial, guardada.
         'POST /api/fila/conectada' { $b = Read-Corpo $Ctx; if (([string]$b.ip).Trim() -and (Test-RecusaGuardada $Ctx 'retomar')) { return }; Add-Comando $Ctx @{ tipo = 'conectada'; porta = $b.porta; canal = $b.canal; ip = $b.ip } }
         # -Sempre: desligar o vigia no meio de uma configuracao tem que ser
@@ -1837,13 +1945,86 @@ function Invoke-Rota {
         # inclusive com a camera instalada (grava direto no registro).
         'POST /api/camera'     { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'camera'; mac = [string]$b.mac; porta = [string]$b.porta; canal = [string]$b.canal } }
         'GET /api/registro'    { Send-Json $Ctx @{ cameras = @((Read-RegistroAtual).Cameras); simulado = [bool]$E.Simular } }
-        'GET /api/relatorio.csv' {
-            $txt = ConvertTo-RelatorioCsv (Read-RegistroAtual)
-            $bom = [byte[]](0xEF, 0xBB, 0xBF)
-            $nome = 'relatorio-cameras-' + (Get-Date).ToString('yyyyMMdd-HHmm')
-            if ($E.Simular) { $nome += '-SIMULADO' }
-            Send-Resposta $Ctx 200 'text/csv; charset=utf-8' ([byte[]]($bom + [Text.Encoding]::UTF8.GetBytes($txt))) @{
-                'Content-Disposition' = ('attachment; filename="' + $nome + '.csv"') }
+        # Registro inteiro por GET; so as selecionadas por POST {macs} (G7: a
+        # lista vai no corpo, nao na URL; a pagina baixa por Blob).
+        'GET /api/relatorio.csv' { Send-RelatorioCsv $Ctx (ConvertTo-RelatorioCsv (Read-RegistroAtual)) }
+        'POST /api/relatorio.csv' {
+            $b = Read-Corpo $Ctx
+            $macs = Get-MacsDoCorpo $b $TextoExportarVazio
+            Send-RelatorioCsv $Ctx (ConvertTo-RelatorioCsv -Registro (Read-RegistroAtual) -Macs $macs) '-selecao'
+        }
+        # Excluir do registro (G2, G4, G5): recusa inteira (409, nada sai) se
+        # algum MAC esta na fila aberta. Sob o Mutex do registro, num passo so:
+        # copia do registro inteiro (acao 'zerar' quando sairiam todas) e a
+        # exclusao. Nenhum MAC no registro: nada muda e nao ha copia.
+        'POST /api/registro/excluir' {
+            $b = Read-Corpo $Ctx
+            $macs = Get-MacsDoCorpo $b $TextoExcluirVazio
+            $fila = Get-FilaPublicada
+            $naFila = @($macs | ForEach-Object { Get-MacNormalizado $_ } | Where-Object { $fila.Macs.ContainsKey($_) } | Select-Object -Unique | ForEach-Object { Format-Mac $_ })
+            if ($naFila.Count -gt 0) {
+                $quem = $(if ($naFila.Count -eq 1) { 'a câmera ' + $naFila[0] + ' está' } else { 'as câmeras ' + ($naFila -join ', ') + ' estão' })
+                Send-Json $Ctx @{ erro = ('Nada foi excluído: ' + $quem + ' na fila aberta. Tire da seleção ou encerre a fila antes.'); naFila = $naFila } 409
+                return
+            }
+            $arqReg = Get-ArquivoRegistroAtual
+            $pastaCopias = Get-PastaCopiasAtual
+            $alvo = @{}
+            foreach ($m in $macs) { $alvo[(Get-MacNormalizado $m)] = $true }
+            $r = Invoke-SobMutexRegistro -Caminho $arqReg -Complemento 'Nada foi excluído; tente de novo.' -Bloco {
+                $todas = @(@((Read-RegistroTravado -Caminho $arqReg).Cameras) | Where-Object { $null -ne $_ })
+                $saem = @($todas | Where-Object { $alvo.ContainsKey((Get-MacNormalizado $_.Mac)) }).Count
+                if ($saem -eq 0) { return [pscustomobject]@{ Removidas = 0; Restantes = $todas.Count; Copia = $null } }
+                $acao = 'excluir'
+                if ($saem -eq $todas.Count) { $acao = 'zerar' }
+                $copia = Save-CopiaRegistro -Caminho $arqReg -Pasta $pastaCopias -Acao $acao
+                $fora = @(Remove-CamerasRegistro -Caminho $arqReg -Macs $macs)
+                [pscustomobject]@{ Removidas = $fora.Count; Restantes = ($todas.Count - $fora.Count); Copia = $copia }
+            }
+            if ($r.Removidas -gt 0) {
+                Write-Log ("Registro: " + $r.Removidas + " camera(s) excluida(s) pelo operador (" + $r.Copia.Acao + "); " + $r.Restantes +
+                           " ficam. Copia de antes: " + $r.Copia.Nome + ".") 'Cyan'
+            }
+            Send-Json $Ctx ([ordered]@{ ok = $true; removidas = [int]$r.Removidas; restantes = [int]$r.Restantes; copia = (ConvertTo-CopiaPublicada $r.Copia) })
+        }
+        'GET /api/registro/copias' {
+            $copias = @(Get-CopiasRegistro -Pasta (Get-PastaCopiasAtual) | ForEach-Object { ConvertTo-CopiaPublicada $_ })
+            Send-Json $Ctx ([ordered]@{ copias = $copias; simulado = [bool]$E.Simular })
+        }
+        # Restaurar uma copia (G2, G5): travado com a fila aberta (o motor
+        # ainda grava no registro) e com o worker ocupado. Restore-CopiaRegistro
+        # recusa nome fora do padrao ou da pasta (400) e guarda antes uma
+        # copia do registro atual.
+        'POST /api/registro/restaurar' {
+            $b = Read-Corpo $Ctx
+            if ((Get-FilaPublicada).Aberta) { Send-Json $Ctx @{ erro = $TextoRestaurarComFila } 409; return }
+            if ($E.Ocupado -or $Q.Count -gt 0) { Send-Json $Ctx @{ erro = 'Aguarde: o painel está terminando a operação atual.' } 409; return }
+            $nome = ''
+            if ($null -ne $b.PSObject.Properties['nome'] -and $b.nome -is [string]) { $nome = $b.nome }
+            try { $r = Restore-CopiaRegistro -Caminho (Get-ArquivoRegistroAtual) -Pasta (Get-PastaCopiasAtual) -Nome $nome }
+            catch {
+                $msg = $_.Exception.Message
+                $status = 409
+                if ($msg -like 'Cópia do registro inválida*' -or $msg -like 'Cópia do registro fora*') { $status = 400 }
+                Send-Json $Ctx @{ erro = $msg } $status
+                return
+            }
+            Send-Json $Ctx ([ordered]@{ ok = $true; cameras = @($r.Registro.Cameras).Count; copiaAntes = (ConvertTo-CopiaPublicada $r.CopiaAntes) })
+        }
+        # Log do painel para baixar (G8): le com o arquivo compartilhado (os
+        # runspaces continuam gravando; a rotacao pode move-lo). Sem log: vazio.
+        'GET /api/log.txt' {
+            $bytes = [byte[]]@()
+            if ([IO.File]::Exists($arquivos.Log)) {
+                $fs = New-Object IO.FileStream($arquivos.Log, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+                try {
+                    $ms = New-Object IO.MemoryStream
+                    $fs.CopyTo($ms)
+                    $bytes = $ms.ToArray()
+                } finally { $fs.Dispose() }
+            }
+            $nome = 'log-configurar-cameras-' + (Get-Date).ToString('yyyyMMdd-HHmm') + '.txt'
+            Send-Resposta $Ctx 200 'text/plain; charset=utf-8' $bytes @{ 'Content-Disposition' = ('attachment; filename="' + $nome + '"') }
         }
         'POST /api/sondar'     { if (Test-RecusaGuardada $Ctx 'ferramenta') { return }; $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'sondar'; ip = $b.ip } }
         'POST /api/verificar'  { if (Test-RecusaGuardada $Ctx 'ferramenta') { return }; Add-Comando $Ctx @{ tipo = 'verificar' } }
@@ -1894,6 +2075,8 @@ if (-not $SemNavegador) { Open-Navegador ($origem + '/') }
 # curso, para (o finally devolve a placa). O retrato do worker e a fonte.
 $E.UltimoPoll = (Get-Date)
 $proximaChecagem = (Get-Date).AddSeconds(5)
+# Rotacao do log no laco (G8): a cada minuto, alem da abertura.
+$proximaRotacao = (Get-Date).AddMinutes(1)
 function Test-PainelOciosoAgora {
     try {
         # Camera em portao ou conferindo, ou esperando decisao: nao e ocioso.
@@ -1920,6 +2103,10 @@ try {
                 $E.Parar = $true
                 break
             }
+        }
+        if ((Get-Date) -ge $proximaRotacao) {
+            $proximaRotacao = (Get-Date).AddMinutes(1)
+            Invoke-RotacaoLogPainel
         }
         try {
             if ($null -eq $pendente) { $pendente = $listener.BeginGetContext($null, $null) }
