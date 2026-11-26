@@ -412,6 +412,35 @@ const TEXTOS = {
   'registro.ler': 'Ler o registro de novo',
   'registro.exportar': 'Exportar o relatório',
   'registro.vazio': 'Nenhuma câmera registrada ainda.',
+  // Busca, selecao e exclusao (G3, G4, G5, G7).
+  'registro.busca': 'Buscar no registro',
+  'registro.busca.ajuda': 'Por IP, MAC, serial, modelo, local, rack ou andar.',
+  'registro.busca.resultado': ({ n, total }) => n + ' de ' + pl(total, 'câmera', 'câmeras') + '.',
+  'registro.busca.nada': 'Nenhuma câmera do registro combina com a busca.',
+  'registro.busca.limpar': 'Limpar a busca',
+  'registro.selecao': 'Seleção do registro',
+  'registro.selecao.nenhuma': 'Nenhuma selecionada',
+  'registro.selecao.n': ({ n, fora }) => (n === 1 ? '1 selecionada' : n + ' selecionadas') +
+    (fora ? ' (' + fora + ' fora da busca)' : ''),
+  'registro.marcarVisiveis': 'Selecionar as câmeras visíveis',
+  'registro.marcar': ({ quem }) => 'Selecionar a câmera ' + quem,
+  'registro.naFila': 'Na fila agora',
+  'registro.exportarSelecao': 'Exportar a seleção',
+  'registro.exportando': 'Exportando…',
+  'registro.exportado': ({ n }) => 'Relatório da seleção baixado, com ' + pl(n, 'câmera', 'câmeras') + '.',
+  'registro.excluir': 'Excluir do registro',
+  'registro.excluindo': 'Excluindo…',
+  'registro.limparSelecao': 'Limpar a seleção',
+  'registro.excluido': ({ n }) => (n === 1 ? '1 câmera excluída do registro.' : n + ' câmeras excluídas do registro.') +
+    ' A cópia de antes está em Ferramentas, em Cópias do registro.',
+  'registro.excluidoNada': 'Nenhuma das câmeras marcadas estava mais no registro. Nada mudou.',
+  // Dialogo da exclusao (G2): quantas saem e onde fica a copia. todas: o registro inteiro, com mais de uma.
+  'dialogo.excluir.titulo': ({ n, todas }) => (todas ? 'Excluir todas as ' + n + ' câmeras' : 'Excluir ' + pl(n, 'câmera', 'câmeras')) +
+    ' do registro?',
+  'dialogo.excluir.texto': ({ n, vazio }) => (vazio ? 'O registro fica vazio. '
+    : (n === 1 ? 'A câmera sai do registro. ' : 'As ' + n + ' câmeras saem do registro. ')) +
+    'Antes, o painel guarda uma cópia do registro inteiro, que fica em Ferramentas, em Cópias do registro, para restaurar.',
+  'dialogo.excluir.confirmar': ({ n, todas }) => (todas ? 'Excluir todas as ' + n : 'Excluir ' + pl(n, 'câmera', 'câmeras')),
   'registro.col.ip': 'IP',
   'registro.col.mac': 'MAC',
   'registro.col.modelo': 'Modelo',

@@ -479,17 +479,36 @@
     .tabela td.coluna-metades, .tabela th { white-space: normal; }
     .tabela th, .tabela td { padding-inline: var(--esp-2); }
   }
-  /* Registro: abaixo de 1600 a tabela rola por dentro, com o IP fixo a esquerda.
-     A linha tem fundo para a celula fixa herdar (no hover tambem). */
+  /* Registro: abaixo de 1600 a tabela rola por dentro, com a caixa de marcar e
+     o IP fixos a esquerda (o IP logo depois da largura da caixa). A linha tem
+     fundo para as celulas fixas herdarem (no hover e marcada tambem). */
   .tabela-registro tbody tr { background: var(--superficie); }
+  .tabela-registro .coluna-marca {
+    position: sticky; inset-inline-start: 0; background: inherit; padding: 0;
+    inline-size: var(--coluna-marca); min-inline-size: var(--coluna-marca); max-inline-size: var(--coluna-marca);
+  }
   .tabela-registro .coluna-ip {
-    position: sticky; inset-inline-start: 0;
+    position: sticky; inset-inline-start: var(--coluna-marca);
     background: inherit; box-shadow: inset calc(-1 * var(--traco)) 0 0 var(--linha);
   }
-  .tabela-registro th.coluna-ip { z-index: var(--z-tabela-canto); background: var(--superficie-2); }
+  .tabela-registro th.coluna-ip, .tabela-registro th.coluna-marca { z-index: var(--z-tabela-canto); background: var(--superficie-2); }
+  /* Alvo de clique maior que a caixa; Espaco marca pelo teclado. */
+  .registro-marca {
+    display: grid; place-items: center; cursor: pointer;
+    min-inline-size: var(--alvo-marca); min-block-size: var(--alvo-marca);
+  }
+  .registro-marca:has(input:disabled) { cursor: not-allowed; }
+  .registro-marca input { inline-size: var(--caixa-marca); block-size: var(--caixa-marca); margin: 0; padding: 0; cursor: inherit; }
+  /* "Na fila agora" embaixo do IP: texto de apoio, fora da fonte mono. */
+  .tabela .registro-na-fila {
+    display: flex; align-items: center; gap: var(--esp-1);
+    font-family: var(--familia); font-size: var(--tipo-meta); color: var(--apoio);
+  }
   .tabela .linha-falha, .tabela .linha-falha:hover { background: var(--falha-fundo); }
   /* Instalada agora: fundo de acao por um ciclo de consulta. */
   .tabela .linha-nova, .tabela .linha-nova:hover { background: var(--acao-fraco); }
+  /* Registro: linha selecionada (G4). */
+  .tabela .linha-marcada, .tabela .linha-marcada:hover { background: var(--acao-fraco); }
   /* Linha que a fita apontou: a barra do foco na borda, por um instante. */
   .tabela .linha-alvo { box-shadow: inset var(--barra-mini) 0 0 var(--foco); }
   /* Linha de detalhe (falha, nota da porta e do canal): junto da linha de cima. */
@@ -509,7 +528,7 @@
   .entrada-tabela[readonly] { background: var(--superficie-2); color: var(--apoio); }
   .tabela-vazio { padding: var(--esp-5); color: var(--apoio); display: grid; gap: var(--esp-3); justify-items: start; }
   .tabela-vazio p { margin: 0; display: inline-flex; align-items: center; gap: var(--esp-2); }
-  .situacao-detalhe, .stream { display: block; font-size: var(--tipo-meta); color: var(--apoio); }
+  .situacao-detalhe, .registro-stream { display: block; font-size: var(--tipo-meta); color: var(--apoio); }
   .tabela .coluna-situacao { white-space: normal; }
   /* Falha na linha: o erro, o conserto e as duas decisoes. */
   .falha-linha { display: grid; gap: var(--esp-2); justify-items: start; white-space: normal; }

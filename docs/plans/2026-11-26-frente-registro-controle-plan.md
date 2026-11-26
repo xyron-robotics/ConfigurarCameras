@@ -14,7 +14,7 @@ Frente 2 da onda 2 do mapa `docs/plans/2026-11-26-versao-131-mapa.md`. Depende d
 - histórico de filas encerradas;
 - filtros além da busca de texto.
 
-**Touched:** `fonte/Motor-Cameras.ps1`, `fonte/web/Servidor-Painel.ps1`, `fonte/Testes-Motor.ps1`, `fonte/web/www/` (`tela-painel.js`, `tela-inicio.js`, `tela-ferramentas.js`, `textos.js`, `constantes.js`, `componentes.css`, `telas.css`, `tokens.css`), `CONTEXT.md`, `LEIA-ME.md`, este plano, o mapa.
+**Touched:** `fonte/Motor-Cameras.ps1`, `fonte/web/Servidor-Painel.ps1`, `fonte/Testes-Motor.ps1`, `fonte/web/www/` (`api.js`, `tela-painel.js`, `tela-inicio.js`, `tela-ferramentas.js`, `textos.js`, `constantes.js`, `componentes.css`, `telas.css`, `tokens.css`), `CONTEXT.md`, `LEIA-ME.md`, este plano, o mapa.
 
 ## Estado de hoje (levantamento, 26/11)
 
@@ -121,7 +121,7 @@ Testes com MACs `AA:00:00:00:00:0x`, em pasta temporária.
 
 ## Task 3: Registro no Painel (G3, G4, G5, G7)
 
-**Files:** `tela-painel.js`, `textos.js`, `constantes.js`, `componentes.css`, `telas.css`, `tokens.css`
+**Files:** `tela-painel.js`, `api.js` (só o método aditivo `baixar(rota, corpo)` -> `{ ok, blob, nome }`, o nome do `Content-Disposition`; decisão do usuário, 26/11), `textos.js`, `constantes.js`, `componentes.css`, `telas.css`, `tokens.css`
 
 **Skills:** `design-taste-frontend` (`references/system.md`, tabelas e estados), `web-design-guidelines`, `frontend-design` (escrita).
 

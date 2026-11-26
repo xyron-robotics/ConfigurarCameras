@@ -152,6 +152,26 @@
   .vista-conteudo { display: grid; gap: var(--esp-4); min-inline-size: 0; }
   .vista-cabeca { display: flex; justify-content: space-between; align-items: center; gap: var(--esp-4); flex-wrap: wrap; }
   .vista-acoes { display: flex; gap: var(--esp-2); flex-wrap: wrap; }
+  /* Registro (G3, G4): a busca a esquerda, com rotulo em cima e ajuda embaixo;
+     a barra da selecao na linha do campo, encostada a direita. Abaixo de 1100,
+     um embaixo do outro. */
+  .registro-ferramentas {
+    display: grid; grid-template-columns: var(--grade-registro); gap: var(--esp-1) var(--esp-4);
+    grid-template-areas: "rotulo ." "entrada barra" "ajuda .";
+    align-items: center;
+  }
+  .registro-busca-rotulo { grid-area: rotulo; }
+  .registro-busca-entrada { grid-area: entrada; inline-size: 100%; }
+  .registro-busca-ajuda { grid-area: ajuda; }
+  .registro-barra {
+    grid-area: barra; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--esp-2);
+  }
+  .registro-contagem { margin: 0; font-size: var(--tipo-meta); color: var(--apoio); }
+  @media (max-width: 1100px) {
+    .registro-ferramentas { grid-template-columns: var(--grade-1); grid-template-areas: "rotulo" "entrada" "ajuda" "barra"; }
+    .registro-busca-entrada { max-inline-size: var(--campo-busca-max); }
+    .registro-barra { justify-content: flex-start; }
+  }
   .grupo { display: grid; gap: var(--esp-2); min-inline-size: 0; }
   .grupo-titulo { margin: 0; font-size: var(--tipo-subtitulo); }
   .grupo > p { margin: 0; }

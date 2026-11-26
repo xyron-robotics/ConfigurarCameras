@@ -9,7 +9,7 @@
 // Porta e canal (P2): vale o valor publicado pelo servidor. A linha mostra o
 // valor enviado so ate a consulta seguinte ao envio; recusado, volta ao
 // publicado e o erro fica junto dos campos; reenviar o mesmo valor envia de novo.
-import { h, focar } from './dom.js';
+import { h, focar, novoId } from './dom.js';
 import { icone } from './icones.js';
 import { t, nomeEtapa, textoDaFalha, traduzirServidor, traduzirRecusaPortaCanal, motivoVigia } from './textos.js';
 import { botao, ocupar, selo, barraEtapas, chip, lugarAviso, aviso, detalhe, lateral } from './componentes.js';
@@ -17,11 +17,14 @@ import { montarFormulario, salvarParcial } from './formularios.js';
 import { dataHora, hora, mac as formatarMac, streamsEncoder } from './formato.js';
 import {
   CONSULTA_MS, ESPERA_ESTADO_MS, ESPERA_ESTADO_PASSO_MS, NOTA_SALVO_MS, TRAVA_DECISAO_MS,
-  DESTAQUE_LINHA_MS, FITA_MAX_NUMEROS, FITA_PASSO_NUMERO,
+  DESTAQUE_LINHA_MS, FITA_MAX_NUMEROS, FITA_PASSO_NUMERO, FASES_FILA_ABERTA, REVOGAR_BLOB_MS,
 } from './constantes.js';
 
 const COLUNAS_FILA = ['pos', 'estado', 'ip', 'modelo', 'serial', 'mac', 'porta', 'canal'];
 const COLUNAS_REGISTRO = ['ip', 'mac', 'modelo', 'situacao', 'encoder', 'local', 'rackPorta', 'canal', 'data'];
+// Campos do registro que a busca (G3) le, alem do MAC.
+const CAMPOS_BUSCA = ['Ip', 'Serial', 'Modelo', 'Local', 'Rack', 'Andar'];
+const ROTA_RELATORIO = '/api/relatorio.csv';
 const ESTADO_DO_STATUS = { Instalada: 'instalada', Falhou: 'falha', 'Em andamento': 'curso', Resetada: 'pulada' };
 const COM_CAMPOS = ['instalada', 'curso', 'falha'];
 const ROTA_FILA = '#/sessao/fila';
@@ -343,9 +346,15 @@ export function telaPainel(ctx, parte) {
   // Os titulos levam data-foco para o redesenho seguinte nao os perder.
   const RESERVA_FOCO = {
     encerrar: 'montar', vigia: 'montar', 'registro-ler-erro': 'registro-ler', 'pede-titulo': 'fila-titulo',
+    // Registro: a linha marcada que saiu (excluida, fora da busca) leva o foco a
+    // caixa do cabecalho; a barra que sumiu (registro zerado), ao Ler de novo.
+    'registro-marca-todas': 'registro-busca', 'registro-busca': 'registro-ler', 'registro-busca-limpar': 'registro-busca',
+    'registro-barra': 'registro-ler', 'registro-excluir': 'registro-barra', 'registro-exportar': 'registro-barra',
+    'registro-limpar-selecao': 'registro-barra',
   };
   function reservaDoFoco(onde, chave) {
-    let outra = /^pede-item-/.test(chave) ? 'pede-titulo' : RESERVA_FOCO[chave];
+    let outra = /^pede-item-/.test(chave) ? 'pede-titulo'
+      : /^registro-marca-/.test(chave) && !RESERVA_FOCO[chave] ? 'registro-marca-todas' : RESERVA_FOCO[chave];
     while (outra) {
       const el = onde.querySelector(`[data-foco="${outra}"]`);
       if (el) return el;
@@ -481,8 +490,8 @@ export function telaPainel(ctx, parte) {
     const s = streamsEncoder(r.Encoder, false);
     if (!s) return '';
     return [
-      s.principal ? h('span', { class: 'stream' }, t('registro.principal', { texto: s.principal })) : null,
-      s.secundario ? h('span', { class: 'stream' }, t('registro.secundario', { texto: s.secundario })) : null,
+      s.principal ? h('span', { class: 'registro-stream' }, t('registro.principal', { texto: s.principal })) : null,
+      s.secundario ? h('span', { class: 'registro-stream' }, t('registro.secundario', { texto: s.secundario })) : null,
     ];
   }
 
@@ -495,7 +504,212 @@ export function telaPainel(ctx, parte) {
     return [h('span', { class: 'data-parte' }, partes[1]), h('span', { class: 'data-parte' }, partes[2])];
   }
 
-  function tabelaRegistro(m) {
+  // Busca (G3) e selecao (G4) vivem na tela. A selecao guarda o MAC formatado
+  // e sobrevive a troca da busca ("N fora da busca"); a linha que sai do
+  // registro ou entra na fila aberta sai dela. O campo da busca, a contagem e
+  // o aviso das acoes sao os mesmos nos entre redesenhos: o valor, o cursor e o
+  // desfazer do campo ficam, e a regiao viva so fala quando o texto muda.
+  let busca = '';
+  const selecao = new Set();
+  let acaoRegistro = '';
+  const avisoRegistro = lugarAviso();
+  const buscaId = novoId('registro-busca');
+  const buscaRotulo = h('label', { class: ['campo-rotulo', 'registro-busca-rotulo'], for: buscaId }, t('registro.busca'));
+  const buscaAjuda = h('p', { class: ['campo-ajuda', 'registro-busca-ajuda'], id: buscaId + '-ajuda', 'aria-live': 'polite' });
+  const buscaEntrada = h('input', {
+    id: buscaId, type: 'search', class: ['campo-entrada', 'registro-busca-entrada'], autocomplete: 'off', spellcheck: 'false',
+    'aria-describedby': buscaId + '-ajuda', dados: { foco: 'registro-busca' },
+    // Acento por tecla morta compoe: o redesenho espera o fim da composicao.
+    oninput: (ev) => { busca = buscaEntrada.value; if (!ev.isComposing) mudouLocal(); },
+    oncompositionend: () => { busca = buscaEntrada.value; mudouLocal(); },
+  });
+  const contagemSelecao = h('p', { class: 'registro-contagem', 'aria-live': 'polite' });
+
+  function trocarTexto(el, texto) {
+    if (el.textContent !== texto) el.textContent = texto;
+  }
+
+  // MACs da fila aberta (G5), como o servidor (Get-FilaPublicada): as cameras
+  // com posicao, na espera e ignoradas. Fila encerrada ou concluida: nenhum.
+  function macsNaFila(m) {
+    if (!FASES_FILA_ABERTA.includes(m.fase)) return new Set();
+    const comPosicao = m.fila ? m.fila.posicoes.map((p) => p.camera).filter(Boolean) : [];
+    return new Set([...comPosicao, ...m.espera, ...m.ignoradas].map((c) => formatarMac(c.macBruto)).filter(Boolean));
+  }
+
+  // O MAC entra com dois-pontos, com hifen e sem separador.
+  function combina(r, termo) {
+    if (!termo) return true;
+    const mac = formatarMac(r.Mac);
+    const campos = [mac, mac.split(':').join('-'), mac.split(':').join(''), ...CAMPOS_BUSCA.map((k) => r[k])];
+    return campos.filter(Boolean).join(' ').toLowerCase().includes(termo);
+  }
+
+  // O que a aba Registro mostra agora: as linhas da busca, as travadas pela
+  // fila, as que a caixa do cabecalho marca e quantas marcadas a busca esconde.
+  function visaoRegistro(m) {
+    const lista = m.registro.lista || [];
+    const travadas = macsNaFila(m);
+    if (m.registro.lista) {
+      const presentes = new Set(lista.map((r) => formatarMac(r.Mac)));
+      for (const k of [...selecao]) if (!presentes.has(k) || travadas.has(k)) selecao.delete(k);
+    }
+    const termo = busca.trim().toLowerCase();
+    const visiveis = lista.filter((r) => combina(r, termo));
+    const chavesVisiveis = new Set(visiveis.map((r) => formatarMac(r.Mac)));
+    const marcaveis = [...chavesVisiveis].filter((k) => !travadas.has(k));
+    return {
+      lista, termo, visiveis, travadas, marcaveis,
+      marcadasVisiveis: marcaveis.filter((k) => selecao.has(k)).length,
+      fora: [...selecao].filter((k) => !chavesVisiveis.has(k)).length,
+    };
+  }
+
+  function mudarSelecao(chaves, marcar) {
+    for (const k of chaves) { if (marcar) selecao.add(k); else selecao.delete(k); }
+    avisoRegistro.limpar();
+    mudouLocal();
+  }
+
+  function limparBusca() {
+    busca = '';
+    buscaEntrada.value = '';
+    mudouLocal();
+    focar(buscaEntrada);
+  }
+
+  function focarRegistro(chave) {
+    const el = raiz.querySelector(`[data-foco="${chave}"]`) || reservaDoFoco(raiz, chave);
+    if (el) focar(el);
+  }
+
+  // Download sem fetch na tela: o link do GET (registro inteiro) ou o Blob da api.js.
+  function baixarLink(href, nome) {
+    const a = h('a', { href, download: nome || '', hidden: true });
+    raiz.append(a);
+    a.click();
+    a.remove();
+  }
+
+  // G7: com selecao, so as marcadas (POST, nome com -selecao, Blob); sem, o
+  // registro inteiro pelo GET de sempre.
+  async function exportarRegistro() {
+    if (acaoRegistro) return;
+    avisoRegistro.limpar();
+    const macs = [...selecao];
+    if (!macs.length) { baixarLink(ROTA_RELATORIO, ''); return; }
+    acaoRegistro = 'exportando';
+    mudouLocal();
+    const r = await ctx.api.baixar(ROTA_RELATORIO, { macs });
+    acaoRegistro = '';
+    if (r.ok) {
+      const url = URL.createObjectURL(r.blob);
+      baixarLink(url, r.nome);
+      setTimeout(() => URL.revokeObjectURL(url), REVOGAR_BLOB_MS);
+      avisoRegistro.mostrar('sucesso', t('registro.exportado', { n: macs.length }));
+    } else {
+      const e = traduzirServidor(r);
+      avisoRegistro.mostrar('erro', e.texto, e.cru);
+    }
+    mudouLocal();
+  }
+
+  // G2, G4: o dialogo diz quantas saem (todas as N, quando e o registro
+  // inteiro) e onde fica a copia. Depois, o foco volta a barra da selecao.
+  async function excluirSelecao() {
+    if (acaoRegistro || !selecao.size) return;
+    const macs = [...selecao];
+    const n = macs.length;
+    const vazio = n >= (ctx.modelo().registro.lista || []).length;
+    const todas = vazio && n > 1;
+    avisoRegistro.limpar();
+    const sim = await ctx.confirmar({
+      titulo: t('dialogo.excluir.titulo', { n, todas }),
+      texto: t('dialogo.excluir.texto', { n, vazio }),
+      confirmar: t('dialogo.excluir.confirmar', { n, todas }),
+      perigo: true,
+    });
+    if (!sim) {
+      // O botao que abriu pode ter sido trocado por um redesenho com o dialogo aberto.
+      if (!raiz.contains(document.activeElement)) focarRegistro('registro-excluir');
+      return;
+    }
+    acaoRegistro = 'excluindo';
+    mudouLocal();
+    const r = await ctx.api.comando('/api/registro/excluir', { macs });
+    acaoRegistro = '';
+    if (r.ok) {
+      selecao.clear();
+      const removidas = Number(r.dados && r.dados.removidas) || 0;
+      avisoRegistro.mostrar(removidas ? 'sucesso' : 'info', removidas ? t('registro.excluido', { n: removidas }) : t('registro.excluidoNada'));
+      await ctx.lerRegistro();
+    } else {
+      const e = traduzirServidor(r);
+      avisoRegistro.mostrar('erro', e.texto, e.cru);
+      mudouLocal();
+    }
+    focarRegistro('registro-barra');
+  }
+
+  function limparSelecao() {
+    if (!selecao.size) return;
+    mudarSelecao([...selecao], false);
+  }
+
+  // Campo da busca, contagem da selecao e as acoes dela (G3, G4, G7).
+  function ferramentasRegistro(m, v) {
+    const n = selecao.size;
+    const ocupada = !!acaoRegistro || m.registro.lendo;
+    trocarTexto(buscaAjuda, v.termo ? t('registro.busca.resultado', { n: v.visiveis.length, total: v.lista.length }) : t('registro.busca.ajuda'));
+    trocarTexto(contagemSelecao, n ? t('registro.selecao.n', { n, fora: v.fora }) : t('registro.selecao.nenhuma'));
+    const exportar = botao(n ? t('registro.exportarSelecao') : t('registro.exportar'), exportarRegistro,
+      { tipo: 'secundario', travado: ocupada, dados: { foco: 'registro-exportar' } });
+    if (acaoRegistro === 'exportando') ocupar(exportar, t('registro.exportando'));
+    const excluir = botao(t('registro.excluir'), excluirSelecao,
+      { tipo: 'secundario', travado: ocupada || !n, dados: { foco: 'registro-excluir' } });
+    if (acaoRegistro === 'excluindo') ocupar(excluir, t('registro.excluindo'));
+    return h('div', { class: 'registro-ferramentas' }, [
+      buscaRotulo,
+      buscaEntrada,
+      h('div', { class: 'registro-barra', role: 'group', 'aria-label': t('registro.selecao'), tabindex: '-1', dados: { foco: 'registro-barra' } }, [
+        contagemSelecao,
+        exportar,
+        excluir,
+        botao(t('registro.limparSelecao'), limparSelecao, { tipo: 'discreto', travado: !n, dados: { foco: 'registro-limpar-selecao' } }),
+      ]),
+      buscaAjuda,
+    ]);
+  }
+
+  // Caixa da linha (Espaco marca). Na fila aberta: desabilitada, com "Na fila
+  // agora" junto do IP (a celula ao lado), que a descreve.
+  function caixaDaLinha(r, k, travada) {
+    const naFilaId = travada ? novoId('registro-na-fila') : undefined;
+    const caixa = h('input', {
+      type: 'checkbox', checked: selecao.has(k), disabled: travada,
+      'aria-label': t('registro.marcar', { quem: r.Ip || k }), 'aria-describedby': naFilaId,
+      dados: { foco: 'registro-marca-' + k },
+      onchange: (ev) => mudarSelecao([k], ev.currentTarget.checked),
+    });
+    const aviso = travada ? h('span', { class: 'registro-na-fila', id: naFilaId, translate: 'yes' }, [icone('agora'), t('registro.naFila')]) : null;
+    return { caixa: h('label', { class: 'registro-marca' }, caixa), aviso };
+  }
+
+  // Caixa do cabecalho: marca as linhas visiveis que podem ser marcadas;
+  // indeterminada quando so parte delas esta marcada.
+  function caixaDoCabecalho(v) {
+    const total = v.marcaveis.length;
+    const k = v.marcadasVisiveis;
+    const caixa = h('input', {
+      type: 'checkbox', checked: total > 0 && k === total, disabled: total === 0,
+      'aria-label': t('registro.marcarVisiveis'), dados: { foco: 'registro-marca-todas' },
+      onchange: (ev) => mudarSelecao(v.marcaveis, ev.currentTarget.checked),
+    });
+    caixa.indeterminate = k > 0 && k < total;
+    return h('label', { class: 'registro-marca' }, caixa);
+  }
+
+  function tabelaRegistro(m, v) {
     const reg = m.registro;
     if (reg.lendo) return h('div', { class: 'tabela-vazio', role: 'status' }, h('p', null, t('registro.lendo')));
     if (reg.erro) {
@@ -506,20 +720,34 @@ export function telaPainel(ctx, parte) {
     }
     if (!reg.lista) return h('div', { class: 'tabela-vazio', role: 'status' }, h('p', null, t('registro.lendo')));
     if (!reg.lista.length) return h('div', { class: 'tabela-vazio' }, h('p', null, t('registro.vazio')));
-    // IP fixo na rolagem; Rack/porta e texto livre (quebra como o Local).
-    const corpo = reg.lista.map((r) => h('tr', null, [
-      h('td', { class: ['mono', 'coluna-ip'], translate: 'no' }, r.Ip || ''),
-      h('td', { class: 'mono', translate: 'no' }, formatarMac(r.Mac)),
-      h('td', null, r.Modelo || ''),
-      h('td', { class: 'coluna-situacao' }, situacao(r)),
-      h('td', { class: 'coluna-encoder' }, encoder(r)),
-      h('td', { class: 'coluna-local' }, r.Local || ''),
-      h('td', null, [r.Rack, r.Porta].filter(Boolean).join(' / ')),
-      h('td', { class: 'mono' }, r.Canal || ''),
-      h('td', { class: 'numeros' }, dataEmDuasLinhas(r.Data)),
-    ]));
+    if (!v.visiveis.length) {
+      return h('div', { class: 'tabela-vazio' }, [
+        h('p', null, t('registro.busca.nada')),
+        botao(t('registro.busca.limpar'), limparBusca, { tipo: 'secundario', dados: { foco: 'registro-busca-limpar' } }),
+      ]);
+    }
+    // Caixa e IP fixos na rolagem; Rack/porta e texto livre (quebra como o Local).
+    const corpo = v.visiveis.map((r) => {
+      const k = formatarMac(r.Mac);
+      const { caixa, aviso: naFila } = caixaDaLinha(r, k, v.travadas.has(k));
+      return h('tr', { class: selecao.has(k) ? 'linha-marcada' : null }, [
+        h('td', { class: 'coluna-marca' }, caixa),
+        h('td', { class: ['mono', 'coluna-ip'], translate: 'no' }, [r.Ip || '', naFila]),
+        h('td', { class: 'mono', translate: 'no' }, k),
+        h('td', null, r.Modelo || ''),
+        h('td', { class: 'coluna-situacao' }, situacao(r)),
+        h('td', { class: 'coluna-encoder' }, encoder(r)),
+        h('td', { class: 'coluna-local' }, r.Local || ''),
+        h('td', null, [r.Rack, r.Porta].filter(Boolean).join(' / ')),
+        h('td', { class: 'mono' }, r.Canal || ''),
+        h('td', { class: 'numeros' }, dataEmDuasLinhas(r.Data)),
+      ]);
+    });
     return h('div', { class: 'tabela-rolagem' }, h('table', { class: ['tabela', 'tabela-registro'] }, [
-      h('thead', null, h('tr', null, COLUNAS_REGISTRO.map((k) => h('th', { scope: 'col', class: k === 'ip' ? 'coluna-ip' : null }, t('registro.col.' + k))))),
+      h('thead', null, h('tr', null, [
+        h('th', { scope: 'col', class: 'coluna-marca' }, caixaDoCabecalho(v)),
+        ...COLUNAS_REGISTRO.map((k) => h('th', { scope: 'col', class: k === 'ip' ? 'coluna-ip' : null }, t('registro.col.' + k))),
+      ])),
       h('tbody', null, corpo),
     ]));
   }
@@ -529,10 +757,17 @@ export function telaPainel(ctx, parte) {
       h('h2', { class: 'grupo-titulo' }, m.registro.simulado || m.simular ? t('registro.titulo-simulacao') : t('registro.titulo')),
       h('div', { class: 'vista-acoes' }, [
         botao(t('registro.ler'), () => ctx.lerRegistro(), { tipo: 'secundario', travado: m.registro.lendo, dados: { foco: 'registro-ler' } }),
-        h('a', { class: ['botao', 'botao-secundario'], href: '/api/relatorio.csv', download: '', dados: { foco: 'registro-exportar' } },
-          h('span', { class: 'botao-rotulo' }, t('registro.exportar'))),
       ]),
     ]);
+  }
+
+  // A barra da selecao fica enquanto ha registro, tambem ao ler de novo (o
+  // foco volta a ela depois de excluir); o aviso das acoes fica mesmo com o
+  // registro vazio (o "excluidas" de quem zerou).
+  function conteudoRegistro(m) {
+    const v = visaoRegistro(m);
+    const comLista = !m.registro.erro && v.lista.length > 0;
+    return [barraRegistro(m), comLista ? ferramentasRegistro(m, v) : null, avisoRegistro.el, tabelaRegistro(m, v)];
   }
 
   // ------------------------------------------------------------ topo: cabecalho, fita e estados
@@ -788,7 +1023,8 @@ export function telaPainel(ctx, parte) {
     const ativo = document.activeElement;
     const chave = ativo && topo.contains(ativo) && ativo.dataset ? ativo.dataset.foco : null;
     const posicao = chave ? ativo.dataset.posicao : '';
-    const cursor = chave && ativo.tagName === 'INPUT' ? [ativo.selectionStart, ativo.selectionEnd] : null;
+    // Caixa de marcar nao tem cursor (selectionStart null; setSelectionRange lancaria).
+    const cursor = chave && ativo.tagName === 'INPUT' && typeof ativo.selectionStart === 'number' ? [ativo.selectionStart, ativo.selectionEnd] : null;
     desenharTopo(m);
     if (!chave) return;
     const el = topo.querySelector(`[data-foco="${chave}"]`) || reservaDoFoco(topo, chave);
@@ -827,7 +1063,7 @@ export function telaPainel(ctx, parte) {
   function desenhar(m) {
     const conteudo = aba === 'fila'
       ? [tabelaFila(m), grupoEspera(m), grupoIgnoradas(m)]
-      : [barraRegistro(m), tabelaRegistro(m)];
+      : conteudoRegistro(m);
     raiz.replaceChildren(
       abas(),
       h('div', { class: 'vista-conteudo', role: 'tabpanel', id: 'painel-aba-conteudo', 'aria-labelledby': `painel-aba-${aba}` }, conteudo),
@@ -878,14 +1114,15 @@ export function telaPainel(ctx, parte) {
     trocouDeFila(m);
     compararEstados(m);
     atualizarTopo(m);
-    const nova = JSON.stringify([m.fila, m.espera, m.ignoradas, m.registro, m.simular, aba, versaoLocal, [...novas]]);
+    const nova = JSON.stringify([m.fase, m.fila, m.espera, m.ignoradas, m.registro, m.simular, aba, versaoLocal, [...novas]]);
     if (nova === assinatura) return;
     assinatura = nova;
     // O redesenho troca os nos: o foco (e o cursor do campo) volta ao mesmo controle.
     const ativo = document.activeElement;
     const chave = ativo && raiz.contains(ativo) && ativo.dataset ? ativo.dataset.foco : null;
     const posicao = chave ? ativo.dataset.posicao : '';
-    const cursor = chave && ativo.tagName === 'INPUT' ? [ativo.selectionStart, ativo.selectionEnd] : null;
+    // Caixa de marcar nao tem cursor (selectionStart null; setSelectionRange lancaria).
+    const cursor = chave && ativo.tagName === 'INPUT' && typeof ativo.selectionStart === 'number' ? [ativo.selectionStart, ativo.selectionEnd] : null;
     redesenhando = true;
     try {
       desenhar(m);

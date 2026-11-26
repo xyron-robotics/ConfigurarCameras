@@ -139,6 +139,14 @@
     --coluna-encoder-min: 24ch;
     --coluna-modelo-max: 18ch;
     --coluna-campo-curto: 64px;
+    /* Registro (G4): coluna da caixa de marcar (o IP fixo comeca depois dela),
+       o alvo do clique (WCAG 2.5.8) e a caixa. */
+    --coluna-marca: 40px;
+    --alvo-marca: 24px;
+    --caixa-marca: 16px;
+    /* Campo da busca do Registro (G3). */
+    --campo-busca-min: 200px;
+    --campo-busca-max: 360px;
     --rotulo-conferir: 120px;
     --tabela-altura-max: 60vh;
     --recorte-oculto: inset(50%);
@@ -170,6 +178,7 @@
     --grade-conferir: var(--rotulo-conferir) minmax(0, 1fr) auto;
     --grade-sessao: var(--sessao-menu) minmax(0, 1fr);
     --grade-ferramenta: var(--rotulo-ferramenta) minmax(0, 1fr) auto;
+    --grade-registro: minmax(var(--campo-busca-min), var(--campo-busca-max)) minmax(0, 1fr);
     --grade-topo: auto auto minmax(0, 1fr) auto auto;
     --metade: 50%;
 

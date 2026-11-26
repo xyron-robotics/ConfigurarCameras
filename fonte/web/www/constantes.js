@@ -31,6 +31,11 @@ export const DESTAQUE_LINHA_MS = 3000;
 // Fita (direcao 5.5): ate 24 casas, numero em todas; acima, a cada 5.
 export const FITA_MAX_NUMEROS = 24;
 export const FITA_PASSO_NUMERO = 5;
+// Registro (G5): fases em que a fila esta aberta e grava no registro (as mesmas
+// do Get-FilaPublicada do servidor). As cameras dela nao podem ser excluidas.
+export const FASES_FILA_ABERTA = Object.freeze(['fila', 'configurando', 'decisao']);
+// Download do CSV da selecao por Blob: o endereco do Blob vale ate o navegador pegar o arquivo.
+export const REVOGAR_BLOB_MS = 10000;
 
 export const HTTP = {
   OK: 200,
