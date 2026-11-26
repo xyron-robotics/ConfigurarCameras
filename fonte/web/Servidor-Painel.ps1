@@ -1833,7 +1833,8 @@ function Invoke-Rota {
         # Decisao por MAC (sem MAC: 'encerrar' = encerrar a fila; as outras
         # acoes valem para a retomada manual ou a primeira camera em decisao).
         'POST /api/decisao'    { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'decisao'; mac = [string]$b.mac; acao = [string]$b.acao } }
-        # Porta e canal do cartao, editaveis ate a conferencia terminar.
+        # Porta e canal do cartao, editaveis enquanto a fila estiver aberta,
+        # inclusive com a camera instalada (grava direto no registro).
         'POST /api/camera'     { $b = Read-Corpo $Ctx; Add-Comando $Ctx @{ tipo = 'camera'; mac = [string]$b.mac; porta = [string]$b.porta; canal = [string]$b.canal } }
         'GET /api/registro'    { Send-Json $Ctx @{ cameras = @((Read-RegistroAtual).Cameras); simulado = [bool]$E.Simular } }
         'GET /api/relatorio.csv' {
