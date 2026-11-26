@@ -23,12 +23,14 @@
     block-size: 100%;
     max-inline-size: var(--conteudo-max);
     margin-inline: auto;
-    padding-inline: var(--esp-5);
+    padding-inline: var(--margem-pagina);
   }
   .topo-marca {
-    display: inline-flex; align-items: center; gap: var(--esp-2);
+    display: inline-flex; align-items: center; gap: var(--esp-2); min-inline-size: 0;
     color: var(--texto); text-decoration: none; font-weight: var(--peso-forte); font-size: var(--tipo-leitura);
   }
+  /* O nome fica numa linha (a 1024 quebrava em duas). */
+  .topo-nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .topo-nav { display: flex; gap: var(--esp-1); block-size: 100%; }
   .topo-aba {
     display: inline-flex; align-items: center; padding: 0 var(--esp-3);
@@ -38,11 +40,33 @@
   .topo-aba:hover { color: var(--texto); }
   .topo-aba[aria-current="page"] { color: var(--texto); border-block-end-color: var(--acao); }
   .topo-chips { display: flex; gap: var(--esp-2); justify-content: flex-end; }
+  /* "Encerrar o painel": o icone so aparece quando o rotulo sai (abaixo de 1100). */
+  .topo-encerrar .icone { display: none; }
+
+  /* Abaixo de 1100 o topo inteiro nao cabe com os rotulos (pedia 969 px): os
+     chips ficam so com icone e ponto de estado, o rotulo fica no aria-label e no
+     title, e o popover segue com o detalhe completo. "Encerrar o painel" vira
+     botao de icone, com aria-label e title. */
+  @media (max-width: 1100px) {
+    .topo-conteudo { gap: var(--esp-3); }
+    .topo-chip .chip { padding-inline: var(--esp-2); }
+    .topo-chip .chip > span { display: none; }
+    .topo-chip .chip:not(.chip-neutro)::after {
+      content: ""; inline-size: var(--ponto-estado); block-size: var(--ponto-estado);
+      border-radius: var(--raio-selo); background: currentColor;
+    }
+    .topo-encerrar { padding-inline: 0; inline-size: var(--controle-altura); }
+    .topo-encerrar .icone { display: block; }
+    .topo-encerrar .botao-rotulo { display: none; }
+  }
 
   /* ---------------------------------------------------------------- estrutura */
+  /* Faixa suportada a partir de --pagina-min de janela: abaixo dela a pagina
+     rola na horizontal inteira, sem esconder nada. A barra vertical sai da conta. */
+  body { min-inline-size: calc(var(--pagina-min) - var(--barra-rolagem)); }
   main {
     max-inline-size: var(--conteudo-max); margin-inline: auto; min-width: 0;
-    padding: var(--esp-5) var(--esp-5) var(--esp-6);
+    padding: var(--esp-5) var(--margem-pagina) var(--esp-6);
   }
   .view { display: flex; flex-direction: column; gap: var(--esp-5); }
   .view > h1 + .apoio { margin-top: calc(-1 * var(--esp-4)); }

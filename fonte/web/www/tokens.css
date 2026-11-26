@@ -7,8 +7,9 @@
    azul-700 acao, azul-500 agora, verde concluido, vermelho falha que pede
    voce, ambar atencao, cinza todo o resto (inclusive simulacao).
    As quebras do @media nao aceitam var(): o teste le esta linha. 1100 e 1600
-   sao as da direcao (4.4); 760 e a do layout de hoje, ate a frente 3.
-   quebras: 760px 1100px 1600px */
+   sao as da direcao (4.4); 900 e o minimo da pagina (--pagina-min): abaixo
+   dela a pagina rola na horizontal, sem nada escondido.
+   quebras: 900px 1100px 1600px */
 
 @layer tokens {
   /* Tema: light-dark(claro, escuro) segue o color-scheme. Sem data-tema (ou
@@ -100,6 +101,16 @@
     --fita-falha-extra: 4px;
     --fita-casa-min: 20px;
     --conteudo-max: 1240px;
+    /* Faixa suportada: de 900 (meia tela de um monitor de 1920) para cima. */
+    --pagina-min: 900px;
+    /* Largura da barra de rolagem vertical, medida onde e usada (100% e a
+       largura util do pai): com ela, a janela de 900 com rolagem nao rola na
+       horizontal por 15 px. */
+    --barra-rolagem: calc(100vw - 100%);
+    /* Margem lateral da pagina (main e topo): de 16 a 24 com a janela. */
+    --margem-pagina: clamp(var(--esp-4), 2vw, var(--esp-5));
+    /* Ponto de estado do chip do topo so com icone (abaixo de 1100). */
+    --ponto-estado: 6px;
     --coluna-form: 720px;
     --lateral-largura: 440px;
     --sessao-menu: 220px;

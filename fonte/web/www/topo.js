@@ -50,7 +50,11 @@ export function criarTopo(ctx) {
     // O servidor fecha logo depois de responder: sem resposta tambem e encerrado.
     const r = await ctx.api.comando('/api/encerrar', {});
     ctx.encerrado(!!(r.ok && r.dados && r.dados.restaurando));
-  }, { tipo: 'secundario' });
+  }, { tipo: 'secundario', icone: 'fechar', classe: 'topo-encerrar' });
+  // Abaixo de 1100 o rotulo sai e fica so o icone (telas.css): o nome vai no
+  // aria-label e no title.
+  encerrar.setAttribute('aria-label', t('nav.encerrar'));
+  encerrar.title = t('nav.encerrar');
 
   const el = h('header', { class: 'topo', hidden: true }, h('div', { class: 'topo-conteudo' }, [
     h('a', { class: 'topo-marca', href: '#/painel' }, [simbolo(), h('span', { class: 'topo-nome' }, t('app.titulo'))]),
@@ -95,7 +99,10 @@ function chipComPopover(id, titulo, corpo) {
       const nova = rotulo + '|' + nivel + '|' + nomeIcone;
       if (nova === assinatura) return;
       assinatura = nova;
+      // Abaixo de 1100 o chip fica so com icone (telas.css): o rotulo segue no
+      // aria-label e no title.
       btn.setAttribute('aria-label', t('chip.detalhe', { nome: rotulo }));
+      btn.title = rotulo;
       btn.replaceChildren(chip(rotulo, nivel, nomeIcone));
     },
   };
