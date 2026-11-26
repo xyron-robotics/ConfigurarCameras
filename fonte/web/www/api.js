@@ -29,6 +29,7 @@ export function criarApi(transporte) {
   return {
     estado: (desde) => chamar('GET', '/api/estado?desde=' + desde),
     registro: () => chamar('GET', '/api/registro'),
+    copias: () => chamar('GET', '/api/registro/copias'),
     sessao: () => chamar('GET', '/api/sessao'),
     placas: () => chamar('GET', '/api/placas'),
     salvarSessao: (parcial) => chamar('PUT', '/api/sessao', parcial),

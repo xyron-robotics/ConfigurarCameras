@@ -616,4 +616,28 @@
   .log-linhas .falha .log-sinal { color: var(--falha); }
   .log-linhas .sucesso .log-sinal { color: var(--sucesso); }
   .log-linhas .atencao .log-sinal { color: var(--atencao); }
+  /* Busca no log (G8): a linha que nao casa sai da tela, como no filtro de avisos. */
+  .log-linhas > div.log-fora-da-busca { display: none; }
+  /* Busca, filtro e Baixar o log numa linha acima das linhas; quebram juntos. */
+  .log-controles { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--esp-2) var(--esp-4); }
+  .log-busca {
+    display: grid; gap: var(--esp-1);
+    flex: 1 1 var(--campo-busca-min); max-inline-size: var(--campo-busca-max);
+  }
+  .log-controles label.check { min-block-size: var(--controle-altura); }
+
+  /* ---------------------------------------------------------------- copias do registro */
+  /* G2: titulo, o que e, o aviso da acao e a lista (data, acao, cameras, Restaurar). */
+  .ferramentas-copias { display: grid; gap: var(--esp-3); justify-items: start; }
+  .ferramentas-copias h2 { margin: 0; }
+  .copias-corpo { display: grid; gap: var(--esp-3); justify-self: stretch; justify-items: start; }
+  .copias-corpo > .tabela-rolagem { justify-self: stretch; }
+  .copias-texto { margin: 0; color: var(--texto); max-inline-size: var(--medida-texto); }
+  /* Restaurar travado: o motivo fica escrito acima da lista (aria-describedby dos botoes). */
+  .copias-motivo {
+    margin: 0; display: flex; align-items: center; gap: var(--esp-2);
+    color: var(--texto); max-inline-size: var(--medida-texto);
+  }
+  .copias-motivo .icone { color: var(--atencao); flex: none; }
+  .copias-danificada { color: var(--apoio); }
 }

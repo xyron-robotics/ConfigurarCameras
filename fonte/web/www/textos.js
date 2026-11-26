@@ -591,9 +591,36 @@ const TEXTOS = {
   'ferr.resultado.vazio': 'Escolha uma ferramenta acima. O resultado aparece aqui.',
   'ferr.log': 'Log do painel',
   'ferr.log.filtro': 'Só avisos e erros',
-  'ferr.log.resumo': 'As últimas linhas, com hora. O completo fica em log.txt, na pasta de dados.',
+  'ferr.log.resumo': 'As últimas linhas, com hora. O log completo sai em Baixar o log.',
   'ferr.log.mostrar': 'Mostrar',
   'ferr.log.esconder': 'Esconder',
+  // Busca e download do log (G8). A busca filtra as linhas da tela, junto do filtro de avisos.
+  'ferr.log.busca': 'Buscar no log',
+  'ferr.log.busca.ajuda': 'Qualquer texto da linha: hora, IP, MAC ou palavra da mensagem.',
+  'ferr.log.busca.resultado': ({ n, total }) => n + ' de ' + pl(total, 'linha', 'linhas') + ' na tela.',
+  'ferr.log.baixar': 'Baixar o log',
+  // Copias do registro (G2): o painel guarda uma antes de excluir, zerar ou restaurar.
+  'ferr.copias': 'Cópias do registro',
+  'ferr.copias.texto': 'Antes de excluir câmeras, zerar ou restaurar, o painel guarda uma cópia do registro inteiro. ' +
+    'Ficam as 10 mais novas.',
+  'ferr.copias.lendo': 'Lendo as cópias…',
+  'ferr.copias.vazio': 'Nenhuma cópia ainda. A primeira aparece aqui quando câmeras forem excluídas do registro.',
+  'ferr.copias.colunas': ['Data', 'Feita antes de', 'Câmeras', 'Restaurar'],
+  'ferr.copias.acao.excluir': 'Excluir câmeras',
+  'ferr.copias.acao.zerar': 'Zerar o registro',
+  'ferr.copias.acao.restaurar': 'Restaurar uma cópia',
+  'ferr.copias.danificada': 'Danificada, não restaura',
+  'ferr.copias.restaurar': 'Restaurar esta cópia',
+  'ferr.copias.restaurarDe': ({ data }) => 'Restaurar esta cópia, de ' + data,
+  'ferr.copias.restaurando': 'Restaurando…',
+  'ferr.copias.travadoFila': 'Encerre a fila no Painel antes de restaurar: com a fila aberta, o painel ainda grava no registro.',
+  'ferr.copias.travadoOcupado': 'Aguarde o painel terminar a operação atual para restaurar.',
+  'ferr.copias.restaurada': ({ n }) => 'Cópia restaurada: o registro tem ' + pl(n, 'câmera', 'câmeras') + '. ' +
+    'O registro de antes virou a cópia mais nova da lista.',
+  'dialogo.restaurarCopia.titulo': ({ data }) => 'Restaurar a cópia de ' + data + '?',
+  'dialogo.restaurarCopia.texto': ({ n }) => 'O registro de agora é trocado pelo da cópia, com ' + pl(n, 'câmera', 'câmeras') +
+    '. Antes, o painel guarda uma cópia do registro de agora, que aparece nesta lista.',
+  'dialogo.restaurarCopia.confirmar': 'Restaurar a cópia',
   // Avisos das ferramentas que o servidor manda (traduzirAvisoFerramenta).
   'ferr.aviso.soReal': 'Em simulação não há câmera na rede: Sondar e Procurar câmeras só leem a rede no uso real.',
   'ferr.aviso.senhaRecusada': ({ ip }) => 'A câmera em ' + ip + ' recusou a senha da sessão. Não repita: cada tentativa conta ' +

@@ -3,14 +3,17 @@
 // camera. A tela recebe o modelo (estado.js) e o contexto do app.js; o que ela
 // guarda e dela: a ultima ferramenta pedida aqui, o envio em curso e o filtro
 // do log. O log chega aos pedacos (cursor do GET /api/estado) por anexarLog.
-import { h } from './dom.js';
+// As copias do registro (G2) e o log para baixar e buscar (G8) sao da frente
+// registro-controle: a lista de copias e relida ao entrar na tela.
+import { h, focar, novoId } from './dom.js';
 import { icone } from './icones.js';
 import { t, traduzirServidor, traduzirAvisoFerramenta } from './textos.js';
-import { botao, ocupar, campo, aviso } from './componentes.js';
-import { streamsEncoder } from './formato.js';
+import { botao, ocupar, campo, aviso, lugarAviso } from './componentes.js';
+import { streamsEncoder, dataHora, numero } from './formato.js';
+import { aoMudarRota } from './rotas.js';
 import {
   RE_IP, LOG_FOLGA_FIM, LOG_MAX_LINHAS, LOG_INICIO_HORA, PORTA_HTTP,
-  COLUNAS_MONO_DESCOBRIR, COLUNAS_MONO_VERIFICAR,
+  COLUNAS_MONO_DESCOBRIR, COLUNAS_MONO_VERIFICAR, FASES_FILA_ABERTA,
 } from './constantes.js';
 
 // Ferramenta -> rota. A chave e o tipo do comando no servidor, que tambem e a
@@ -41,6 +44,14 @@ const ICONE_DO_SIGNIFICADO = Object.freeze({
 
 // So IP, MAC, serial e log em mono (direcao 4.3), fora do tradutor do navegador.
 const MONO = { class: 'mono', translate: 'no' };
+
+// Rotas da frente registro-controle (Servidor-Painel.ps1).
+const ROTA_RESTAURAR = '/api/registro/restaurar';
+const ROTA_LOG = '/api/log.txt';
+// Acao que gerou a copia (Save-CopiaRegistro) -> texto da coluna "Feita antes de".
+const ACAO_DA_COPIA = Object.freeze({
+  excluir: 'ferr.copias.acao.excluir', zerar: 'ferr.copias.acao.zerar', restaurar: 'ferr.copias.acao.restaurar',
+});
 
 export function telaFerramentas(ctx) {
   const titulo = h('h1', null, t('ferr.titulo'));
@@ -130,8 +141,54 @@ export function telaFerramentas(ctx) {
   });
   const filtro = h('input', {
     type: 'checkbox',
-    onchange: (ev) => linhasLog.classList.toggle('log-so-avisos', ev.currentTarget.checked),
+    onchange: (ev) => { linhasLog.classList.toggle('log-so-avisos', ev.currentTarget.checked); contarLog(true); },
   });
+
+  // Busca no log (G8): filtra as linhas que estao na tela, junto do filtro de
+  // avisos. Linha nova que chega ja entra filtrada. A contagem so fala quando o
+  // operador mexe na busca ou no filtro (o log anda sozinho e falaria sem parar).
+  let termoLog = '';
+  const buscaLogId = novoId('log-busca');
+  const buscaLogAjuda = h('p', { class: 'campo-ajuda', id: buscaLogId + '-ajuda' }, t('ferr.log.busca.ajuda'));
+  const buscaLog = h('input', {
+    id: buscaLogId, type: 'search', class: 'campo-entrada', autocomplete: 'off', spellcheck: 'false',
+    'aria-describedby': buscaLogId + '-ajuda',
+    // Acento por tecla morta compoe: o filtro espera o fim da composicao.
+    oninput: (ev) => { if (!ev.isComposing) filtrarLog(); },
+    oncompositionend: () => filtrarLog(),
+  });
+  const textoBuscaDe = (linha) => linha.dataset.busca || '';
+  function marcarBusca(linha) {
+    linha.classList.toggle('log-fora-da-busca', !!termoLog && !textoBuscaDe(linha).includes(termoLog));
+  }
+  function contarLog(falar) {
+    const soAvisos = filtro.checked;
+    let texto = t('ferr.log.busca.ajuda');
+    if (termoLog || soAvisos) {
+      const todas = [...linhasLog.children];
+      const vistas = todas.filter((l) => !l.classList.contains('log-fora-da-busca')
+        && (!soAvisos || l.classList.contains('falha') || l.classList.contains('atencao'))).length;
+      texto = t('ferr.log.busca.resultado', { n: vistas, total: todas.length });
+    }
+    if (buscaLogAjuda.textContent !== texto) buscaLogAjuda.textContent = texto;
+    if (falar) ctx.anunciar(texto);
+  }
+  function filtrarLog() {
+    const termo = buscaLog.value.trim().toLowerCase();
+    if (termo === termoLog) return;
+    termoLog = termo;
+    for (const l of linhasLog.children) marcarBusca(l);
+    contarLog(true);
+  }
+
+  // Baixar o log (G8): o GET devolve o log.txt inteiro como anexo; sem fetch na tela.
+  function baixarLog() {
+    const a = h('a', { href: ROTA_LOG, download: '', hidden: true });
+    el.append(a);
+    a.click();
+    a.remove();
+  }
+  const baixar = botao(t('ferr.log.baixar'), baixarLog, { tipo: 'secundario' });
   // Recolhido como os outros da casa (formularios.js): titulo, resumo e a acao escrita.
   const acaoLog = h('span', { class: 'recolhido-acao' }, t('ferr.log.mostrar'));
   const log = h('details', { class: 'recolhido log-painel' }, [
@@ -140,7 +197,18 @@ export function telaFerramentas(ctx) {
       h('span', { class: 'recolhido-resumo' }, t('ferr.log.resumo')),
       acaoLog,
     ]),
-    h('div', { class: 'log-corpo' }, [h('label', { class: 'check' }, [filtro, t('ferr.log.filtro')]), linhasLog]),
+    h('div', { class: 'log-corpo' }, [
+      h('div', { class: 'log-controles' }, [
+        h('div', { class: 'log-busca' }, [
+          h('label', { class: 'campo-rotulo', for: buscaLogId }, t('ferr.log.busca')),
+          buscaLog,
+          buscaLogAjuda,
+        ]),
+        h('label', { class: 'check' }, [filtro, t('ferr.log.filtro')]),
+        baixar,
+      ]),
+      linhasLog,
+    ]),
   ]);
   // Aberto agora: mostra o fim, onde esta o que acabou de acontecer.
   log.addEventListener('toggle', () => {
@@ -157,16 +225,146 @@ export function telaFerramentas(ctx) {
       const significado = SIGNIFICADO_DO_CONSOLE[l.cor] || null;
       const ic = ICONE_DO_SIGNIFICADO[significado];
       // A casa do icone existe em toda linha, para a hora e a mensagem alinharem.
-      linhasLog.append(h('div', { class: significado }, [
+      const ts = String(l.ts).slice(LOG_INICIO_HORA);
+      const linhaLog = h('div', { class: significado, dados: { busca: (ts + ' ' + l.msg).toLowerCase() } }, [
         h('span', { class: 'log-sinal' }, ic ? icone(ic.nome, 'p', t(ic.rotulo)) : null),
-        h('span', { class: 'ts' }, String(l.ts).slice(LOG_INICIO_HORA)),
+        h('span', { class: 'ts' }, ts),
         l.msg,
-      ]));
+      ]);
+      marcarBusca(linhaLog);
+      linhasLog.append(linhaLog);
       ultimoN = l.n;
     }
     while (linhasLog.childElementCount > LOG_MAX_LINHAS) linhasLog.firstElementChild.remove();
     if (noFim) linhasLog.scrollTop = linhasLog.scrollHeight;
+    contarLog(false);
   }
+
+  // ---------------------------------------------------------------- copias do registro (G2)
+  // Lista da mais nova para a mais velha (GET /api/registro/copias), relida ao
+  // entrar na tela e depois de restaurar. Restaurar fica travado com a fila
+  // aberta (o motor ainda grava no registro) e com o painel ocupado, com o
+  // motivo escrito acima da lista; o servidor recusa do mesmo jeito.
+  let copias = { lendo: false, erro: null, lista: null };
+  let restaurando = '';
+  let chaveCopias = '';
+  let lendoCopias = null;
+  const tituloCopias = h('h2', { id: 'ferramentas-copias-titulo', tabindex: '-1' }, t('ferr.copias'));
+  const avisoCopias = lugarAviso();
+  const corpoCopias = h('div', { class: 'copias-corpo' });
+  const motivoCopiasId = novoId('copias-motivo');
+
+  function lerCopias() {
+    if (lendoCopias) return lendoCopias;
+    copias = { ...copias, lendo: true, erro: null };
+    desenharCopias(ctx.modelo());
+    lendoCopias = (async () => {
+      const r = await ctx.api.copias();
+      copias = r.ok ? { lendo: false, erro: null, lista: (r.dados && r.dados.copias) || [] }
+        : { lendo: false, erro: traduzirServidor(r), lista: null };
+      desenharCopias(ctx.modelo());
+    })().finally(() => { lendoCopias = null; });
+    return lendoCopias;
+  }
+
+  function motivoTrava(m) {
+    if (FASES_FILA_ABERTA.includes(m.fase)) return t('ferr.copias.travadoFila');
+    if (m.ocupado) return t('ferr.copias.travadoOcupado');
+    return '';
+  }
+
+  async function restaurarCopia(c) {
+    if (restaurando || motivoTrava(ctx.modelo())) return;
+    avisoCopias.limpar();
+    const data = dataHora(c.data);
+    const sim = await ctx.confirmar({
+      titulo: t('dialogo.restaurarCopia.titulo', { data }),
+      texto: t('dialogo.restaurarCopia.texto', { n: Number(c.cameras) || 0 }),
+      confirmar: t('dialogo.restaurarCopia.confirmar'),
+      perigo: true,
+    });
+    if (!sim) return;
+    restaurando = c.nome;
+    desenharCopias(ctx.modelo());
+    const r = await ctx.api.comando(ROTA_RESTAURAR, { nome: c.nome });
+    restaurando = '';
+    if (r.ok) {
+      avisoCopias.mostrar('sucesso', t('ferr.copias.restaurada', { n: Number(r.dados && r.dados.cameras) || 0 }));
+      ctx.lerRegistro();
+    } else {
+      const e = traduzirServidor(r);
+      avisoCopias.mostrar('erro', e.texto, e.cru);
+    }
+    await lerCopias();
+    // O botao que abriu saiu no redesenho: o foco vai ao titulo, logo acima do aviso.
+    focar(tituloCopias);
+  }
+
+  function tabelaCopias(lista, travado) {
+    const linhas = lista.map((c) => {
+      const legivel = c.legivel !== false;
+      let acao = h('span', { class: 'copias-danificada' }, t('ferr.copias.danificada'));
+      if (legivel) {
+        acao = botao(t('ferr.copias.restaurar'), () => restaurarCopia(c), {
+          tipo: 'secundario', travado: travado || !!restaurando, motivoId: travado ? motivoCopiasId : undefined,
+          dados: { foco: 'copia-' + c.nome },
+        });
+        // O nome acessivel comeca pelo rotulo que se ve e diz qual copia (sao varias linhas iguais).
+        acao.setAttribute('aria-label', t('ferr.copias.restaurarDe', { data: dataHora(c.data) }));
+        if (restaurando === c.nome) ocupar(acao, t('ferr.copias.restaurando'));
+      }
+      return h('tr', null, [
+        h('td', { class: 'numeros' }, dataHora(c.data)),
+        h('td', null, ACAO_DA_COPIA[c.acao] ? t(ACAO_DA_COPIA[c.acao]) : String(c.acao || '')),
+        h('td', { class: 'numeros' }, legivel ? numero(c.cameras) : ''),
+        h('td', null, acao),
+      ]);
+    });
+    const [colData, colAcao, colCameras, colRestaurar] = t('ferr.copias.colunas');
+    return h('div', { class: 'tabela-rolagem' }, h('table', { class: 'tabela' }, [
+      h('thead', null, h('tr', null, [
+        h('th', { scope: 'col' }, colData), h('th', { scope: 'col' }, colAcao), h('th', { scope: 'col' }, colCameras),
+        h('th', { scope: 'col' }, h('span', { class: 'so-leitor' }, colRestaurar)),
+      ])),
+      h('tbody', null, linhas),
+    ]));
+  }
+
+  // Redesenha so quando muda o que se ve; o foco num botao da lista volta ao mesmo botao.
+  function desenharCopias(m) {
+    const motivo = motivoTrava(m);
+    const nova = JSON.stringify([copias, restaurando, motivo]);
+    if (nova === chaveCopias) return;
+    chaveCopias = nova;
+    const focado = corpoCopias.contains(document.activeElement) ? document.activeElement.dataset.foco : '';
+    let partes;
+    if (copias.erro) partes = [aviso('erro', copias.erro.texto, copias.erro.cru)];
+    else if (!copias.lista) partes = [h('p', { class: 'copias-texto' }, t('ferr.copias.lendo'))];
+    else if (!copias.lista.length) partes = [h('p', { class: 'copias-texto' }, t('ferr.copias.vazio'))];
+    else {
+      partes = [
+        motivo ? h('p', { class: 'copias-motivo', id: motivoCopiasId }, [icone('atencao', 'p'), motivo]) : null,
+        tabelaCopias(copias.lista, !!motivo),
+      ];
+    }
+    corpoCopias.replaceChildren(...partes.filter(Boolean));
+    if (focado) {
+      const volta = corpoCopias.querySelector(`[data-foco="${CSS.escape(focado)}"]`);
+      focar(volta || tituloCopias);
+    }
+  }
+
+  const secaoCopias = h('section', { class: 'ferramentas-copias', 'aria-labelledby': tituloCopias.id }, [
+    tituloCopias,
+    h('p', { class: 'copias-texto' }, t('ferr.copias.texto')),
+    avisoCopias.el,
+    corpoCopias,
+  ]);
+
+  // Entrar em Ferramentas rele a lista (a exclusao no Painel cria copia nova);
+  // a primeira leitura sai no primeiro estado (atualizar).
+  let leuCopias = false;
+  aoMudarRota((r) => { if (r.tela === 'ferramentas') lerCopias(); });
 
   const el = h('div', { class: 'ferramentas-tela' }, [
     h('div', { class: 'ferramentas-cabeca' }, [titulo, h('p', { class: 'lead' }, t('ferr.lead'))]),
@@ -180,6 +378,7 @@ export function telaFerramentas(ctx) {
       h('h2', { id: 'ferramentas-resultado-titulo' }, t('ferr.resultado')),
       caixa,
     ]),
+    secaoCopias,
     log,
   ]);
 
@@ -318,6 +517,7 @@ export function telaFerramentas(ctx) {
       else procurar.removeAttribute('aria-describedby');
     }
     desenhar(m);
+    if (!leuCopias) { leuCopias = true; lerCopias(); } else desenharCopias(m);
   }
 
   return { el, foco: titulo, atualizar, anexarLog };
