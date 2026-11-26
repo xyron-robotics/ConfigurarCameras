@@ -79,6 +79,12 @@
   /* Uma coluna de leitura sob a logo; o Conferir usa a largura toda. O rodape
      fixo cobre o fim da pagina: o respiro embaixo e a altura dele. */
   .inicio { padding-block-end: calc(var(--rodape-altura) + var(--esp-6)); }
+  /* O passo fica na coluna de leitura centrada, a logo e o chip Simulacao nas
+     pontas dela (nao nas do main); o Conferir segue com a largura toda.
+     inline-size: sem ela, a margem auto no flex encolhe a tela ao conteudo. */
+  .inicio-tela:has(> .inicio-corpo:not(.inicio-conferir)) {
+    inline-size: 100%; max-inline-size: var(--coluna-form); margin-inline: auto;
+  }
   .inicio-cabeca { display: flex; justify-content: space-between; align-items: flex-start; margin-block-end: var(--esp-5); }
   .inicio-corpo { max-inline-size: var(--coluna-form); display: grid; gap: var(--esp-5); }
   /* Conferir cabe inteiro a 1366x768 (conflito e saida incluidos): respiro menor. */
@@ -193,7 +199,11 @@
 
   /* ---------------------------------------------------------------- sessao */
   /* Direcao 3.5: menu das secoes a esquerda, a secao escolhida a direita. */
-  .sessao-tela { display: grid; gap: var(--esp-5); }
+  /* Menu e secao centrados no main (a secao para em --coluna-form). */
+  .sessao-tela {
+    display: grid; gap: var(--esp-5);
+    inline-size: 100%; max-inline-size: var(--sessao-largura); margin-inline: auto;
+  }
   .sessao-cabeca, .sessao-secao-cabeca { display: grid; gap: var(--esp-2); }
   .sessao-cabeca h1, .sessao-secao-cabeca h2, .sessao-cabeca .lead, .sessao-secao-cabeca .lead { margin: 0; }
   .sessao-grade { display: grid; grid-template-columns: var(--grade-sessao); gap: var(--esp-6); align-items: start; }

@@ -69,12 +69,13 @@
   .chip-botao:hover .chip { box-shadow: inset 0 0 0 var(--traco) var(--linha-forte); }
 
   /* ---------------------------------------------------------------- popover (5.9, casca) */
-  /* Sob o topo, alinhado a direita; fecha com Esc e clique fora (popover=auto). */
+  /* Sob o topo, alinhado ao fim do topo centrado (nao a borda da janela); fecha
+     com Esc e clique fora (popover=auto). */
   .popover {
     position: fixed;
     inset: auto;
     inset-block-start: calc(var(--topo-altura) + var(--esp-1));
-    inset-inline-end: var(--esp-5);
+    inset-inline-end: var(--popover-recuo);
     margin: 0;
     inline-size: var(--popover-largura);
     padding: var(--esp-4);
@@ -159,7 +160,6 @@
   .lateral-texto { margin: 0; padding: var(--esp-4) var(--esp-5) 0; color: var(--texto); max-inline-size: var(--medida-texto); }
   .lateral-corpo { flex: 1; overflow: auto; padding: var(--esp-4) var(--esp-5) var(--esp-5); }
   .lateral-form { display: grid; gap: var(--esp-4); }
-  .lateral-form .form-streams { grid-template-columns: var(--grade-1); }
   .lateral-acoes { display: flex; justify-content: flex-end; gap: var(--esp-2); }
 
   /* ---------------------------------------------------------------- campo (5.2, casca) */
@@ -283,7 +283,8 @@
     max-inline-size: var(--conteudo-max); margin-inline: auto; padding-inline: var(--esp-5);
   }
   .rodape-linha { display: flex; align-items: center; gap: var(--esp-4); inline-size: 100%; }
-  .rodape-estreito { max-inline-size: var(--coluna-form); }
+  /* Estreito: os botoes na coluna do passo a passo, centrada como ela. */
+  .rodape-estreito { max-inline-size: var(--coluna-form); margin-inline: auto; }
   .rodape-fim { margin-inline-start: auto; display: flex; align-items: center; gap: var(--esp-4); }
   .rodape-nota { color: var(--apoio); font-size: var(--tipo-meta); }
 
@@ -291,8 +292,14 @@
   .form { display: grid; gap: var(--esp-5); }
   .form-grade { display: grid; grid-template-columns: var(--grade-2); gap: var(--esp-4) var(--esp-5); }
   .form-grade-local { grid-template-columns: var(--grade-local); }
-  .form-streams { display: grid; grid-template-columns: var(--grade-2); gap: var(--esp-5); }
+  .form-grade-local > :first-child { grid-column: var(--coluna-inteira); }
+  /* Principal e secundario sempre um sobre o outro: lado a lado, cada select
+     ficava com 162 px e cortava "1920 x 1080 (testado)". */
+  .form-streams { display: grid; grid-template-columns: var(--grade-1); gap: var(--esp-5); }
   .stream { display: grid; gap: var(--esp-3); margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+  /* Campos do stream em 2 colunas so quando cada uma cabe a opcao mais longa
+     ("1280 x 720 (recusado na <modelo>)"); na Sessao a 900 e na lateral, 1. */
+  .stream > .form-grade { grid-template-columns: var(--grade-stream); }
   .stream-titulo { font-size: var(--tipo-leitura); font-weight: var(--peso-forte); padding: 0; margin-block-end: var(--esp-1); }
   .recolhido { border-block-start: var(--traco) solid var(--linha); padding-block-start: var(--esp-3); }
   .recolhido > summary {
@@ -320,9 +327,6 @@
   .placa-rotulo { font-weight: var(--peso-forte); }
   .placa-desc { color: var(--apoio); }
   .placa-nota { font-size: var(--tipo-meta); }
-  @media (max-width: 1100px) {
-    .form-streams { grid-template-columns: var(--grade-1); }
-  }
 
   /* ---------------------------------------------------------------- selo */
   /* Estado da linha da tabela (5.3): icone e palavra. A cor de estado vai no

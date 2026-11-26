@@ -117,6 +117,8 @@
     --coluna-form: 720px;
     --lateral-largura: 440px;
     --sessao-menu: 220px;
+    /* Sessao inteira (menu, vao e a coluna do formulario), centrada no main. */
+    --sessao-largura: calc(var(--sessao-menu) + var(--esp-6) + var(--coluna-form));
     --logo-largura: 168px;
     --simbolo-altura: 28px;
     --icone-p: 16px;
@@ -143,7 +145,13 @@
     --rotulo-ferramenta: 180px;
     --campo-ip: 200px;
     --entrada-curta: 96px;
+    /* Select de stream que mostra a opcao mais longa do catalogo inteira. */
+    --campo-stream-min: 320px;
     --popover-largura: 360px;
+    /* Recuo do popover a direita: alinha com o fim do topo centrado
+       (--conteudo-max), nao com a borda da janela. 100% e a largura da janela
+       sem a barra de rolagem (o popover e fixo), a mesma em que o topo centra. */
+    --popover-recuo: max(var(--margem-pagina), calc((100% - var(--conteudo-max)) / 2 + var(--margem-pagina)));
     --dialogo-largura: 440px;
     --texto-desabilitado-opacidade: 0.7;
 
@@ -152,7 +160,13 @@
     --grade-2: repeat(2, minmax(0, 1fr));
     --grade-marcador: auto minmax(0, 1fr);
     --coluna-texto: 2;
-    --grade-local: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    /* Local da fila em duas linhas: Local inteiro em cima (--coluna-inteira),
+       Rack e Andar lado a lado embaixo. */
+    --grade-local: var(--grade-2);
+    --coluna-inteira: 1 / -1;
+    /* Campos de um stream do encoder: quantas colunas de --campo-stream-min
+       couberem (2 na coluna de 720, 1 na Sessao a 900 e na lateral). */
+    --grade-stream: repeat(auto-fit, minmax(min(100%, var(--campo-stream-min)), 1fr));
     --grade-conferir: var(--rotulo-conferir) minmax(0, 1fr) auto;
     --grade-sessao: var(--sessao-menu) minmax(0, 1fr);
     --grade-ferramenta: var(--rotulo-ferramenta) minmax(0, 1fr) auto;
