@@ -162,7 +162,7 @@ function faixaDoModelo() {
   const motivoId = a.motivo ? novoId('faixa-motivo') : undefined;
   const opcoes = { tipo: 'secundario', desabilitado: !!a.motivo, motivoId };
   const notas = a.pagina ? h('a', { href: a.pagina, target: '_blank', rel: 'noopener' }, t('topo.atualizacao-notas')) : null;
-  const motivo = a.motivo ? t('atualizacao.' + a.motivo) : '';
+  const motivo = a.motivo ? t(a.motivo) : '';
   if (a.estado === 'erro') {
     const texto = t('atualizacao.erro', { versao: a.versao, erro: a.erro || t('atualizacao.erro-generico') });
     return faixa('atencao', texto, [botao(t('atualizacao.tentar'), pedirAtualizacao, opcoes)], motivo, motivoId);
