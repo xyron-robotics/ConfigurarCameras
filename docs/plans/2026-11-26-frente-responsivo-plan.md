@@ -1,6 +1,6 @@
 # Frente responsivo: layout responsivo de 900 a 1920 px (1.3.1, 1 de 2)
 
-**Status:** Ativo · **Frente:** `responsivo`
+**Status:** Concluído · **Frente:** `responsivo`
 
 Frente 1 da onda 1 do mapa `docs/plans/2026-11-26-versao-131-mapa.md`. Sem dependência. A frente `registro-controle` depende desta.
 
