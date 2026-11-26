@@ -68,6 +68,11 @@
     max-inline-size: var(--conteudo-max); margin-inline: auto; min-width: 0;
     padding: var(--esp-5) var(--margem-pagina) var(--esp-6);
   }
+  /* Painel a partir da quebra 1600: ate --conteudo-largo, para a tabela Registro
+     caber sem rolar. As outras telas (e o topo) seguem em --conteudo-max. */
+  @media (min-width: 1600px) {
+    main:has(> .view:not([hidden]) > .vista) { max-inline-size: var(--conteudo-largo); }
+  }
   .view { display: flex; flex-direction: column; gap: var(--esp-5); }
   .view > h1 + .apoio { margin-top: calc(-1 * var(--esp-4)); }
   /* ---------------------------------------------------------------- passo a passo (2.2, 3.1) */

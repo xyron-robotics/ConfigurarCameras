@@ -336,7 +336,8 @@
   .selo-aguardando, .selo-pulada, .selo-espera { color: var(--apoio); }
   .selo-ignorada .icone { color: var(--atencao); }
   /* Mini barra das 4 etapas ao lado do selo em curso (UX-04). */
-  .estado-linha { display: inline-flex; align-items: center; gap: var(--esp-3); }
+  /* Selo e barra das etapas: a barra desce para baixo do selo quando falta largura. */
+  .estado-linha { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--esp-1) var(--esp-3); }
   .barra-etapas { display: inline-flex; gap: var(--traco); inline-size: var(--barra-mini-largura); }
   .barra-etapa { flex: 1 1 0; block-size: var(--barra-mini); border-radius: var(--traco); background: var(--linha); }
   .barra-etapa-feita { background: var(--agora); }
@@ -450,9 +451,38 @@
   }
   .tabela tbody tr:last-child td { border-block-end: 0; }
   .tabela tbody tr:hover { background: var(--superficie-2); }
-  .tabela td.mono, .tabela .coluna-pos, .tabela .coluna-estado, .tabela .coluna-campo, .tabela .numeros { white-space: nowrap; }
+  .tabela td.mono, .tabela .coluna-pos, .tabela .coluna-campo, .tabela .numeros { white-space: nowrap; }
   .tabela .coluna-pos { inline-size: var(--coluna-pos); color: var(--apoio); }
-  .tabela .coluna-estado { inline-size: var(--coluna-estado); }
+  /* Estado e Local: um minimo, nao uma largura fixa; o resto vai para as outras colunas. */
+  .tabela .coluna-estado { min-inline-size: var(--coluna-estado-min); }
+  .tabela .coluna-local { min-inline-size: var(--coluna-local-min); }
+  /* Situacao e Encoder do Registro: com minimo, abaixo de 1600 a tabela rola
+     (IP fixo) em vez de espremer a coluna ate partir a resolucao ao meio. */
+  .tabela .coluna-situacao { min-inline-size: var(--coluna-situacao-min); }
+  .tabela .coluna-encoder { min-inline-size: var(--coluna-encoder-min); }
+  /* Modelo da Fila agora: uma linha, com reticencias; o nome inteiro fica no title. */
+  .tabela .modelo-texto {
+    display: block; max-inline-size: var(--coluna-modelo-max);
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  /* Data do Registro em duas linhas: o dia em cima, a hora embaixo. */
+  .tabela .data-parte { display: block; }
+  /* Abaixo de 1100: serial e MAC da Fila agora quebram no meio (o <wbr> do
+     tela-painel.js), em 2 linhas, nunca no meio de cada metade; o cabecalho
+     quebra entre palavras ("Porta do switch") e a celula perde folga lateral,
+     para a Fila agora caber em 900 com serial e MAC de tamanho real. */
+  @media (max-width: 1100px) {
+    .tabela td.coluna-metades, .tabela th { white-space: normal; }
+    .tabela th, .tabela td { padding-inline: var(--esp-2); }
+  }
+  /* Registro: abaixo de 1600 a tabela rola por dentro, com o IP fixo a esquerda.
+     A linha tem fundo para a celula fixa herdar (no hover tambem). */
+  .tabela-registro tbody tr { background: var(--superficie); }
+  .tabela-registro .coluna-ip {
+    position: sticky; inset-inline-start: 0;
+    background: inherit; box-shadow: inset calc(-1 * var(--traco)) 0 0 var(--linha);
+  }
+  .tabela-registro th.coluna-ip { z-index: var(--z-tabela-canto); background: var(--superficie-2); }
   .tabela .linha-falha, .tabela .linha-falha:hover { background: var(--falha-fundo); }
   /* Instalada agora: fundo de acao por um ciclo de consulta. */
   .tabela .linha-nova, .tabela .linha-nova:hover { background: var(--acao-fraco); }
@@ -477,7 +507,6 @@
   .tabela-vazio p { margin: 0; display: inline-flex; align-items: center; gap: var(--esp-2); }
   .situacao-detalhe, .stream { display: block; font-size: var(--tipo-meta); color: var(--apoio); }
   .tabela .coluna-situacao { white-space: normal; }
-  .tabela .coluna-encoder { white-space: nowrap; }
   /* Falha na linha: o erro, o conserto e as duas decisoes. */
   .falha-linha { display: grid; gap: var(--esp-2); justify-items: start; white-space: normal; }
   .falha-linha p { margin: 0; }

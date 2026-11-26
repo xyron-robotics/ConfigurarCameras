@@ -373,6 +373,14 @@ export function telaPainel(ctx, parte) {
   }
 
   // ------------------------------------------------------------ Fila agora
+  // Serial e MAC com um <wbr> no meio: abaixo de 1100 a celula pode quebrar ali
+  // (2 linhas) e em nenhum outro ponto; o texto copiado e lido segue inteiro.
+  function emDuasMetades(texto) {
+    const s = String(texto || '');
+    const meio = Math.ceil(s.length / 2);
+    return s.length > 1 ? [s.slice(0, meio), h('wbr'), s.slice(meio)] : s;
+  }
+
   function tabelaFila(m) {
     const f = m.fila;
     if (!f) return null;
@@ -389,9 +397,9 @@ export function telaPainel(ctx, parte) {
           p.estado === 'curso' && p.etapaN ? barraEtapas(p.etapaN, f.totalEtapas) : null,
         ])),
         h('td', { class: 'mono', translate: 'no' }, p.ip),
-        h('td', null, c ? c.modelo : ''),
-        h('td', { class: 'mono', translate: 'no' }, c ? c.serial : ''),
-        h('td', { class: 'mono', translate: 'no' }, c ? c.mac : ''),
+        h('td', null, c ? h('span', { class: 'modelo-texto', title: c.modelo }, c.modelo) : ''),
+        h('td', { class: ['mono', 'coluna-metades'], translate: 'no' }, c ? emDuasMetades(c.serial) : ''),
+        h('td', { class: ['mono', 'coluna-metades'], translate: 'no' }, c ? emDuasMetades(c.mac) : ''),
         h('td', { class: 'coluna-campo' }, comCampos ? entrada(p, 'porta') : ''),
         h('td', { class: 'coluna-campo' }, comCampos ? entrada(p, 'canal') : ''),
       ]));
@@ -478,6 +486,15 @@ export function telaPainel(ctx, parte) {
     ];
   }
 
+  // Data em 2 linhas: o dia e a hora (dataHora da "26/11/2026, 08:42"). Fora
+  // desse formato, o texto inteiro numa linha.
+  function dataEmDuasLinhas(q) {
+    const texto = dataHora(q);
+    const partes = /^(.+?),?\s+(\S+)$/.exec(texto);
+    if (!partes) return texto;
+    return [h('span', { class: 'data-parte' }, partes[1]), h('span', { class: 'data-parte' }, partes[2])];
+  }
+
   function tabelaRegistro(m) {
     const reg = m.registro;
     if (reg.lendo) return h('div', { class: 'tabela-vazio', role: 'status' }, h('p', null, t('registro.lendo')));
@@ -489,19 +506,20 @@ export function telaPainel(ctx, parte) {
     }
     if (!reg.lista) return h('div', { class: 'tabela-vazio', role: 'status' }, h('p', null, t('registro.lendo')));
     if (!reg.lista.length) return h('div', { class: 'tabela-vazio' }, h('p', null, t('registro.vazio')));
+    // IP fixo na rolagem; Rack/porta e texto livre (quebra como o Local).
     const corpo = reg.lista.map((r) => h('tr', null, [
-      h('td', { class: 'mono', translate: 'no' }, r.Ip || ''),
+      h('td', { class: ['mono', 'coluna-ip'], translate: 'no' }, r.Ip || ''),
       h('td', { class: 'mono', translate: 'no' }, formatarMac(r.Mac)),
       h('td', null, r.Modelo || ''),
       h('td', { class: 'coluna-situacao' }, situacao(r)),
       h('td', { class: 'coluna-encoder' }, encoder(r)),
-      h('td', null, r.Local || ''),
-      h('td', { class: 'mono' }, [r.Rack, r.Porta].filter(Boolean).join(' / ')),
+      h('td', { class: 'coluna-local' }, r.Local || ''),
+      h('td', null, [r.Rack, r.Porta].filter(Boolean).join(' / ')),
       h('td', { class: 'mono' }, r.Canal || ''),
-      h('td', { class: 'numeros' }, dataHora(r.Data)),
+      h('td', { class: 'numeros' }, dataEmDuasLinhas(r.Data)),
     ]));
-    return h('div', { class: 'tabela-rolagem' }, h('table', { class: 'tabela' }, [
-      h('thead', null, h('tr', null, COLUNAS_REGISTRO.map((k) => h('th', { scope: 'col' }, t('registro.col.' + k))))),
+    return h('div', { class: 'tabela-rolagem' }, h('table', { class: ['tabela', 'tabela-registro'] }, [
+      h('thead', null, h('tr', null, COLUNAS_REGISTRO.map((k) => h('th', { scope: 'col', class: k === 'ip' ? 'coluna-ip' : null }, t('registro.col.' + k))))),
       h('tbody', null, corpo),
     ]));
   }

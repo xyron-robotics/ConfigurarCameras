@@ -65,12 +65,10 @@ $script:CorteCurtos = @(
     'numeros', 'coluna-pos', 'coluna-campo',   # numero: data e hora, posicao, porta e canal
     'mono',                                    # mono: IP, MAC e serial (direcao 4.3)
     'th')                                      # cabecalho de coluna: uma ou duas palavras
-# Excecoes do www real, por seletor (o trecho da violacao). Texto variavel com
-# nowrap na tabela: o estado em curso ("n de N: etapa") e o resumo do encoder. A
-# Task 3 do plano responsivo (R4, R7) conserta e tira daqui; excecao que nao casa
-# mais falha. O Rack/porta em td.mono (tela-painel.js) e mono fora de IP/MAC: a
-# regra so le CSS e nao ve; quem mostra e medir-responsivo.js, e a Task 3 tira.
-$script:CorteExcecoes = @('.tabela .coluna-estado', '.tabela .coluna-encoder')
+# Excecoes do www real, por seletor (o trecho da violacao); excecao que nao casa
+# mais falha. Vazia desde a Task 3 do plano responsivo (R4, R7): o estado em curso
+# e o resumo do encoder quebram linha, e o Rack/porta saiu do td.mono.
+$script:CorteExcecoes = @()
 
 # Divide uma lista de seletores nas virgulas de fora dos parenteses.
 function Split-Seletores {

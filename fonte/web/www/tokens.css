@@ -101,6 +101,9 @@
     --fita-falha-extra: 4px;
     --fita-casa-min: 20px;
     --conteudo-max: 1240px;
+    /* Largura do Painel a partir da quebra 1600: a tabela Registro cabe sem
+       rolar. Inicio, Sessao e Ferramentas seguem em --conteudo-max. */
+    --conteudo-largo: 1440px;
     /* Faixa suportada: de 900 (meia tela de um monitor de 1920) para cima. */
     --pagina-min: 900px;
     /* Largura da barra de rolagem vertical, medida onde e usada (100% e a
@@ -126,7 +129,13 @@
     --barra-mini: 4px;
     --barra-mini-largura: 48px;
     --coluna-pos: 56px;
-    --coluna-estado: 220px;
+    /* Colunas da tabela: minimo e maximo, nunca largura fixa. */
+    --coluna-estado-min: 160px;
+    --coluna-local-min: 18ch;
+    --coluna-situacao-min: 18ch;
+    /* "Secundario: 704 x 480," numa linha: a resolucao nunca parte ao meio. */
+    --coluna-encoder-min: 24ch;
+    --coluna-modelo-max: 18ch;
     --coluna-campo-curto: 64px;
     --rotulo-conferir: 120px;
     --tabela-altura-max: 60vh;
@@ -153,6 +162,8 @@
     /* ---- camadas de empilhamento */
     --z-topo: 10;
     --z-rodape: 10;
+    /* Canto da tabela Registro: o cabecalho do IP, fixo nas duas rolagens. */
+    --z-tabela-canto: 2;
   }
 
   :root[data-tema="claro"] { color-scheme: light; }
