@@ -34,4 +34,4 @@ Os testes rodam no PowerShell 5.1 (`powershell.exe`), o mesmo do painel e do CI 
 
 ## Planos
 
-Planos em `docs/plans/`, com `**Status:**` Draft | Ativo | Concluído | Superado. Plano de frente para o `/regime:maestro` tem `**Frente:**` no cabeçalho e `## Task N:`. O mapa do trabalho em curso é `docs/plans/2026-11-cameras-em-paralelo.md`.
+Planos em `docs/plans/`, com `**Status:**` Draft | Ativo | Concluído | Superado. Plano de frente para o `/regime:maestro` tem `**Frente:**` no cabeçalho e `## Task N:`. O mapa do trabalho em curso é `docs/plans/2026-11-26-versao-131-mapa.md`.
