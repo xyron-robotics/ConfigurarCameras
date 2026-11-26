@@ -347,6 +347,12 @@ O `log.txt` na pasta de dados guarda tudo com data e hora. É o primeiro lugar a
   vizinho estático, a conferência em paralelo e o modo sem Administrador só
   têm prova em simulação e na bancada de 17/11/2026, feita sem o painel. Falta
   uma rodada com 2 a 3 câmeras de fábrica reais do começo ao fim.
+- **Painel redesenhado** (1.3.0) sem rodada em câmera real: a bancada com
+  uma câmera de fábrica foi adiada em 26/11/2026 (antes ou logo depois da
+  release 1.3.0). Não foram vistos no hardware: o chip "Placa pronta" depois
+  de "Preparar a placa", Conferir com a sessão, a câmera entrando na fila e
+  terminando "Instalada", porta e canal salvos na linha e vistos no Registro,
+  e "Encerrar o painel" devolvendo a placa ao DHCP.
 - **Vigia** e a **contagem do boot real** ainda não foram usados em campo pelo
   painel (o vigia mudou para o modo paralelo).
 - **Descoberta DHIP**: validada com 33 aparelhos já inicializados (01/10/2026),

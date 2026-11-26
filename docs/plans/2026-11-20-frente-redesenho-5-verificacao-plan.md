@@ -1,6 +1,8 @@
 # Frente redesenho-verificacao: Ferramentas, estados globais e verificação final (fase B, 5 de 5)
 
-**Status:** Ativo · **Frente:** `redesenho-verificacao`
+**Status:** Concluído (26/11/2026), **sem a bancada real (Task 4 adiada)** · **Frente:** `redesenho-verificacao`
+
+**Fechamento:** entraram a tela Ferramentas da direção 3.4, com o bloco "Resultado" (mono só em IP, MAC, serial e log), o texto corrido em `--texto` e o log do painel saindo do Painel (Task 1); os estados globais na faixa da casca (Abrindo, conexão perdida depois de 3 consultas sem resposta com o resto da tela `inert`, Encerrado sem pedido depois do fim, faixa de atualização), os 7 MENOR herdados da frente 4 e a recusa de porta e canal traduzida (H1 a H8), e o fim dos `legado-*.js`, guardado pela regra `legado` do `Testes-Front.ps1` com o `www` conferido contra a lista da direção 7.3 (Task 2); a verificação final em simulação, com o roteiro de duas filas nos dois temas, `consistency.mjs`, `perf.mjs` e `web-design-guidelines`, e os GRAVE achados (foco perdido em 4 fluxos, campo sob o rodapé fixo) corrigidos (Task 3). **A bancada com uma câmera de fábrica real (Task 4) foi adiada por decisão do usuário (26/11, commit `edbbb3b`): nenhum dos cinco pontos foi conferido no hardware.** Ela fica como pendência aberta, para antes ou logo depois da release 1.3.0, no mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md` e nas Pendências do `LEIA-ME.md`. Os MENOR achados na verificação e nas Tasks 1 e 2 (Non-Goals) estão nos corpos dos commits `06208f2`, `543dd0e` e `8dfedec`.
 
 Frente 5 do mapa `docs/plans/2026-11-20-frente-redesenho-mapa.md`. Depende da frente 4 fechada. Especificação: `docs/design/2026-11-ux/direcao.md`, seções 2.3 (jornada inteira), 3.4, 3.6, 5.7, 7.3 e 7.4. Código de partida: `docs/design/2026-11-ux/prototipo/tela-ferramentas.js`, `app.js`, `componentes.js`.
 

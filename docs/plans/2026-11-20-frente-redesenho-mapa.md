@@ -1,6 +1,18 @@
 # Mapa da fase B do redesenho do painel
 
-**Status:** Ativo
+**Status:** Concluído (26/11/2026), com a bancada real da frente 5 adiada (pendência aberta abaixo)
+
+## Próximo passo e pendência aberta
+
+- **Release 1.3.0 (próximo passo).** Pede a aprovação do usuário: versão, tag, push e "Atualizar" pelo painel, pela seção 9 de `docs/plans/2026-11-cameras-em-paralelo.md`. O usuário quer lançá-la o mais rápido possível.
+- **Pendência aberta: bancada do painel redesenhado com uma câmera de fábrica real** (Task 4 da frente 5, adiada pelo usuário em 26/11, commit `edbbb3b`). Fazer antes ou logo depois da release 1.3.0. Nenhum dos cinco pontos foi conferido no hardware:
+  - chip "Placa pronta" depois de "Preparar a placa";
+  - Conferir com a sessão;
+  - a câmera entrando na fila e terminando "Instalada";
+  - porta e canal salvos na linha e vistos no Registro;
+  - "Encerrar o painel" devolve a placa ao DHCP.
+
+  O roteiro é o da Task 4 do plano `docs/plans/2026-11-20-frente-redesenho-5-verificacao-plan.md`; sem MAC, serial nem IP reais no commit.
 
 Índice das frentes que implementam a direção aprovada (`docs/design/2026-11-ux/direcao.md`) a partir do protótipo (`docs/design/2026-11-ux/prototipo/`). Escrito na Task 6 da frente `ux` (`docs/plans/2026-11-19-frente-ux-plan.md`), em 19/11. O redesenho vem antes da release 1.3.0; a release não faz parte deste mapa.
 
@@ -14,7 +26,7 @@ Todas são **sequenciais**: cada uma mexe em `fonte/web/www/**` e no `instalador
 | 2 | `redesenho-marca` | `docs/plans/2026-11-20-frente-redesenho-2-marca-plan.md` | Sistema visual da direção (seção 4) sobre o layout de hoje: tokens de marca e semânticos, tipo, ícones, logo, símbolo, favicon, `.png` no `$tipos`, `.iss`. Feita em 24/11/2026 | 1 |
 | 3 | `redesenho-navegacao` | `docs/plans/2026-11-20-frente-redesenho-3-navegacao-plan.md` | Casca nova (topo, abas, chips, rotas, diálogo), passo a passo de 6 passos, Conferir e Sessão (antes "Opções"). Feita em 24/11/2026 | 2 |
 | 4 | `redesenho-painel` | `docs/plans/2026-11-20-frente-redesenho-4-painel-plan.md` | Painel: fila, fita, tabela, linha da câmera, "Pede você", painel lateral do encoder, vigia, registro. Bug do `salvarCartao`. Feita em 25/11/2026 | 3 |
-| 5 | `redesenho-verificacao` | `docs/plans/2026-11-20-frente-redesenho-5-verificacao-plan.md` | Ferramentas, estados globais, saída do código de transição e verificação final (Playwright nos dois temas, `consistency.mjs`, `web-design-guidelines`, roteiro de duas filas, bancada) | 4 |
+| 5 | `redesenho-verificacao` | `docs/plans/2026-11-20-frente-redesenho-5-verificacao-plan.md` | Ferramentas, estados globais, saída do código de transição e verificação final (Playwright nos dois temas, `consistency.mjs`, `web-design-guidelines`, roteiro de duas filas, bancada). Feita em 26/11/2026, **sem a bancada real**: a Task 4 foi adiada pelo usuário e é pendência aberta (seção "Próximo passo e pendência aberta") | 4 |
 
 Paralela com: nenhuma (sobreposição de arquivo em todas).
 
