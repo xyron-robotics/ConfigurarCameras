@@ -128,8 +128,10 @@ Testes com MACs `AA:00:00:00:00:0x`, em pasta temporária.
 - Busca, caixas, barra de seleção e diálogo de exclusão (G2), linha travada "Na fila agora" e exportação da seleção.
 - A coluna de caixas cabe no layout da frente `responsivo` (`medir-responsivo.js` sem regressão).
 - Teclado: Espaço marca a linha, e o foco volta à barra depois de excluir.
+- Achado menor da revisão da frente `responsivo`: a classe `.stream` serve ao fieldset do formulário (`formularios.js`, grid em `componentes.css` ~299) e aos spans do Registro (`tela-painel.js` ~484), e a regra do Registro (`componentes.css` ~512, `display: block`) sobrescreve o grid do formulário. Separar: os spans do Registro ganham classe própria (`registro-stream`), e `.stream` fica só no formulário.
 
 **Validation:** a régua. Playwright em simulação:
+- o fieldset `.stream` do formulário tem `display: grid` (computado), e os streams do Registro seguem em bloco;
 - buscar, marcar 2, exportar (nome com `-selecao`, 2 linhas);
 - excluir 1 e conferir a cópia criada;
 - marcar todas e excluir (diálogo "todas as N");
@@ -163,5 +165,6 @@ Testes com MACs `AA:00:00:00:00:0x`, em pasta temporária.
 - G9.
 - Roteiro de ponta a ponta nos dois temas: passo a passo com registro antigo, operação com fila aberta excluindo linhas antigas, limpar a fila e restaurar a cópia.
 - `medir-responsivo.js` sem regressão.
+- Achado menor da revisão da frente `responsivo`: a lateral "Mudar o encoder" foi só calculada. Medir no navegador, com a lateral aberta a 900, 1366 e 1920 nos dois temas: sem rolagem horizontal (`scrollWidth <= clientWidth`) e sem texto cortado. Se falhar, corrigir aqui.
 
-**Validation:** a régua, com o roteiro colado; `git diff --cached` sem dado real.
+**Validation:** a régua, com o roteiro colado e a medição da lateral; `git diff --cached` sem dado real.
