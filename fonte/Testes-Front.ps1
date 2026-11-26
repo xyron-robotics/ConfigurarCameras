@@ -6,10 +6,12 @@
 
     A interface e uma funcao so:
         Test-Front -Www <pasta> -Iss <arquivo .iss> -Servidor <Servidor-Painel.ps1>
-    que devolve a lista de violacoes { regra, arquivo, linha, trecho }. As 11
+    que devolve a lista de violacoes { regra, arquivo, linha, trecho }. As 12
     regras ficam atras dela:
       hex, medida, numero-solto-css, numero-solto-js, estilo-inline,
-      id-no-css, camada, texto-fora, import, servido, legado.
+      id-no-css, camada, texto-fora, import, servido, legado, corte.
+    A regra corte (nowrap sem reticencias fora dos curtos) entrou na Task 1 do
+    plano docs/plans/2026-11-26-frente-responsivo-plan.md.
     A regra legado (nenhum legado-*.js no www nem import de um) e a lista dos
     24 arquivos da direcao 7.3 entraram na Task 2 do plano
     docs/plans/2026-11-20-frente-redesenho-5-verificacao-plan.md.
@@ -51,6 +53,50 @@ $script:ArquivosWww = @('index.html', 'tokens.css', 'base.css', 'componentes.css
     'app.js', 'api.js', 'estado.js', 'rotas.js', 'textos.js', 'formato.js', 'constantes.js', 'dom.js',
     'icones.js', 'componentes.js', 'formularios.js', 'tela-inicio.js', 'tela-painel.js', 'tela-sessao.js',
     'tela-ferramentas.js', 'topo.js', 'marca.js', 'logo.png', 'simbolo.png')
+
+# Regra corte (frente responsivo, Task 1): todo white-space: nowrap de
+# componentes.css e telas.css vem com text-overflow: ellipsis na mesma regra, ou o
+# alvo do seletor (o ultimo composto) e um curto desta lista. Regra que esconde o
+# elemento (clip-path: var(--recorte-oculto), texto so do leitor de tela) nao conta.
+$script:CorteArquivos = @('componentes.css', 'telas.css')
+$script:CorteCurtos = @(
+    'botao',                                   # botao
+    'chip', 'selo', 'trilha-passo',            # chip: o do topo, o de estado da tabela, o passo da trilha
+    'numeros', 'coluna-pos', 'coluna-campo',   # numero: data e hora, posicao, porta e canal
+    'mono',                                    # mono: IP, MAC e serial (direcao 4.3)
+    'th')                                      # cabecalho de coluna: uma ou duas palavras
+# Excecoes do www real, por seletor (o trecho da violacao). Texto variavel com
+# nowrap na tabela: o estado em curso ("n de N: etapa") e o resumo do encoder. A
+# Task 3 do plano responsivo (R4, R7) conserta e tira daqui; excecao que nao casa
+# mais falha. O Rack/porta em td.mono (tela-painel.js) e mono fora de IP/MAC: a
+# regra so le CSS e nao ve; quem mostra e medir-responsivo.js, e a Task 3 tira.
+$script:CorteExcecoes = @('.tabela .coluna-estado', '.tabela .coluna-encoder')
+
+# Divide uma lista de seletores nas virgulas de fora dos parenteses.
+function Split-Seletores {
+    param([string]$Lista)
+    $saida = @(); $prof = 0; $atual = ''
+    foreach ($ch in $Lista.ToCharArray()) {
+        if ($ch -eq '(') { $prof++ } elseif ($ch -eq ')') { $prof-- }
+        if ($ch -eq ',' -and $prof -eq 0) { $saida += $atual; $atual = ''; continue }
+        $atual += $ch
+    }
+    $saida += $atual
+    return @($saida | ForEach-Object { ($_ -replace '\s+', ' ').Trim() } | Where-Object { $_ })
+}
+
+# O alvo do seletor (ultimo composto, sem :pseudo(...) nem [atributo]) e um curto?
+function Test-SeletorCurto {
+    param([string]$Seletor)
+    $s = $Seletor
+    while ($s -match '\([^()]*\)') { $s = $s -replace '\([^()]*\)', '' }
+    $s = $s -replace '\[[^\]]*\]', '' -replace '::?[\w-]+', ''
+    $alvo = @($s -split '[\s>+~]+' | Where-Object { $_ })[-1]
+    $elemento = [regex]::Match($alvo, '^[A-Za-z][\w-]*').Value
+    $classes = @([regex]::Matches($alvo, '\.([\w-]+)') | ForEach-Object { $_.Groups[1].Value })
+    foreach ($x in (@($elemento) + $classes)) { if ($x -and $script:CorteCurtos -contains $x) { return $true } }
+    return $false
+}
 
 function Hide-Trecho {
     param([string]$Texto)
@@ -197,6 +243,21 @@ function Test-Front {
                     # O sinal e operador (calc(x * -1)), como no JS: conta o literal.
                     $x = [Math]::Abs([double]::Parse($m.Value, [Globalization.CultureInfo]::InvariantCulture))
                     return ($x -ne 0 -and $x -ne 1)
+                }
+            }
+
+            # corte: um por seletor fora dos curtos, na linha do nowrap
+            if ($script:CorteArquivos -contains $nome) {
+                foreach ($r in [regex]::Matches($limpo, '([^{};]*)\{([^{}]*)\}')) {
+                    $corpo = $r.Groups[2].Value
+                    $mn = [regex]::Match($corpo, 'white-space\s*:\s*nowrap')
+                    if (-not $mn.Success) { continue }
+                    if ($corpo -match 'text-overflow\s*:\s*ellipsis') { continue }
+                    if ($corpo -match 'clip-path\s*:\s*var\(--recorte-oculto\)') { continue }
+                    $n = Get-NumeroLinha $limpo ($r.Groups[2].Index + $mn.Index)
+                    foreach ($sel in (Split-Seletores $r.Groups[1].Value)) {
+                        if (-not (Test-SeletorCurto $sel)) { & $add 'corte' $nome $n $sel }
+                    }
                 }
             }
         }
@@ -385,6 +446,11 @@ function Get-WwwLimpo {
             '  .botao { padding: var(--espaco-2); border-radius: var(--raio); flex: 1; font-weight: var(--peso-forte); width: 100%; }',
             '  .lista > li:nth-child(2n+1) { opacity: 1; }',
             '  .coluna-2 { gap: var(--espaco-2); margin-inline-start: calc(var(--raio) * -1); }',
+            '  .chip { white-space: nowrap; }',
+            '  .tabela td.mono:not(.x, .y), .tabela th { white-space: nowrap; }',
+            '  .celula-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
+            '  .ferramenta-campo .campo-rotulo { position: absolute; clip-path: var(--recorte-oculto); white-space: nowrap; }',
+            '  .texto-livre { white-space: normal; }',
             '}')
         'telas.css' = Join-Linhas @(
             '@layer telas {',
@@ -542,6 +608,12 @@ $casos = @(
        Mudar = @{ 'legado-x.js' = (Join-Linhas @('export const A = 1;')) } }
     @{ Nome = 'import de um legado-*.js'; Regra = 'legado'; Arquivo = 'app.js'; Linha = 4
        Mudar = @{ 'app.js' = (Edit-Linha 'app.js' 4 "import { nada } from './legado-x.js';") } }
+    @{ Nome = 'nowrap sem reticencias em texto livre'; Regra = 'corte'; Arquivo = 'componentes.css'; Linha = 5
+       Mudar = @{ 'componentes.css' = (Edit-Linha 'componentes.css' 5 '  .rotulo-livre { white-space: nowrap; }') } }
+    @{ Nome = 'nowrap numa lista com um seletor fora dos curtos, dentro de @media'; Regra = 'corte'; Arquivo = 'telas.css'; Linha = 3
+       Mudar = @{ 'telas.css' = (Edit-Linha 'telas.css' 3 '    .botao, .grade { display: grid; white-space: nowrap; }') } }
+    @{ Nome = 'nowrap no filho de um curto: vale o alvo do seletor'; Regra = 'corte'; Arquivo = 'componentes.css'; Linha = 5
+       Mudar = @{ 'componentes.css' = (Edit-Linha 'componentes.css' 5 '  .botao .rotulo-livre { white-space: nowrap; }') } }
 )
 
 # ------------------------------------------------------------------ testes
@@ -577,9 +649,9 @@ try {
         }
     }
 
-    T 'as 11 regras tem caso plantado' {
+    T 'as 12 regras tem caso plantado' {
         $regras = @('hex', 'medida', 'numero-solto-css', 'numero-solto-js', 'estilo-inline',
-                    'id-no-css', 'camada', 'texto-fora', 'import', 'servido', 'legado')
+                    'id-no-css', 'camada', 'texto-fora', 'import', 'servido', 'legado', 'corte')
         $cobertas = @($casos | ForEach-Object { $_.Regra } | Sort-Object -Unique)
         $faltam = @($regras | Where-Object { $cobertas -notcontains $_ })
         Assert-Igual '' ($faltam -join ', ') 'regras sem caso'
@@ -596,8 +668,13 @@ T 'www real: zero violacoes' {
     foreach ($p in @($wwwReal, $issReal, $srvReal)) {
         if (-not (Test-Path -LiteralPath $p)) { throw ('nao achei ' + $p) }
     }
-    $real = @(Test-Front -Www $wwwReal -Iss $issReal -Servidor $srvReal)
+    $todas = @(Test-Front -Www $wwwReal -Iss $issReal -Servidor $srvReal)
+    $real = @($todas | Where-Object { -not ($_.regra -eq 'corte' -and $script:CorteExcecoes -contains $_.trecho) })
     Assert-Igual 0 $real.Count ('violacoes no www real: ' + (Format-Violacoes $real))
+    # Excecao que nao casa mais e vencida: sai da lista no mesmo commit do conserto.
+    $vencidas = @($script:CorteExcecoes | Where-Object {
+        $x = $_; -not @($todas | Where-Object { $_.regra -eq 'corte' -and $_.trecho -eq $x }).Count })
+    Assert-Igual '' ($vencidas -join ', ') 'excecoes da regra corte vencidas'
 }
 
 # O www real tem os 24 arquivos da direcao 7.3, nem um a mais nem um a menos.
