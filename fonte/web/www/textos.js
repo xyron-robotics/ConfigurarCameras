@@ -158,6 +158,28 @@ const TEXTOS = {
   'inicio.comecar.demorou': 'O painel ainda está preparando a placa. Espere um instante e clique em Começar de novo.',
   'inicio.carregando': 'Carregando a sessão…',
   'inicio.demorou': 'O painel ainda não confirmou. Espere um instante e tente de novo.',
+  // Registro de antes no passo a passo novo (G1): nada sai sem o operador escolher.
+  'inicio.registro.titulo': ({ n, ultima }) => 'O registro tem ' + pl(n, 'câmera', 'câmeras') +
+    (ultima ? (n === 1 ? ', de ' : ', a última de ') + ultima : '') + '.',
+  'inicio.registro.texto': 'Vêm de filas anteriores. Mantenha para somar as desta sessão, ou zere para começar com o registro ' +
+    'vazio. Avançar sem escolher mantém tudo.',
+  'inicio.registro.manter': 'Manter',
+  'inicio.registro.exportarZerar': 'Exportar e zerar',
+  'inicio.registro.zerar': 'Zerar',
+  'inicio.registro.exportando': 'Exportando…',
+  'inicio.registro.zerando': 'Zerando…',
+  'inicio.registro.mantido': 'O registro fica como está.',
+  'inicio.registro.zerado': ({ n, exportado }) => (exportado ? 'Relatório baixado e registro zerado: ' : 'Registro zerado: ') +
+    (n === 1 ? '1 câmera saiu' : n + ' câmeras saíram') + '. A cópia de antes está em Ferramentas, em Cópias do registro.',
+  'inicio.registro.exportarFalhou': 'O relatório não foi baixado, e o registro ficou como estava.',
+  'inicio.registro.zerarFalhou': ({ exportado }) => (exportado ? 'O relatório foi baixado, mas o registro não foi zerado.'
+    : 'O registro não foi zerado.'),
+  'dialogo.zerar.titulo': ({ exportar }) => (exportar ? 'Exportar e zerar o registro?' : 'Zerar o registro?'),
+  'dialogo.zerar.texto': ({ n, exportar }) => (exportar
+    ? 'O relatório com ' + (n === 1 ? 'a câmera' : 'as ' + n + ' câmeras') + ' é baixado primeiro; só depois o registro fica vazio. '
+    : (n === 1 ? 'A câmera sai' : 'As ' + n + ' câmeras saem') + ' do registro, que fica vazio. ') +
+    'Antes, o painel guarda uma cópia do registro inteiro, que fica em Ferramentas, em Cópias do registro, para restaurar.',
+  'dialogo.zerar.confirmar': ({ exportar }) => (exportar ? 'Exportar e zerar' : 'Zerar o registro'),
   'secao.nome': ({ secao }) => ({ senha: 'Senha', placa: 'Placa', rede: 'Rede', camera: 'Câmera', fila: 'Fila', conferir: 'Conferir', painel: 'Painel' })[secao] || secao,
   'secao.alterar': ({ secao }) => ({ senha: 'Alterar a senha', placa: 'Alterar a placa', rede: 'Alterar a rede', camera: 'Alterar a câmera', fila: 'Alterar a fila' })[secao] || 'Alterar',
 
@@ -297,6 +319,10 @@ const TEXTOS = {
   'painel.fila.montarOutra': 'Montar outra fila',
   'painel.fila.encerrar': 'Encerrar a fila',
   'painel.fila.encerrando': 'Encerrando a fila…',
+  // Limpar a fila (G6): so encerrada ou concluida; o registro nao muda.
+  'painel.fila.limpar': 'Limpar a fila',
+  'painel.fila.limpando': 'Limpando a fila…',
+  'painel.fim.limpar': 'Limpar a fila tira esta tabela do Painel; o registro fica como está.',
   'painel.vazio.semFila': 'Nenhuma fila montada',
   'painel.vazio.semFila.texto': 'Monte a fila em Sessão > Fila, com a faixa de IPs que as câmeras vão receber.',
   'painel.vazio.desligado': 'Ligue o vigia para configurar sozinho cada câmera de fábrica que aparecer no switch, na próxima ' +

@@ -345,7 +345,7 @@ export function telaPainel(ctx, parte) {
   // de Pede voce): o foco vai ao vizinho que continua na tela, nunca ao body.
   // Os titulos levam data-foco para o redesenho seguinte nao os perder.
   const RESERVA_FOCO = {
-    encerrar: 'montar', vigia: 'montar', 'registro-ler-erro': 'registro-ler', 'pede-titulo': 'fila-titulo',
+    encerrar: 'montar', vigia: 'montar', limpar: 'montar-fila','registro-ler-erro': 'registro-ler', 'pede-titulo': 'fila-titulo',
     // Registro: a linha marcada que saiu (excluida, fora da busca) leva o foco a
     // caixa do cabecalho; a barra que sumiu (registro zerado), ao Ler de novo.
     'registro-marca-todas': 'registro-busca', 'registro-busca': 'registro-ler', 'registro-busca-limpar': 'registro-busca',
@@ -937,6 +937,10 @@ export function telaPainel(ctx, parte) {
         tituloBloco(titulo, m.painel === 'concluida' ? 'concluido' : null),
         textoMotivo,
         h('p', null, t('painel.fim.registro')),
+        // G6: a tabela sai e o Painel volta a "Sem fila"; o registro nao muda.
+        h('p', null, t('painel.fim.limpar')),
+        botaoTopo('limpar', t('painel.fila.limpar'), t('painel.fila.limpando'),
+          () => enviarTopo('limpar', '/api/fila/limpar'), { tipo: 'secundario' }),
       ]);
     }
     if (m.painel === 'vigiaDesligado') {

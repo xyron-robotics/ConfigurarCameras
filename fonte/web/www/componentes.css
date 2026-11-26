@@ -434,6 +434,9 @@
   .bloco-titulo { margin: 0; font-size: var(--tipo-subtitulo); display: flex; gap: var(--esp-2); align-items: center; }
   .bloco-subtitulo { margin: var(--esp-2) 0 0; }
   .bloco-sucesso .bloco-titulo .icone { color: var(--sucesso); }
+  /* Registro de antes no passo a passo (G1): o bloco e as tres saidas lado a lado. */
+  .registro-escolha-lugar:empty { display: none; }
+  .registro-escolha-acoes { display: flex; flex-wrap: wrap; gap: var(--esp-2); }
 
   /* ---------------------------------------------------------------- tabela */
   /* 5.4: cabecalho fixo na rolagem, linha de altura fixa, dado de maquina em

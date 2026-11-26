@@ -5,14 +5,14 @@
 // e o salvar vem do formularios.js; aqui so a navegacao e o Conferir.
 import { h } from './dom.js';
 import { icone } from './icones.js';
-import { t } from './textos.js';
+import { t, traduzirServidor } from './textos.js';
 import { logo } from './marca.js';
 import { botao, ocupar, lugarAviso, chip, aviso } from './componentes.js';
 import { montarFormulario, pcNaFabrica, mostrarFalha, salvarSenha, salvarParcial } from './formularios.js';
 import { rotaDoPasso, ROTA_INICIAL } from './rotas.js';
 import { numero, resolucao, mac } from './formato.js';
 import {
-  PASSOS, ETAPA_DO_PASSO, NBSP, ESPERA_COMECAR_MS,
+  PASSOS, ETAPA_DO_PASSO, NBSP, ESPERA_COMECAR_MS, RE_DATA_SERVIDOR, REVOGAR_BLOB_MS,
 } from './constantes.js';
 
 // ctx (do app.js): { api, modelo(), ir(hash), corrigir(hash), confirmar(o),
@@ -67,6 +67,115 @@ function corpo(modelo, atual, classe, filhos) {
   ]);
 }
 
+// ------------------------------------------------------------------ registro de antes (G1)
+// Passo a passo novo com registro nao vazio: o passo da placa (onde o passo a
+// passo abre, inclusive pelo "Refazer") mostra quantas cameras ha e a data da
+// ultima, com Manter, Exportar e zerar e Zerar. Nada sai sozinho: Avancar sem
+// escolher mantem tudo. A escolha e o resultado dela valem ate o Comecar desta
+// abertura (a tela e refeita a cada redesenho; a escolha nao).
+const PASSO_DO_REGISTRO = 'placa';
+const ROTA_RELATORIO = '/api/relatorio.csv';
+const ROTA_EXCLUIR = '/api/registro/excluir';
+// O POST do relatorio nomeia o arquivo como selecao; aqui ele e o registro inteiro.
+const SUFIXO_SELECAO = '-selecao';
+const ID_ESCOLHA = 'registro-escolha';
+const escolhaRegistro = { feita: false, aviso: null };
+
+// "dd/mm/aaaa" da camera mais recente; '' sem data legivel.
+function ultimaData(lista) {
+  const datas = lista.map((r) => RE_DATA_SERVIDOR.exec(String(r.Data || ''))).filter(Boolean);
+  if (!datas.length) return '';
+  const [, ano, mes, dia] = datas.reduce((a, b) => (b[0] > a[0] ? b : a));
+  return [dia, mes, ano].join('/');
+}
+
+function baixarArquivo(blob, nome) {
+  const url = URL.createObjectURL(blob);
+  const a = h('a', { href: url, download: nome || '', hidden: true });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), REVOGAR_BLOB_MS);
+}
+
+// o: { marcarOcupada(bool): a tela do passo nao e redesenhada no meio da acao;
+// depois(feita, id): redesenha so o bloco (o formulario do passo nao perde o
+// que o operador mexeu) e leva o foco ao Avancar ou de volta ao botao. }
+function blocoRegistro(ctx, modelo, o) {
+  const lista = (modelo.registro && !modelo.registro.erro && modelo.registro.lista) || [];
+  const aviso0 = escolhaRegistro.aviso ? aviso(escolhaRegistro.aviso.tipo, escolhaRegistro.aviso.texto, escolhaRegistro.aviso.cru) : null;
+  if (escolhaRegistro.feita || !lista.length) return aviso0;
+  const n = lista.length;
+  const macs = lista.map((r) => r.Mac).filter(Boolean);
+  const tituloId = ID_ESCOLHA + '-titulo';
+
+  function concluir(tipo, texto, cru, feita) {
+    escolhaRegistro.feita = feita;
+    escolhaRegistro.aviso = tipo ? { tipo, texto, cru: cru || '' } : null;
+    ctx.anunciar(texto);
+  }
+
+  function manter() {
+    concluir(null, t('inicio.registro.mantido'), '', true);
+    o.depois(true, '');
+  }
+
+  async function zerar(exportar, btn) {
+    const sim = await ctx.confirmar({
+      titulo: t('dialogo.zerar.titulo', { exportar }),
+      texto: t('dialogo.zerar.texto', { n, exportar }),
+      confirmar: t('dialogo.zerar.confirmar', { exportar }),
+      perigo: true,
+    });
+    if (!sim) return;
+    o.marcarOcupada(true);
+    const restaurar = ocupar(btn, exportar ? t('inicio.registro.exportando') : t('inicio.registro.zerando'));
+    let feita = false;
+    try {
+      // So zera depois do download iniciado: sem o arquivo, nada sai do registro.
+      if (exportar) {
+        const r = await ctx.api.baixar(ROTA_RELATORIO, { macs });
+        if (!r.ok) {
+          const e = traduzirServidor(r);
+          concluir('erro', t('inicio.registro.exportarFalhou') + ' ' + e.texto, e.cru, false);
+          return;
+        }
+        baixarArquivo(r.blob, r.nome.replace(SUFIXO_SELECAO, ''));
+        btn.querySelector('.botao-rotulo').textContent = t('inicio.registro.zerando');
+      }
+      const res = await ctx.api.comando(ROTA_EXCLUIR, { macs });
+      if (!res.ok) {
+        const e = traduzirServidor(res);
+        concluir('erro', t('inicio.registro.zerarFalhou', { exportado: exportar }) + ' ' + e.texto, e.cru, false);
+        return;
+      }
+      const saiu = Number(res.dados && res.dados.removidas) || 0;
+      concluir('sucesso', t('inicio.registro.zerado', { n: saiu, exportado: exportar }), '', true);
+      feita = true;
+      await ctx.lerRegistro();
+    } finally {
+      restaurar();
+      o.marcarOcupada(false);
+      // Zerado: o bloco sai e o foco vai ao Avancar. Falha: o bloco fica, e o
+      // foco volta ao botao que falhou (mesmo id).
+      o.depois(feita, btn.id);
+    }
+  }
+
+  const exportarZerar = botao(t('inicio.registro.exportarZerar'), () => zerar(true, exportarZerar), { tipo: 'secundario' });
+  exportarZerar.id = ID_ESCOLHA + '-exportar';
+  const zerarSo = botao(t('inicio.registro.zerar'), () => zerar(false, zerarSo), { tipo: 'secundario' });
+  zerarSo.id = ID_ESCOLHA + '-zerar';
+  const manterBtn = botao(t('inicio.registro.manter'), manter, { tipo: 'secundario' });
+  manterBtn.id = ID_ESCOLHA + '-manter';
+  return h('section', { class: ['bloco', 'registro-escolha'], 'aria-labelledby': tituloId }, [
+    h('h3', { class: 'bloco-titulo', id: tituloId }, t('inicio.registro.titulo', { n, ultima: ultimaData(lista) })),
+    h('p', null, t('inicio.registro.texto')),
+    h('div', { class: 'registro-escolha-acoes' }, [manterBtn, exportarZerar, zerarSo]),
+    aviso0,
+  ]);
+}
+
 // ------------------------------------------------------------------ passo
 export function telaPasso(ctx, passo) {
   const modelo = ctx.modelo();
@@ -84,6 +193,8 @@ export function telaPasso(ctx, passo) {
   if (passo === 'senha' && !modelo.simular && !modelo.senhaDefinida) { rotulo = t('senha.salvar'); rotuloOcupado = t('senha.salvando'); }
   const avancar = botao(rotulo, null, { tipo: 'primario', submit: true });
   avancar.setAttribute('form', formId);
+  // Com id, o foco no Avancar fica depois do redesenho (o registro relido no G1 refaz a tela).
+  avancar.id = 'inicio-avancar';
 
   async function salvar(r) {
     if (passo === 'senha') return r.senha ? salvarSenha(ctx, r.senha, resposta, form) : true;
@@ -105,11 +216,27 @@ export function telaPasso(ctx, passo) {
     ctx.ir(rotaDoPasso(ctx.modelo().sessaoCompleta ? 'conferir' : PASSOS[i + 1]));
   }
 
+  // G1: o registro de antes, so no passo da placa.
+  const lugarRegistro = passo === PASSO_DO_REGISTRO ? h('div', { class: 'registro-escolha-lugar' }) : null;
+  function desenharRegistro() {
+    const bloco = blocoRegistro(ctx, ctx.modelo(), {
+      marcarOcupada: (v) => { ocupada = v; },
+      depois: (feita, id) => {
+        desenharRegistro();
+        const alvo = !feita && id ? document.getElementById(id) : null;
+        (alvo || avancar).focus();
+      },
+    });
+    lugarRegistro.replaceChildren(...(bloco ? [bloco] : []));
+  }
+  if (lugarRegistro) desenharRegistro();
+
   const voltar = i > 0 ? botao(t('inicio.voltar'), () => ctx.ir(rotaDoPasso(PASSOS[i - 1])), { tipo: 'secundario' }) : null;
   const marcarSujo = () => { sujo = true; };
   const el = h('div', { class: 'inicio-passo' }, [
     corpo(modelo, passo, null, [
       h('div', { class: 'inicio-secao' }, [titulo, h('p', { class: 'lead' }, t(passo + '.lead'))]),
+      lugarRegistro,
       h('form', { id: formId, class: 'form', novalidate: true, onsubmit: aoEnviar, oninput: marcarSujo, onchange: marcarSujo }, form.el),
       resposta.el,
     ]),
@@ -283,6 +410,9 @@ export function telaConferir(ctx) {
     } finally { ocupada = false; restaurar(); }
     if (!ok) return;
     sujo = false;
+    // O proximo passo a passo (Refazer) pergunta de novo pelo registro (G1).
+    escolhaRegistro.feita = false;
+    escolhaRegistro.aviso = null;
     ctx.corrigir(ROTA_INICIAL);
     ctx.ir(ROTA_INICIAL);
   }
