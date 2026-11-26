@@ -1404,6 +1404,275 @@ T 'Relatorio: 27 colunas, SENHA vazia, MAC formatado, ordem por IP' {
     Assert-Verdade ($vazio -match '^"TIPO";') 'registro vazio ainda tem cabecalho'
 }
 
+T 'Relatorio -Macs: so as linhas pedidas, mesmas colunas; sem -Macs, todas; lista vazia, so o cabecalho' {
+    $reg = New-Registro
+    foreach ($i in 1..3) { Set-CameraRegistro $reg (New-EntradaRegistro -Mac ('AA:00:00:00:00:0' + $i) -Ip ('10.0.0.' + $i)) }
+    $todas = @(ConvertTo-RelatorioCsv $reg | ConvertFrom-Csv -Delimiter ';')
+    Assert-Igual 3 $todas.Count 'sem -Macs, todas'
+    $sel = @(ConvertTo-RelatorioCsv -Registro $reg -Macs @('aa:00:00:00:00:03', 'AA0000000002', 'AA:00:00:00:00:09') | ConvertFrom-Csv -Delimiter ';')
+    Assert-Igual 2 $sel.Count 'so as pedidas (MAC ausente nao conta)'
+    Assert-Igual 'aa:00:00:00:00:02|aa:00:00:00:00:03' (($sel | ForEach-Object { $_.'MAC-ADRESS' }) -join '|') 'MACs pedidos, em ordem de IP'
+    Assert-Igual ((Get-ColunasRelatorio) -join ';') (@($sel[0].PSObject.Properties | ForEach-Object { $_.Name }) -join ';') 'mesmas colunas'
+    $cab = ((Get-ColunasRelatorio | ForEach-Object { '"' + $_ + '"' }) -join ';')
+    Assert-Igual $cab (ConvertTo-RelatorioCsv -Registro $reg -Macs @()) 'lista vazia: so o cabecalho'
+}
+
+# ------------------------------------------------------ controle do registro
+
+Write-Host ""
+Write-Host "Controle do registro (excluir, copias, restaurar, rotacao do log)" -ForegroundColor Cyan
+
+function New-RegistroControle {
+    param([string]$Caminho, [int[]]$Numeros)
+    foreach ($i in $Numeros) { $null = Update-RegistroCamera -Caminho $Caminho -Entrada (New-EntradaRegistro -Mac ('AA:00:00:00:00:0' + $i) -Ip ('10.0.0.' + $i)) }
+}
+
+function Get-MacsRegistroControle {
+    param([string]$Caminho)
+    return ((@((Read-RegistroTravado -Caminho $Caminho).Cameras) | ForEach-Object { [string]$_.Mac } | Sort-Object) -join ',')
+}
+
+# Roda -Bloco com o Mutex do registro preso por outro thread (Mutex e por
+# thread: o proprio teste entraria de novo sem esperar). Devolve a mensagem
+# do erro ('' se nao estourou).
+function Invoke-ComMutexPreso {
+    param([string]$Caminho, [scriptblock]$Bloco)
+    $dono = [PowerShell]::Create()
+    $pronto = New-Object Threading.ManualResetEventSlim($false)
+    $solta = New-Object Threading.ManualResetEventSlim($false)
+    try {
+        $null = $dono.AddScript({
+            param($Nome, $Pronto, $Solta)
+            $mx = New-Object Threading.Mutex($false, $Nome)
+            $null = $mx.WaitOne()
+            $Pronto.Set()
+            $null = $Solta.Wait(60000)
+            $mx.ReleaseMutex(); $mx.Dispose()
+        }).AddArgument((Get-NomeMutexRegistro $Caminho)).AddArgument($pronto).AddArgument($solta)
+        $h = $dono.BeginInvoke()
+        Assert-Verdade ($pronto.Wait(10000)) 'outro thread pegou o Mutex'
+        $msg = ''
+        try { $null = & $Bloco } catch { $msg = $_.Exception.Message }
+        $solta.Set()
+        $null = $dono.EndInvoke($h)
+        return $msg
+    } finally {
+        $solta.Set()
+        $dono.Dispose()
+    }
+}
+
+function New-CopiaFalsa {
+    param([string]$Pasta, [string]$Nome, [int[]]$Numeros)
+    if (-not (Test-Path -LiteralPath $Pasta)) { $null = New-Item -ItemType Directory -Path $Pasta }
+    $reg = New-Registro
+    foreach ($i in $Numeros) { Set-CameraRegistro $reg (New-EntradaRegistro -Mac ('AA:00:00:00:00:0' + $i) -Ip ('10.0.0.' + $i)) }
+    [IO.File]::WriteAllText((Join-Path $Pasta $Nome), (ConvertTo-Json -InputObject $reg -Depth 30))
+}
+
+T 'Remove-CamerasRegistro tira so os MACs pedidos e devolve as removidas; MAC ausente nao e erro' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    try {
+        New-RegistroControle -Caminho $arq -Numeros 1, 2, 3
+        $fora = @(Remove-CamerasRegistro -Caminho $arq -Macs @('aa0000000001', 'AA:00:00:00:00:03', 'AA:00:00:00:00:09'))
+        Assert-Igual 2 $fora.Count 'duas removidas'
+        Assert-Igual 'AA0000000001,AA0000000003' ((@($fora | ForEach-Object { [string]$_.Mac } | Sort-Object)) -join ',') 'devolve as removidas'
+        Assert-Igual 'AA0000000002' (Get-MacsRegistroControle $arq) 'no disco, so a que ficou'
+        Assert-Igual 0 @(Remove-CamerasRegistro -Caminho $arq -Macs @('AA:00:00:00:00:09')).Count 'so MAC ausente: nada removido'
+        Assert-Igual 'AA0000000002' (Get-MacsRegistroControle $arq) 'registro intacto'
+        $novo = Join-Path $d 'nao-existe.json'
+        Assert-Igual 0 @(Remove-CamerasRegistro -Caminho $novo -Macs @('AA:00:00:00:00:01')).Count 'registro ausente: nada removido'
+        Assert-Falso (Test-Path -LiteralPath $novo) 'registro ausente nao e criado'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Remove-CamerasRegistro com o Mutex preso estoura sem gravar' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    try {
+        New-RegistroControle -Caminho $arq -Numeros 1, 2
+        $msg = Invoke-ComMutexPreso -Caminho $arq -Bloco { Remove-CamerasRegistro -Caminho $arq -Macs @('AA:00:00:00:00:01') -EsperaMs 200 }
+        Assert-Verdade ($msg -match 'registro') ('erro fala do registro: ' + $msg)
+        Assert-Igual 'AA0000000001,AA0000000002' (Get-MacsRegistroControle $arq) 'nada removido'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Save-CopiaRegistro grava o registro inteiro com data e acao no nome, sem sobrescrever, e poda para 10' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $pasta = Join-Path $d 'copias-registro'
+    try {
+        New-RegistroControle -Caminho $arq -Numeros 1, 2
+        $c = Save-CopiaRegistro -Caminho $arq -Pasta $pasta -Acao 'excluir'
+        Assert-Verdade ([string]$c.Nome -match '^registro-\d{8}-\d{6}-excluir\.json$') ('nome da copia: ' + $c.Nome)
+        Assert-Igual 'excluir' $c.Acao 'acao'
+        Assert-Igual 2 $c.Cameras 'numero de cameras'
+        $lida = [IO.File]::ReadAllText((Join-Path $pasta $c.Nome)) | ConvertFrom-Json
+        Assert-Igual 'AA0000000001,AA0000000002' ((@($lida.Cameras | ForEach-Object { [string]$_.Mac } | Sort-Object)) -join ',') 'copia com o registro inteiro'
+        $c2 = Save-CopiaRegistro -Caminho $arq -Pasta $pasta -Acao 'excluir'
+        Assert-Verdade ($c2.Nome -ne $c.Nome) 'segunda copia no mesmo segundo nao sobrescreve a primeira'
+        Assert-Igual 2 @(Get-ChildItem -LiteralPath $pasta -Filter 'registro-*.json').Count 'duas copias'
+        foreach ($i in 10..21) { New-CopiaFalsa -Pasta $pasta -Nome ('registro-20200101-0000' + $i + '-zerar.json') -Numeros 1 }
+        [IO.File]::WriteAllText((Join-Path $pasta 'outro.txt'), 'nao e copia')
+        $c3 = Save-CopiaRegistro -Caminho $arq -Pasta $pasta -Acao 'zerar'
+        $restam = @(Get-ChildItem -LiteralPath $pasta -Filter 'registro-*.json' | ForEach-Object { $_.Name })
+        Assert-Igual 10 $restam.Count 'poda para 10'
+        foreach ($n in @($c.Nome, $c2.Nome, $c3.Nome)) { Assert-Verdade ($restam -contains $n) ('a nova ' + $n + ' fica') }
+        Assert-Falso ($restam -contains 'registro-20200101-000014-zerar.json') 'a mais velha sai'
+        Assert-Verdade ($restam -contains 'registro-20200101-000015-zerar.json') 'a 10a mais nova fica'
+        Assert-Verdade (Test-Path -LiteralPath (Join-Path $pasta 'outro.txt')) 'arquivo que nao e copia fica'
+        foreach ($ruim in @('../x', 'a b', '', 'Excluir', 'excluir-2')) {
+            Assert-Estoura { Save-CopiaRegistro -Caminho $arq -Pasta $pasta -Acao $ruim } ('acao invalida <' + $ruim + '>')
+        }
+        $vazia = Join-Path $d 'outra-pasta'
+        $c4 = Save-CopiaRegistro -Caminho (Join-Path $d 'nao-existe.json') -Pasta $vazia -Acao 'zerar'
+        Assert-Igual 0 $c4.Cameras 'registro ausente: copia vazia'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Get-CopiasRegistro lista data, acao e numero de cameras, da mais nova para a mais velha' {
+    $d = New-Temp
+    $pasta = Join-Path $d 'copias-registro'
+    try {
+        Assert-Igual 0 @(Get-CopiasRegistro -Pasta $pasta).Count 'pasta ausente: nenhuma'
+        New-CopiaFalsa -Pasta $pasta -Nome 'registro-20260101-100000-excluir.json' -Numeros 1
+        New-CopiaFalsa -Pasta $pasta -Nome 'registro-20260102-090000-zerar.json' -Numeros 1, 2, 3
+        New-CopiaFalsa -Pasta $pasta -Nome 'registro-20260101-100000-restaurar-2.json' -Numeros 1, 2
+        New-CopiaFalsa -Pasta $pasta -Nome 'nota.json' -Numeros 1
+        [IO.File]::WriteAllText((Join-Path $pasta 'registro-20251231-235959-excluir.json'), '{ quebrado')
+        $l = @(Get-CopiasRegistro -Pasta $pasta)
+        Assert-Igual 4 $l.Count 'so as copias (nota.json fora)'
+        Assert-Igual 'registro-20260102-090000-zerar.json' $l[0].Nome 'mais nova primeiro'
+        Assert-Igual '2026-01-02 09:00:00' $l[0].Data 'data'
+        Assert-Igual 'zerar' $l[0].Acao 'acao'
+        Assert-Igual 3 $l[0].Cameras 'cameras'
+        Assert-Igual 'restaurar' $l[1].Acao 'mesmo segundo: a de sufixo -2 e a mais nova'
+        Assert-Igual 2 $l[1].Cameras 'cameras da -2'
+        Assert-Igual 'excluir' $l[2].Acao 'depois a sem sufixo'
+        Assert-Igual 'registro-20251231-235959-excluir.json' $l[3].Nome 'a mais velha por ultimo'
+        Assert-Falso $l[3].Legivel 'copia corrompida marcada ilegivel'
+        Assert-Verdade $l[0].Legivel 'copia boa legivel'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Restore-CopiaRegistro volta a copia e salva antes uma copia do atual' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $pasta = Join-Path $d 'copias-registro'
+    try {
+        New-RegistroControle -Caminho $arq -Numeros 1, 2
+        $c = Save-CopiaRegistro -Caminho $arq -Pasta $pasta -Acao 'excluir'
+        $null = Remove-CamerasRegistro -Caminho $arq -Macs @('AA:00:00:00:00:01')
+        New-RegistroControle -Caminho $arq -Numeros 3
+        $r = Restore-CopiaRegistro -Caminho $arq -Pasta $pasta -Nome $c.Nome
+        Assert-Igual 'AA0000000001,AA0000000002' (Get-MacsRegistroControle $arq) 'registro = a copia'
+        Assert-Igual 2 @($r.Registro.Cameras).Count 'devolve o registro restaurado'
+        Assert-Igual 'restaurar' $r.CopiaAntes.Acao 'devolve a copia feita antes'
+        $antes = @(Get-CopiasRegistro -Pasta $pasta | Where-Object { $_.Acao -eq 'restaurar' })
+        Assert-Igual 1 $antes.Count 'uma copia de restaurar'
+        $lida = [IO.File]::ReadAllText((Join-Path $pasta $antes[0].Nome)) | ConvertFrom-Json
+        Assert-Igual 'AA0000000002,AA0000000003' ((@($lida.Cameras | ForEach-Object { [string]$_.Mac } | Sort-Object)) -join ',') 'a copia de antes tem o registro de antes'
+        Assert-Verdade (Test-Path -LiteralPath (Join-Path $pasta $c.Nome)) 'a copia restaurada continua na pasta'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Restore-CopiaRegistro da mais velha com 10 copias: le antes de podar' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $pasta = Join-Path $d 'copias-registro'
+    try {
+        New-RegistroControle -Caminho $arq -Numeros 1
+        New-CopiaFalsa -Pasta $pasta -Nome 'registro-20200101-000000-zerar.json' -Numeros 5
+        foreach ($i in 11..19) { New-CopiaFalsa -Pasta $pasta -Nome ('registro-20200101-0000' + $i + '-zerar.json') -Numeros 1 }
+        $null = Restore-CopiaRegistro -Caminho $arq -Pasta $pasta -Nome 'registro-20200101-000000-zerar.json'
+        Assert-Igual 'AA0000000005' (Get-MacsRegistroControle $arq) 'registro = a copia mais velha'
+        Assert-Igual 10 @(Get-ChildItem -LiteralPath $pasta -Filter 'registro-*.json').Count 'continua com 10'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Restore-CopiaRegistro recusa nome fora da pasta, fora do padrao, ausente ou ilegivel, sem mexer em nada' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $pasta = Join-Path $d 'copias-registro'
+    try {
+        New-RegistroControle -Caminho $arq -Numeros 1
+        New-CopiaFalsa -Pasta $pasta -Nome 'registro-20260101-000000-zerar.json' -Numeros 2
+        New-CopiaFalsa -Pasta $pasta -Nome 'outro.json' -Numeros 3
+        New-CopiaFalsa -Pasta $d -Nome 'registro-20260101-000001-zerar.json' -Numeros 4
+        [IO.File]::WriteAllText((Join-Path $pasta 'registro-20260101-000002-zerar.json'), '{ quebrado')
+        [IO.File]::WriteAllText((Join-Path $pasta 'registro-20260101-000003-zerar.json'), '{ "Versao": 1 }')
+        $textoAntes = [IO.File]::ReadAllText($arq)
+        $bs = [string][char]92
+        $ruins = @(('..' + $bs + 'registro-20260101-000001-zerar.json'), '../registro-20260101-000001-zerar.json',
+                   (Join-Path $d 'registro-20260101-000001-zerar.json'), ('.' + $bs + 'registro-20260101-000000-zerar.json'),
+                   'outro.json', 'registro-20260101-000009-zerar.json', '', '..', 'registro.json',
+                   'registro-20260101-000002-zerar.json', 'registro-20260101-000003-zerar.json')
+        foreach ($n in $ruins) {
+            Assert-Estoura { Restore-CopiaRegistro -Caminho $arq -Pasta $pasta -Nome $n } ('nome recusado <' + $n + '>')
+        }
+        Assert-Igual $textoAntes ([IO.File]::ReadAllText($arq)) 'registro intacto'
+        Assert-Igual 0 @(Get-CopiasRegistro -Pasta $pasta | Where-Object { $_.Acao -eq 'restaurar' }).Count 'nenhuma copia de restaurar'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Restore-CopiaRegistro com o Mutex preso estoura sem gravar' {
+    $d = New-Temp
+    $arq = Join-Path $d 'registro.json'
+    $pasta = Join-Path $d 'copias-registro'
+    try {
+        New-RegistroControle -Caminho $arq -Numeros 1
+        New-CopiaFalsa -Pasta $pasta -Nome 'registro-20260101-000000-zerar.json' -Numeros 2
+        $msg = Invoke-ComMutexPreso -Caminho $arq -Bloco { Restore-CopiaRegistro -Caminho $arq -Pasta $pasta -Nome 'registro-20260101-000000-zerar.json' -EsperaMs 200 }
+        Assert-Verdade ($msg -match 'registro') ('erro fala do registro: ' + $msg)
+        Assert-Igual 'AA0000000001' (Get-MacsRegistroControle $arq) 'registro intacto'
+        Assert-Igual 1 @(Get-CopiasRegistro -Pasta $pasta).Count 'nenhuma copia nova'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Invoke-RotacaoLog: abaixo do limite nao mexe; acima gira para log.1.txt e mantem 3' {
+    $d = New-Temp
+    $log = Join-Path $d 'log.txt'
+    try {
+        $null = New-Item -ItemType Directory -Path $d
+        Assert-Falso (Invoke-RotacaoLog -Caminho $log -LimiteBytes 100 -Manter 3) 'log ausente: nada a girar'
+        [IO.File]::WriteAllText($log, 'curto')
+        Assert-Falso (Invoke-RotacaoLog -Caminho $log -LimiteBytes 100 -Manter 3) 'abaixo do limite'
+        Assert-Igual 'curto' ([IO.File]::ReadAllText($log)) 'log intacto'
+        [IO.File]::WriteAllText($log, ('x' * 200))
+        foreach ($p in @(@(1, 'um'), @(2, 'dois'), @(3, 'tres'))) { [IO.File]::WriteAllText((Join-Path $d ('log.' + $p[0] + '.txt')), $p[1]) }
+        Assert-Verdade (Invoke-RotacaoLog -Caminho $log -LimiteBytes 100 -Manter 3) 'acima do limite: girou'
+        Assert-Falso (Test-Path -LiteralPath $log) 'log.txt saiu (o proximo Write-Log cria)'
+        Assert-Igual ('x' * 200) ([IO.File]::ReadAllText((Join-Path $d 'log.1.txt'))) 'log.1 = o log atual'
+        Assert-Igual 'um' ([IO.File]::ReadAllText((Join-Path $d 'log.2.txt'))) 'log.2 = o antigo log.1'
+        Assert-Igual 'dois' ([IO.File]::ReadAllText((Join-Path $d 'log.3.txt'))) 'log.3 = o antigo log.2'
+        Assert-Falso (Test-Path -LiteralPath (Join-Path $d 'log.4.txt')) 'mantem so 3'
+        Assert-Igual 3 @(Get-ChildItem -LiteralPath $d).Count 'sem arquivo sobrando'
+    } finally { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+T 'Invoke-RotacaoLog com o log aberto por outro: nao estoura, devolve falso, nao mexe e registra' {
+    $d = New-Temp
+    $log = Join-Path $d 'log.txt'
+    $preso = $null
+    try {
+        $null = New-Item -ItemType Directory -Path $d
+        [IO.File]::WriteAllText($log, ('x' * 200))
+        [IO.File]::WriteAllText((Join-Path $d 'log.1.txt'), 'um')
+        $preso = [IO.File]::Open($log, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::ReadWrite)
+        $script:Linhas.Clear()
+        Assert-Falso (Invoke-RotacaoLog -Caminho $log -LimiteBytes 100 -Manter 3) 'nao girou'
+        $preso.Dispose(); $preso = $null
+        Assert-Igual ('x' * 200) ([IO.File]::ReadAllText($log)) 'log intacto'
+        Assert-Igual 'um' ([IO.File]::ReadAllText((Join-Path $d 'log.1.txt'))) 'log.1 intacto'
+        Assert-Falso (Test-Path -LiteralPath (Join-Path $d 'log.2.txt')) 'nada deslocado'
+        Assert-Verdade (@($script:Linhas | Where-Object { $_ -match 'log' }).Count -ge 1) ('falha registrada: ' + ($script:Linhas -join ' | '))
+    } finally {
+        if ($null -ne $preso) { $preso.Dispose() }
+        Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # ------------------------------------------------------ configuracao simulada
 
 Write-Host ""

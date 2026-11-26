@@ -78,6 +78,50 @@ function Write-Log {
     }
 }
 
+<#
+    Rotacao do log por tamanho: -Caminho (log.txt) com -LimiteBytes ou mais
+    vira log.1.txt, log.1 vira log.2... e fica so ate log.<Manter>.txt. Quem
+    chama e o painel (na abertura e no laco do servidor), nunca o Write-Log:
+    girar dentro dele disputaria o arquivo com os runspaces que gravam.
+    O primeiro passo tira o log.txt do lugar (nome temporario): se o arquivo
+    estiver preso, nada mudou. Falha nunca estoura: vai para o log e devolve
+    falso. Devolve verdadeiro so quando girou.
+#>
+function Invoke-RotacaoLog {
+    param([Parameter(Mandatory)][string]$Caminho, [long]$LimiteBytes = 5MB, [int]$Manter = 3)
+    try {
+        $info = New-Object IO.FileInfo($Caminho)
+        if (-not $info.Exists -or $info.Length -lt $LimiteBytes) { return $false }
+    } catch {
+        Write-Log ('  Rotação do log não conferiu o tamanho de ' + $Caminho + ': ' + $_.Exception.Message) 'Yellow'
+        return $false
+    }
+    $Manter = [math]::Max($Manter, 1)
+    $pasta = $info.DirectoryName
+    $raizNome = [IO.Path]::GetFileNameWithoutExtension($info.Name)
+    $ext = $info.Extension
+    $numerado = { param($i) Join-Path $pasta ($raizNome + '.' + $i + $ext) }
+    $girando = Join-Path $pasta ($raizNome + '.' + [guid]::NewGuid().ToString('N') + '.girando')
+    try { [IO.File]::Move($info.FullName, $girando) }
+    catch {
+        Write-Log ('  Rotação do log ficou para depois (' + $info.Name + ' em uso): ' + $_.Exception.Message) 'Yellow'
+        return $false
+    }
+    try {
+        $ultimo = & $numerado $Manter
+        if ([IO.File]::Exists($ultimo)) { [IO.File]::Delete($ultimo) }
+        for ($i = $Manter - 1; $i -ge 1; $i--) {
+            $de = & $numerado $i
+            if ([IO.File]::Exists($de)) { [IO.File]::Move($de, (& $numerado ($i + 1))) }
+        }
+        [IO.File]::Move($girando, (& $numerado 1))
+    } catch {
+        Write-Log ('  Rotação do log incompleta; o log antigo ficou em ' + $girando + ': ' + $_.Exception.Message) 'Yellow'
+        return $false
+    }
+    return $true
+}
+
 # Etapa em andamento, para o painel mostrar ao vivo.
 # Sink = { param($Etapa, $Detalhe, $Atual, $Total) }. Etapa vazia = mesma
 # etapa, so o detalhe muda (ex.: contagem da espera do boot). Total 0 = sem
@@ -3719,6 +3763,141 @@ function Update-RegistroCamera {
     })
 }
 
+# ------------------------------------------- controle do registro e copias
+#
+# Excluir, copiar e restaurar pegam o Mutex do registro e leem por
+# Read-RegistroTravado (o Mutex do .NET e reentrante no mesmo thread: a
+# leitura dentro do bloco entra de novo sem esperar). Quem quer a copia e a
+# exclusao como um passo so embrulha as duas em Invoke-SobMutexRegistro.
+
+<#
+    Tira do registro em disco as cameras dos -Macs (qualquer formato de MAC)
+    e devolve as removidas. MAC ausente nao e erro; nada removido = nada
+    gravado (registro ausente continua ausente).
+#>
+function Remove-CamerasRegistro {
+    param([Parameter(Mandatory)][string]$Caminho, [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Macs,
+          [int]$EsperaMs = 30000)
+    $alvo = @{}
+    foreach ($m in @($Macs)) { $n = Get-MacNormalizado $m; if ($n -ne '') { $alvo[$n] = $true } }
+    return (Invoke-SobMutexRegistro -Caminho $Caminho -EsperaMs $EsperaMs -Complemento 'Nada foi excluído; tente de novo.' -Bloco {
+        $reg = Read-RegistroTravado -Caminho $Caminho -EsperaMs $EsperaMs
+        $fora = @(@($reg.Cameras) | Where-Object { $alvo.ContainsKey((Get-MacNormalizado $_.Mac)) })
+        if ($fora.Count -gt 0) {
+            $reg.Cameras = [object[]]@(@($reg.Cameras) | Where-Object { -not $alvo.ContainsKey((Get-MacNormalizado $_.Mac)) })
+            Save-JsonAtomico -Caminho $Caminho -Objeto $reg
+        }
+        , $fora
+    })
+}
+
+# Nome de copia: registro-yyyyMMdd-HHmmss-<acao>[-N].json. O -N (2, 3...)
+# separa copias do mesmo segundo e conta por segundo, qualquer que seja a
+# acao, para a ordem entre elas nao depender do nome da acao.
+$script:PadraoCopiaRegistro = '^registro-(\d{8})-(\d{6})-([a-z]+)(?:-(\d+))?\.json$'
+
+# Copias da -Pasta (so os nomes do padrao), da mais nova para a mais velha.
+function Get-ArquivosCopiaRegistro {
+    param([Parameter(Mandatory)][string]$Pasta)
+    if (-not (Test-Path -LiteralPath $Pasta -PathType Container)) { return @() }
+    $l = foreach ($f in @(Get-ChildItem -LiteralPath $Pasta -File)) {
+        $m = [regex]::Match($f.Name, $script:PadraoCopiaRegistro)
+        if (-not $m.Success) { continue }
+        $seq = 1
+        if ($m.Groups[4].Success) { $seq = [int]$m.Groups[4].Value }
+        [pscustomobject]@{ Arquivo = $f; Nome = $f.Name; Quando = ($m.Groups[1].Value + $m.Groups[2].Value); Seq = $seq; Acao = $m.Groups[3].Value }
+    }
+    return @(@($l) | Sort-Object -Property @{ Expression = 'Quando'; Descending = $true }, @{ Expression = 'Seq'; Descending = $true })
+}
+
+<#
+    Copia o registro inteiro (lido sob o Mutex) para
+    -Pasta\registro-yyyyMMdd-HHmmss-<acao>.json, nunca por cima de outra, e
+    poda a pasta para as -Manter mais novas (so arquivos do padrao saem).
+    -Acao: so letras minusculas (vai no nome do arquivo). Registro ausente
+    vira copia vazia. Devolve Nome, Data, Acao e Cameras da copia.
+#>
+function Save-CopiaRegistro {
+    param([Parameter(Mandatory)][string]$Caminho, [Parameter(Mandatory)][string]$Pasta, [Parameter(Mandatory)][AllowEmptyString()][string]$Acao,
+          [int]$Manter = 10, [int]$EsperaMs = 30000)
+    if ($Acao -cnotmatch '^[a-z]+$') { throw ('Ação de cópia do registro inválida: <' + $Acao + '>. Use só letras minúsculas.') }
+    return (Invoke-SobMutexRegistro -Caminho $Caminho -EsperaMs $EsperaMs -Complemento 'Nenhuma cópia foi feita; tente de novo.' -Bloco {
+        $reg = Read-RegistroTravado -Caminho $Caminho -EsperaMs $EsperaMs
+        if (-not (Test-Path -LiteralPath $Pasta)) { $null = New-Item -ItemType Directory -Force -Path $Pasta }
+        $agora = Get-Date
+        $quando = $agora.ToString('yyyyMMddHHmmss')
+        $base = 'registro-' + $agora.ToString('yyyyMMdd-HHmmss') + '-' + $Acao
+        $mesmoSegundo = @(Get-ArquivosCopiaRegistro -Pasta $Pasta | Where-Object { $_.Quando -eq $quando })
+        $nome = $base + '.json'
+        if ($mesmoSegundo.Count -gt 0) {
+            $nome = $base + '-' + ((@($mesmoSegundo | ForEach-Object { $_.Seq }) | Measure-Object -Maximum).Maximum + 1) + '.json'
+        }
+        Save-JsonAtomico -Caminho (Join-Path $Pasta $nome) -Objeto $reg
+        foreach ($velha in @(Get-ArquivosCopiaRegistro -Pasta $Pasta | Select-Object -Skip ([math]::Max($Manter, 1)))) {
+            try { Remove-Item -LiteralPath $velha.Arquivo.FullName -Force -ErrorAction Stop }
+            catch { Write-Log ('  Cópia antiga do registro não saiu (' + $velha.Nome + '): ' + $_.Exception.Message) 'Yellow' }
+        }
+        [pscustomobject]@{ Nome = $nome; Data = $agora.ToString('yyyy-MM-dd HH:mm:ss'); Acao = $Acao; Cameras = @($reg.Cameras).Count }
+    })
+}
+
+<#
+    Copias do registro na -Pasta, da mais nova para a mais velha: Nome, Data
+    (yyyy-MM-dd HH:mm:ss, do nome), Acao, Cameras e Legivel. Copia que nao
+    abre (ou sem Cameras) sai com Legivel falso e Cameras nulo. Pasta
+    ausente: lista vazia.
+#>
+function Get-CopiasRegistro {
+    param([Parameter(Mandatory)][string]$Pasta)
+    return @(foreach ($a in @(Get-ArquivosCopiaRegistro -Pasta $Pasta)) {
+        $cams = $null
+        try {
+            $o = [IO.File]::ReadAllText($a.Arquivo.FullName, [Text.Encoding]::UTF8) | ConvertFrom-Json
+            if ($null -ne $o -and $null -ne $o.PSObject.Properties['Cameras']) { $cams = @(@($o.Cameras) | Where-Object { $null -ne $_ }).Count }
+        } catch { }
+        $q = $a.Quando
+        [pscustomobject]@{
+            Nome = $a.Nome
+            Data = ($q.Substring(0, 4) + '-' + $q.Substring(4, 2) + '-' + $q.Substring(6, 2) + ' ' + $q.Substring(8, 2) + ':' + $q.Substring(10, 2) + ':' + $q.Substring(12, 2))
+            Acao = $a.Acao; Cameras = $cams; Legivel = ($null -ne $cams)
+        }
+    })
+}
+
+<#
+    Troca o registro em disco pela copia -Nome da -Pasta. -Nome e so o nome
+    do arquivo, no padrao das copias: barra, '..' ou caminho estouram antes
+    de qualquer leitura (sem path traversal). A copia e lida e conferida
+    (precisa de Cameras) ANTES da copia do registro atual (acao
+    'restaurar'), que pode podar justamente a copia restaurada. Tudo sob o
+    Mutex. Devolve Registro (o restaurado) e CopiaAntes.
+#>
+function Restore-CopiaRegistro {
+    param([Parameter(Mandatory)][string]$Caminho, [Parameter(Mandatory)][string]$Pasta, [Parameter(Mandatory)][AllowEmptyString()][string]$Nome,
+          [int]$EsperaMs = 30000)
+    if ($Nome -notmatch $script:PadraoCopiaRegistro -or $Nome.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+        throw ('Cópia do registro inválida: <' + $Nome + '>. Escolha uma das cópias listadas em Ferramentas.')
+    }
+    $pastaCheia = [IO.Path]::GetFullPath($Pasta)
+    $arq = [IO.Path]::GetFullPath((Join-Path $pastaCheia $Nome))
+    if (-not [string]::Equals([IO.Path]::GetDirectoryName($arq), $pastaCheia.TrimEnd([IO.Path]::DirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase)) {
+        throw ('Cópia do registro fora da pasta das cópias: <' + $Nome + '>.')
+    }
+    return (Invoke-SobMutexRegistro -Caminho $Caminho -EsperaMs $EsperaMs -Complemento 'O registro não foi trocado; tente de novo.' -Bloco {
+        if (-not [IO.File]::Exists($arq)) { throw ('A cópia ' + $Nome + ' não existe mais. Nada foi trocado.') }
+        $copia = $null
+        try { $copia = [IO.File]::ReadAllText($arq, [Text.Encoding]::UTF8) | ConvertFrom-Json } catch { }
+        if ($null -eq $copia -or $null -eq $copia.PSObject.Properties['Cameras']) {
+            throw ('A cópia ' + $Nome + ' está ilegível. Nada foi trocado.')
+        }
+        $copia.Cameras = [object[]]@(@($copia.Cameras) | Where-Object { $null -ne $_ })
+        $antes = Save-CopiaRegistro -Caminho $Caminho -Pasta $Pasta -Acao 'restaurar' -EsperaMs $EsperaMs
+        Save-JsonAtomico -Caminho $Caminho -Objeto $copia
+        Write-Log ('Registro restaurado da cópia ' + $Nome + ' (' + @($copia.Cameras).Count + ' câmeras); o de antes ficou em ' + $antes.Nome + '.') 'Cyan'
+        [pscustomobject]@{ Registro = $copia; CopiaAntes = $antes }
+    })
+}
+
 # ------------------------------------------------------- fila e relatorio
 
 <#
@@ -3807,11 +3986,20 @@ function Step-Rotulo {
     Relatorio CSV (';', com aspas) a partir do registro. Mesmas 17 colunas do
     inventario antigo mais as do encoder. SENHA sempre vazia. Ordenado por IP.
     Devolve o texto; quem grava poe o BOM (o Excel precisa dele para acento).
+    -Macs (qualquer formato): so essas cameras, mesmas colunas; lista vazia
+    = so o cabecalho. Sem -Macs, o registro inteiro.
 #>
 function ConvertTo-RelatorioCsv {
-    param($Registro)
+    param($Registro, [AllowEmptyCollection()][string[]]$Macs = $null)
 
-    $linhas = foreach ($c in @($Registro.Cameras)) {
+    $cameras = @($Registro.Cameras)
+    if ($PSBoundParameters.ContainsKey('Macs') -and $null -ne $Macs) {
+        $pedidos = @{}
+        foreach ($m in $Macs) { $n = Get-MacNormalizado $m; if ($n -ne '') { $pedidos[$n] = $true } }
+        $cameras = @($cameras | Where-Object { $null -ne $_ -and $pedidos.ContainsKey((Get-MacNormalizado $_.Mac)) })
+    }
+
+    $linhas = foreach ($c in $cameras) {
         $status = [string]$c.Status
         if ($status -eq 'Falhou') { $status = 'Falhou em ' + $c.Etapa + ': ' + $c.Erro }
         $ap = $c.Aplicado
