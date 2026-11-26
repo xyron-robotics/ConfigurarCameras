@@ -71,8 +71,16 @@ Console web local onde a operação é controlada e onde vive o registro das câ
 _Avoid_: dashboard, interface, sistema
 
 **Registro**:
-Lista, guardada pelo painel neste PC, de cada câmera que passou pela configuração: uma entrada por câmera (pelo MAC), com o IP definitivo, a etapa concluída e o estado (em andamento, instalada, falhou). É a única cópia do que foi feito. Fica na tela Painel, na aba Registro.
+Lista, guardada pelo painel neste PC, de cada câmera que passou pela configuração: uma entrada por câmera (pelo MAC), com o IP definitivo, a etapa concluída e o estado (em andamento, instalada, falhou). Fica na tela Painel, na aba Registro, onde o operador busca, seleciona, exporta a seleção e exclui câmeras; a câmera da fila aberta não sai. Só o operador tira câmera dele: abrir o painel ou montar uma fila nunca apaga nada. Antes de toda exclusão, o painel guarda uma cópia do registro.
 _Avoid_: inventário, banco, histórico, cameras.csv
+
+**Cópia do registro**:
+Registro inteiro guardado pelo painel, sozinho, logo antes de excluir câmeras, zerar o registro ou restaurar uma cópia; é o que desfaz essas ações. Ficam as 10 mais novas, listadas em Ferramentas com data, ação e número de câmeras, cada uma com "Restaurar esta cópia". Restaurar troca o registro inteiro pelo da cópia e fica travado com a fila aberta, porque a fila ainda grava no registro.
+_Avoid_: backup, snapshot, versão do registro
+
+**Zerar o registro**:
+Excluir todas as câmeras do registro de uma vez, com a cópia antes. O passo a passo novo com registro não vazio oferece Manter, Exportar e zerar ou Zerar; avançar sem escolher mantém.
+_Avoid_: limpar o registro, apagar o registro, reset do registro
 
 **Relatório**:
 Planilha exportada do painel sob demanda para constatar o que foi feito. Nunca é lida de volta como entrada.
@@ -93,6 +101,10 @@ _Avoid_: configurar vídeo, alterar qualidade
 **Fila**:
 Sequência de IPs de destino montada a partir de uma faixa início–fim antes de começar; cada posição recebe uma câmera. As posições recebem câmeras em paralelo: uma câmera em falha espera a decisão na linha dela e não para as outras. Uma faixa sem nenhuma posição livre não vira fila. A faixa montada fica na sessão e volta preenchida na próxima abertura, só como sugestão. Montar é no passo a passo ou na tela Sessão, seção Fila.
 _Avoid_: plano, lote, lista
+
+**Limpar a fila**:
+Tirar do Painel a fila encerrada ou concluída, que volta a "Nenhuma fila montada". Não muda o registro e não vale com a fila aberta.
+_Avoid_: zerar a fila, apagar a fila, encerrar a fila (é parar a fila, que continua na tela)
 
 **Posição**:
 Um IP de destino da fila. As que podem receber câmera são numeradas "câmera N" (câmera 1, câmera 2…), no mesmo número na fita e na tabela; as deixadas de fora na montagem (gateway, fora da rede, já no registro) não recebem número. A câmera recebe a próxima posição livre ao entrar no portão do IP de fábrica, na ordem em que apareceu no broadcast, que não é a ordem do cabo; por isso porta e canal se digitam na linha da câmera.

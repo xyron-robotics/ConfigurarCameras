@@ -1,6 +1,6 @@
 # Frente registro-controle: controle do operador sobre registro, fila e log (1.3.1, 2 de 2)
 
-**Status:** Ativo · **Frente:** `registro-controle`
+**Status:** Concluído · **Frente:** `registro-controle`
 
 Frente 2 da onda 2 do mapa `docs/plans/2026-11-26-versao-131-mapa.md`. Depende da frente `responsivo` fechada (as duas tocam `tela-painel.js`, `componentes.css` e `textos.js`). Escopo fechado em grilling (26/11).
 

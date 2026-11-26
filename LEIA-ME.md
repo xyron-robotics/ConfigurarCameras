@@ -64,6 +64,13 @@ senha na primeira linha.
    própria linha: ao começar, a rede pisca por alguns segundos e a internet
    é testada depois. Se a leitura das placas falhar, **Ler as placas de
    novo**.
+   Com câmeras de filas anteriores no registro, este passo mostra antes "O
+   registro tem N câmeras, a última de dd/mm/aaaa." e três escolhas:
+   **Manter** (soma as desta sessão), **Exportar e zerar** (baixa o CSV
+   inteiro e só zera depois do download iniciado) e **Zerar**. Zerar pede
+   confirmação, e a cópia de antes fica em **Ferramentas > Cópias do
+   registro**. Avançar sem escolher mantém tudo: abrir o painel ou montar
+   uma fila nunca apaga o registro.
 3. **Rede**: máscara, gateway e DNS gravados em cada câmera (a rede do NVR;
    o gateway vem vazio, é da obra) e, opcional, o IP do PC nessa rede
    (vazio = `.200` a `.249`, derivado do MAC da placa). A **faixa de
@@ -178,7 +185,10 @@ O Painel mostra a fila em três partes, de cima para baixo:
    admitir câmeras: as que estão no portão ou conferindo terminam, e as que
    estão em decisão ainda podem tentar de novo. As posições pendentes ficam
    sem câmera, e o Painel mostra "Fila encerrada: 1 instalada, 2 posições
-   sem câmera".
+   sem câmera". A tabela continua na tela até você montar outra fila ou
+   clicar **Limpar a fila**, que tira a fila encerrada ou concluída do
+   Painel ("Nenhuma fila montada") sem mexer no registro. Com a fila aberta,
+   Limpar a fila não aparece.
 
 Uma câmera **já inicializada** que aparece no broadcast fica no grupo **Já
 inicializadas, não tocadas**, embaixo da tabela: o painel não faz login nela.
@@ -213,11 +223,30 @@ novo a entrada antiga do registro é substituída e o IP antigo fica livre.
 O **Registro**, aba ao lado de Fila agora no Painel, lista cada câmera que
 passou pelo painel (pelo MAC): IP, MAC, modelo, situação (em andamento,
 instalada, falhou), encoder, local, rack / porta, canal e data. **Ler o
-registro de novo** relê a lista; **Exportar o relatório** gera o CSV. Os
-dados ficam em `%ProgramData%\ConfigurarCameras` (`registro.json`,
-`sessao.json`, `log.txt` e, enquanto a placa está preparada,
-`placa-sessao.json`, o rastro do que o painel fez nela): é a única cópia,
-faça backup. Na primeira abertura da 1.2.0, `padroes.json` e
+registro de novo** relê a lista; **Exportar o relatório** gera o CSV do
+registro inteiro.
+
+- **Buscar no registro** filtra a tabela por IP, MAC, serial, modelo, local,
+  rack ou andar, só na tela.
+- A caixa de cada linha marca a câmera (Espaço também marca); a do
+  cabeçalho marca as linhas visíveis. A barra de seleção diz quantas estão
+  marcadas e tem **Exportar a seleção** (CSV com as mesmas colunas, só as
+  marcadas, nome terminado em `-selecao`), **Excluir do registro** e
+  **Limpar a seleção**.
+- **Excluir do registro** pede confirmação, com quantas câmeras saem ("todas
+  as N" quando é o registro inteiro). A câmera da fila aberta fica com a
+  caixa desligada e "Na fila agora" ao lado, e o painel recusa excluí-la;
+  as outras saem a qualquer hora, inclusive durante a operação.
+- Antes de excluir, zerar ou restaurar, o painel guarda sozinho uma **cópia
+  do registro** inteiro em `copias-registro`, na pasta de dados
+  (`registro-<data>-<hora>-<ação>.json`). Ficam as 10 mais novas, e
+  **Ferramentas > Cópias do registro** restaura qualquer uma.
+
+Os dados ficam em `%ProgramData%\ConfigurarCameras` (`registro.json`,
+`sessao.json`, `log.txt`, a pasta `copias-registro` e, enquanto a placa
+está preparada, `placa-sessao.json`, o rastro do que o painel fez nela).
+As cópias do registro ficam no mesmo PC: para não perder o registro com o
+PC, copie a pasta de dados para fora dele. Na primeira abertura da 1.2.0, `padroes.json` e
 `ultima-fila.json` de versões anteriores viram `sessao.json` (os antigos ficam
 como `.migrado`). Para usar outra pasta: `Servidor-Painel.ps1 -PastaDados
 D:\obra`. Sem permissão de escrita em ProgramData o painel usa
@@ -240,10 +269,25 @@ o que fazer). IP inválido no Sondar é recusado embaixo do campo, sem ir à red
 Em simulação, **Procurar câmeras** fica desligado ("Só no uso real.") e o
 **Sondar um IP** responde no Resultado que, em simulação, ele não lê a rede.
 
+**Cópias do registro** lista as cópias que o painel guardou antes de excluir
+câmeras, zerar ou restaurar (veja Registro e relatório): data, ação e número
+de câmeras, da mais nova para a mais velha. **Restaurar esta cópia** pede
+confirmação e troca o registro inteiro pelo da cópia; antes, guarda uma
+cópia do registro de agora, que entra no topo da lista. A cópia é o registro
+daquele momento: câmera configurada depois dela volta como estava na cópia
+("em andamento", por exemplo) ou some, e a cópia do registro de agora
+guarda a versão mais nova. Com a fila aberta o
+botão fica travado, com o motivo escrito ao lado: encerre a fila no Painel
+antes, porque ela ainda grava no registro.
+
 O **Log do painel** fica no fim da aba Ferramentas, recolhido: abra para ver
-as últimas linhas, com hora, em fonte de largura fixa. **Só avisos e erros**
-esconde o resto. O log completo, com data, fica em `log.txt` na pasta de
-dados (veja Registro e relatório).
+as últimas linhas, com hora, em fonte de largura fixa. **Buscar no log**
+filtra as linhas da tela por qualquer texto (hora, IP, MAC, palavra), junto
+com **Só avisos e erros**, que esconde o resto. **Baixar o log** baixa o
+`log.txt` inteiro, com data. O arquivo fica na pasta de dados (veja Registro
+e relatório); passando de 5 MB, ao abrir o painel ou com ele aberto, vira
+`log.1.txt` e um `log.txt` novo começa. Ficam até `log.3.txt`, o mais
+velho; o que passaria disso sai. Não há botão de apagar o log.
 
 Não há reset pelo painel: nenhuma chamada por RPC faz reset de fábrica
 completo neste firmware (a VIP-1230-D-G3 2.800 só restaura configurações e
@@ -319,6 +363,7 @@ Se o SHA-256 não conferir, nada é instalado e a faixa diz o motivo.
 | `senha recusada pela camera` | a câmera já tem outra senha. Não insista: troque a senha em **Sessão > Senha** ou volte a câmera de fábrica pela tela dela |
 | `camera recusou o encoder no passo N` | a câmera não aceitou o que o passo grava (passo 1: resolução, fps ou codec; passo 2: bitrate ou GOP). O log mostra o encoder lido antes. Volte a um valor marcado "(testado)" em **Sessão > Câmera** e **Tentar de novo** |
 | `conta admin BLOQUEADA` | espere alguns minutos; depois confirme a senha certa antes de qualquer tentativa |
+| Câmera excluída ou registro zerado por engano | em **Ferramentas > Cópias do registro**, a cópia mais nova é o registro de logo antes da ação: **Restaurar esta cópia** (com a fila encerrada). O registro de agora vira outra cópia, então dá para voltar atrás de novo |
 | PC ficou sem internet depois de preparar a placa | o chip "Sem internet" diz, no quadro dele, que a internet caiu depois que o painel preparou a placa. **Restaurar o DHCP**, no chip da placa, devolve na hora; encerrar o painel também. Se nada disso resolver: `ncpa.cpl` > placa > IPv4 > "Obter um endereço IP automaticamente" |
 | Chip "Sem internet", mas o navegador navega | a rede só sai por proxy; o teste do painel (`curl.exe`) não usa proxy. Pode ignorar |
 | "ficou preparada desde a última vez" ao abrir | o painel anterior foi fechado no X. Nada a fazer: ela volta ao DHCP ao encerrar (ou em **Restaurar o DHCP**, no chip da placa) |
@@ -326,7 +371,7 @@ Se o SHA-256 não conferir, nada é instalado e a faixa diz o motivo.
 | Atualizou e o painel não reabriu | abra pelo atalho. O que o instalador fez está em `instalador.log` na pasta de dados |
 | O painel abre sempre no passo a passo | é assim: com uma sessão guardada, cada abertura vai direto a **Conferir**, que pede a senha na primeira linha. Se abre num passo, a sessão ficou incompleta (placa que sumiu, campo inválido): é o passo que falta |
 
-O `log.txt` na pasta de dados guarda tudo com data e hora. É o primeiro lugar a olhar; as últimas linhas aparecem também no **Log do painel**, no fim da aba Ferramentas.
+O `log.txt` na pasta de dados guarda tudo com data e hora. É o primeiro lugar a olhar; as últimas linhas aparecem também no **Log do painel**, no fim da aba Ferramentas, onde **Baixar o log** leva o arquivo inteiro.
 
 ## Pendências
 
